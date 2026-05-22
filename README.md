@@ -149,6 +149,7 @@ The folder where these land defaults to
 ├── sentinel.ico                   ← app icon
 ├── sentinel_preview.png           ← preview image
 └── scripts/
+    ├── build_exe.ps1              ← one-command PyInstaller build
     ├── install_book_reader_shortcut.ps1
     ├── install_tts.ps1            ← downloads Piper + en_US-amy voice
     ├── make_sentinel_icon.py      ← regenerates sentinel.ico
@@ -159,18 +160,38 @@ The folder where these land defaults to
 
 ## Build a standalone `.exe`
 
+Verified build, one command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1
+```
+
+…or by hand:
+
 ```powershell
 py -3 -m pip install pyinstaller
-pyinstaller Sentinel-Forge.spec --clean --noconfirm
+py -3 -m PyInstaller Sentinel-Forge.spec --clean --noconfirm
 ```
-Output: `dist\Sentinel-Forge\Sentinel-Forge.exe` (one-folder build —
-ship the whole folder).
+
+**Output:**
+- `dist\Sentinel-Forge\Sentinel-Forge.exe` — ~6 MB launcher
+- `dist\Sentinel-Forge\_internal\` — Python runtime + bundled libs
+- Folder total: ~30 MB without TTS · ~175 MB with the Piper voice bundle
+
+Ship the whole `dist\Sentinel-Forge\` folder — it's a one-folder build
+(intentional: cold-start is fast and the 60 MB voice model doesn't get
+extracted to `%TEMP%` on every launch).
+
+To skip bundling TTS (smaller .exe; app falls back to SAPI5):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
+```
 
 ---
 
 ## Roadmap / what's open
 
-- 🔲 Single-distributable `.exe` via the existing PyInstaller spec
+- ✅ Single-distributable `.exe` via the existing PyInstaller spec — `scripts\build_exe.ps1`
 - 🔲 Voice-note recording (browser MediaRecorder; or `pyaudio` in Tk)
 - 🔲 Tagging UI for the `tags: []` field (schema already supports it)
 - 🔲 Two-way sync with the [Sentinel Forge platform](https://github.com/coconuthead-Sentinel-core/Sentinel-of-sentinel-s-Forge)
