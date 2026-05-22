@@ -551,13 +551,13 @@ class BookReader:
             relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
         ).pack(side=tk.LEFT, padx=(14, 0))
 
-        # ---- Reading timer (Pomodoro-style, 5 / 10 / 15 / 20 / 25 min)
+        # ---- Reading timer (Pomodoro-style, 5 / 10 / 15 / 20 / 25 / 30 min)
         # Lives on the right side of the controls row. Visual order is
         # "⏱ Timer:  [preset ▾]  [Start]   MM:SS" — we pack right-to-left
         # so the countdown sits on the far right and stays in view.
         self._timer_presets: dict[str, int] = {
             "5 min":  5, "10 min": 10, "15 min": 15,
-            "20 min": 20, "25 min": 25,
+            "20 min": 20, "25 min": 25, "30 min": 30,
         }
         self.timer_display_var = tk.StringVar(value="00:00")
         tk.Label(
@@ -7926,7 +7926,7 @@ try {
                  bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
         tk.Label(head,
-                 text="Plan your day in 15/20/25-minute Pomodoro blocks.",
+                 text="Plan your day in 5/15/20/25/30-minute Pomodoro blocks.",
                  bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
         tk.Button(
@@ -8290,7 +8290,7 @@ try {
             value=str(existing["duration_min"]) if existing else "25")
         dur_row = tk.Frame(dlg, bg=BG_DARK, padx=14)
         dur_row.pack(fill=tk.X)
-        for v in ("15", "20", "25"):
+        for v in ("5", "15", "20", "25", "30"):
             tk.Radiobutton(
                 dur_row, text=f"{v} min", variable=duration_var, value=v,
                 bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_INPUT,
