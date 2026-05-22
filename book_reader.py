@@ -3400,8 +3400,17 @@ class BookReader:
                 return
 
         self.is_reading = True
+        # Status now shows WHICH engine is active so the user can tell at
+        # a glance whether they're getting Piper neural voice or a SAPI
+        # fallback. Engine name is upper-cased for visibility.
+        engine_label = {
+            "piper":      "Piper neural · amy",
+            "powershell": "PowerShell SAPI (Windows voice)",
+            "pyttsx3":    "pyttsx3 SAPI (Windows voice)",
+            "none":       "no engine",
+        }.get(self.tts_mode, self.tts_mode)
         self.set_status(
-            f"🔊 Reading aloud from {start_label} "
+            f"🔊 [{engine_label}] Reading from {start_label} "
             f"({len(text):,} chars)… click ■ Stop to end"
         )
 
@@ -3409,8 +3418,10 @@ class BookReader:
             try:
                 self._speak_piper(text, speech_start_idx)
             except Exception as e:
-                print(f"[book_reader] _speak_piper failed, "
-                      f"falling back to PowerShell: {e}", file=sys.stderr)
+                # Surface why Piper fell back, not just silently log it.
+                msg = f"⚠ Piper setup failed: {e} — falling back to Windows voice"
+                print(f"[book_reader] {msg}", file=sys.stderr)
+                self.set_status(msg)
                 self.tts_mode = "powershell"
                 self._speak_powershell(text, speech_start_idx)
         elif self.tts_mode == "pyttsx3":
@@ -3659,23 +3670,34 @@ class BookReader:
                     fd, wav_path = tempfile.mkstemp(suffix=".wav")
                     os.close(fd)
                     # Piper reads text from stdin, writes wav to file.
+                    # Capture stderr so subprocess failures are visible
+                    # (Piper logs voice-load + RTF info to stderr on
+                    # success; a non-zero exit means real trouble).
                     proc = subprocess.Popen(
                         [PIPER_EXE, "--model", PIPER_VOICE,
                           "--output_file", wav_path],
                         stdin=subprocess.PIPE,
                         stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                     )
                     self._ps_proc = proc  # reuse the kill-switch slot
                     try:
-                        proc.communicate(input=chunk_text.encode("utf-8"),
-                                          timeout=60)
+                        _stdout, _stderr = proc.communicate(
+                            input=chunk_text.encode("utf-8"), timeout=60,
+                        )
                     except subprocess.TimeoutExpired:
                         proc.kill()
                         continue
                     finally:
                         self._ps_proc = None
+                    if proc.returncode != 0:
+                        err_tail = (_stderr or b"").decode("utf-8", "replace")[-400:]
+                        self._highlight_queue.put((
+                            "error",
+                            f"piper.exe exit {proc.returncode}: {err_tail}",
+                        ))
+                        return
                     if not self.is_reading:
                         break
                     if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
