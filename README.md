@@ -1,0 +1,190 @@
+# Sentinel Screen Reader
+
+> **A native Windows desktop reading app for `.docx`, `.pdf`, `.md`,
+> `.txt`, `.rtf`, and `.html` — with neural read-aloud, highlight-by-sentence,
+> a Pomodoro timer, and a Three-Zone Library that organises what you save.**
+
+![Status](https://img.shields.io/badge/status-MVP-success)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)
+
+---
+
+## What it does
+
+- **Open** any book (`.docx`, `.pdf`, `.md`, `.txt`, `.rtf`, `.html`) and
+  read it in a big, readable single-window UI
+- **Read aloud** with the bundled **Piper neural voice** (offline,
+  high-quality) or fall back to Windows SAPI5
+- **Highlight by sentence, word, or paragraph** with 8 colour swatches
+- **Save excerpts** — click Save, the selected (or whole) passage is
+  written as a `.md` with YAML front-matter recording zone, cognitive
+  load, source book, and timestamp
+- **Three-Zone Library** — GREEN (active, load 7–10), YELLOW (reference,
+  4–6), RED (archive, 1–3). The Library window auto-filters to the zone
+  matching your current cognitive load
+- **Pomodoro timer** built in (5 / 10 / 15 / 20 / 25 / 45 min)
+- **Session continuity** — start / end of session is written to
+  `HANDOFF_STATE.json` so the next session knows where you left off
+- **Cross-excerpt AI search (✨ Ask Library)** — if the optional
+  [Sentinel Forge platform](https://github.com/coconuthead-Sentinel-core/Sentinel-of-sentinel-s-Forge)
+  is running on localhost, the in-app Ask Library button scores every
+  excerpt against your question and surfaces matches with snippets
+
+## Why it exists
+
+I built this for myself — a CNA → AI-systems-developer transition who
+needs to read a lot of technical material while managing ADHD, dyslexia,
+and dysgraphia. Every feature is there because something else got in
+the way:
+
+- Tk windows because the browser was distracting
+- Big colored buttons because small targets cost attention
+- Neural TTS because the standard Windows voice was draining to listen to
+- Zone-tagged saves because flat dumps of highlights become noise
+
+---
+
+## Quick start
+
+```powershell
+# 1. Get the code
+git clone https://github.com/coconuthead-Sentinel-core/Sentinel-screen-reader. sentinel-screen-reader
+cd sentinel-screen-reader
+
+# 2. Install Python deps
+py -3 -m pip install -r requirements.txt
+
+# 3. (Optional) Install the Piper neural TTS bundle (~100 MB)
+#    The app will fall back to Windows SAPI5 if you skip this.
+powershell -ExecutionPolicy Bypass -File scripts\install_tts.ps1
+
+# 4. Run it
+py -3 book_reader.py
+```
+
+Or double-click **`run_book_reader.bat`** for a no-console launch.
+
+To install a Desktop shortcut:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_book_reader_shortcut.ps1
+```
+
+---
+
+## Requirements
+
+| | |
+|---|---|
+| **OS** | Windows 10 / 11 |
+| **Python** | 3.11+ (3.13 tested) — `py` launcher recommended |
+| **Disk** | ~5 MB without TTS · ~105 MB with Piper voices |
+| **Other** | Tk is bundled with the Python.org installer; nothing else mandatory |
+
+### Python dependencies
+
+| Package | Why |
+|---|---|
+| `python-docx` | parse `.docx` |
+| `pypdf` | parse `.pdf` |
+| `beautifulsoup4` | parse `.html` |
+| `pyttsx3` | Windows SAPI5 fallback voice |
+| `send2trash` | recoverable deletes from the Library |
+| `tkinterdnd2` | drop-files-on-the-Library-window support (optional) |
+
+All listed in [`requirements.txt`](requirements.txt). Each parser is
+imported with `try/except ImportError` and the app degrades gracefully —
+e.g. with no `pypdf` installed, `.pdf` open is disabled but `.docx` /
+`.txt` / `.md` still work.
+
+---
+
+## How the saved-excerpt format works
+
+Every excerpt is a plain Markdown file with YAML front-matter:
+
+```yaml
+---
+doc_id:         BOOKREADER-EXCERPT-bushido_2026-05-22T13-04-11_v001
+zone:           GREEN
+cognitive_load: 8
+source_book:    "C:/Users/sbrya/OneDrive/Documents/Bushido 1.docx"
+timestamp:      2026-05-22T13:04:11
+selection:      true
+word_count:     412
+tags:           []
+---
+
+# Saved 2026-05-22 13-04 — copy from Bushido 1
+
+- Saved: 2026-05-22T13:04:11
+- Source: C:/Users/sbrya/OneDrive/Documents/Bushido 1.docx
+- Word count: 412
+
+---
+
+(... excerpt body ...)
+```
+
+A sidecar `<filename>.md.meta.json` carries the same metadata for fast
+scans. Either is authoritative — the platform-side reader uses the YAML
+front-matter; the desktop Library uses the sidecar.
+
+The folder where these land defaults to
+`%USERPROFILE%\OneDrive\Desktop\Books\`. Override with the
+`SENTINEL_FORGE_BOOKS_DIR` env var.
+
+---
+
+## Layout
+
+```
+.
+├── book_reader.py                 ← the entire desktop app (single file)
+├── run_book_reader.bat            ← no-console launcher
+├── run_book_reader_debug.bat      ← console launcher for debugging
+├── requirements.txt
+├── Sentinel-Forge.spec            ← PyInstaller spec for one-folder build
+├── sentinel.ico                   ← app icon
+├── sentinel_preview.png           ← preview image
+└── scripts/
+    ├── install_book_reader_shortcut.ps1
+    ├── install_tts.ps1            ← downloads Piper + en_US-amy voice
+    ├── make_sentinel_icon.py      ← regenerates sentinel.ico
+    └── sentinel-library-readme.md ← drop-in README for the Books vault
+```
+
+---
+
+## Build a standalone `.exe`
+
+```powershell
+py -3 -m pip install pyinstaller
+pyinstaller Sentinel-Forge.spec --clean --noconfirm
+```
+Output: `dist\Sentinel-Forge\Sentinel-Forge.exe` (one-folder build —
+ship the whole folder).
+
+---
+
+## Roadmap / what's open
+
+- 🔲 Single-distributable `.exe` via the existing PyInstaller spec
+- 🔲 Voice-note recording (browser MediaRecorder; or `pyaudio` in Tk)
+- 🔲 Tagging UI for the `tags: []` field (schema already supports it)
+- 🔲 Two-way sync with the [Sentinel Forge platform](https://github.com/coconuthead-Sentinel-core/Sentinel-of-sentinel-s-Forge)
+  (write-back zone migration from the web dashboard)
+- 🔲 macOS / Linux ports (Tk is portable; Piper has Linux builds)
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+## Author
+
+**Shannon Brian Kelley** (*Coconut head*) · United States ·
+[github.com/coconuthead-Sentinel-core](https://github.com/coconuthead-Sentinel-core)
+
+> Healthcare CNA → AI Systems Developer transition · neurodivergent-first
+> design · accessibility-focused AI engineering.

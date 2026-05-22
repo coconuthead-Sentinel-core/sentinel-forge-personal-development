@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+env/
+.Python
+
+# PyInstaller artifacts
+build/
+dist/
+*.spec.bak
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vs/
+.vscode/
+.idea/
+
+# Local logs / temp / state
+*.log
+*.tmp
+~$*
+
+# Bundled native TTS — too large for git.
+# `scripts/install_tts.ps1` downloads piper.exe + the voice model on demand.
+tts/
+
+# User-specific session state. The app writes these at runtime;
+# they're personal data, not source.
+study/
+session.json
+HANDOFF_STATE.json
+*.meta.json
+
+# Build outputs
+*.exe.staging/
+Sentinel-Forge/

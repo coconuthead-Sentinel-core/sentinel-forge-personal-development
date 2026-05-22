@@ -1,0 +1,11 @@
+# Python deps for the Sentinel screen reader (book_reader.py).
+# Tk is part of the standard Python distribution; nothing to install.
+# Every parser is imported try/except — the app still runs if any of
+# these are missing, with the matching file types disabled.
+
+python-docx>=1.0.0      # .docx parsing
+pypdf>=4.0.0            # .pdf parsing
+beautifulsoup4>=4.12.0  # .html parsing
+pyttsx3>=2.90           # Windows SAPI5 read-aloud fallback (Piper preferred)
+send2trash>=1.8.0       # recoverable Library deletes
+tkinterdnd2>=0.4.0      # drag-and-drop files onto the Library window
