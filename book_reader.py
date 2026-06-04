@@ -152,8 +152,31 @@ HANDOFF_STATE_PATH = os.path.join(STUDY_DIR, "HANDOFF_STATE.json")
 # binary + one voice model under book-reader/tts/.
 _BR_BASE      = os.path.dirname(os.path.abspath(__file__))
 PIPER_EXE     = os.path.join(_BR_BASE, "tts", "piper.exe")
-PIPER_VOICE   = os.path.join(_BR_BASE, "tts", "voices", "en_US-amy-medium.onnx")
-HAS_PIPER     = os.path.exists(PIPER_EXE) and os.path.exists(PIPER_VOICE)
+_VOICES_DIR   = os.path.join(_BR_BASE, "tts", "voices")
+HAS_PIPER     = os.path.exists(PIPER_EXE) and os.path.isdir(_VOICES_DIR) and any(f.endswith('.onnx') for f in os.listdir(_VOICES_DIR))
+
+# Pomodoro cycle constants. The work duration comes from the active
+# block (or the preset dropdown for a freestanding timer). Breaks are
+# fixed at the classic Pomodoro defaults.
+POMO_SHORT_BREAK_MIN        = 5
+POMO_LONG_BREAK_MIN         = 15
+POMO_CYCLES_PER_LONG_BREAK  = 4
+
+# --- voice-picker diagnostic log -----------------------------------------
+# Appends timestamped lines to voice_debug.log next to this file. Every
+# voice change, every read_aloud, every TTS subprocess gets logged with
+# the exact path/mode/command — so when a voice switch "doesn't work" we
+# can read back what actually happened in the live app.
+_VOICE_DEBUG_LOG = os.path.join(_BR_BASE, "voice_debug.log")
+def _vlog(msg: str) -> None:
+    try:
+        import datetime
+        line = f"{datetime.datetime.now().isoformat(timespec='milliseconds')} pid={os.getpid()} {msg}\n"
+        with open(_VOICE_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass  # logging must never break the app
+
 # Audit rubric grade vocabulary (Walkenbach / A1 course pattern).
 AUDIT_GRADES = ("A+", "A", "A−", "B+", "B", "B−",
                 "C+", "C", "C−", "D", "F", "n/a", "")
@@ -491,6 +514,20 @@ class BookReader:
             self.available_fonts = ["Segoe UI"]
         self.font_family = self.available_fonts[0]   # first available = best for dyslexia
 
+        # Voice picker
+        self.available_voices = []
+        self._voice_paths = {}
+        if HAS_PIPER:
+            vd = os.path.join(_BR_BASE, "tts", "voices")
+            if os.path.isdir(vd):
+                for f in os.listdir(vd):
+                    if f.endswith(".onnx"):
+                        label = f.replace(".onnx", "").replace("en_US-", "").title()
+                        self.available_voices.append(label)
+                        self._voice_paths[label] = os.path.join(vd, f)
+        self.available_voices.append("Microsoft System")
+        self.voice_var = tk.StringVar(value=self.available_voices[0])
+
         tk.Label(right_frame, text="Font:", bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=(0, 4))
         self.font_var = tk.StringVar(value=self.font_family)
@@ -550,6 +587,16 @@ class BookReader:
             bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
             relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
         ).pack(side=tk.LEFT, padx=(14, 0))
+
+        # Voice picker
+        tk.Label(controls_row, text="Voice:", bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(14, 4))
+        voice_menu = tk.OptionMenu(
+            controls_row, self.voice_var, *self.available_voices,
+            command=self._on_voice_change,
+        )
+        _style_optionmenu(voice_menu)
+        voice_menu.configure(width=16)
+        voice_menu.pack(side=tk.LEFT, padx=(0, 12))
 
         # ---- Reading timer (Pomodoro-style, 5 / 10 / 15 / 20 / 25 min)
         # Lives on the right side of the controls row. Visual order is
@@ -858,6 +905,14 @@ class BookReader:
         self._timer_after_id: str | None = None
         self._timer_remaining_seconds: int = 0
         self._timer_running: bool = False
+        # Pomodoro cycle state. _pomo_phase tracks where we are in the
+        # work/break rotation; _pomo_work_cycles_done counts completed
+        # work cycles in the current group (resets after a long break);
+        # _pomo_work_duration_min remembers the work length so the cycle
+        # can resume work with the same duration after each break.
+        self._pomo_phase: str = "idle"   # "idle" | "work" | "short_break" | "long_break"
+        self._pomo_work_cycles_done: int = 0
+        self._pomo_work_duration_min: int = 25
         # Study workspace state
         self._study_win: tk.Toplevel | None = None
         self._study_tab_frames: dict[str, tk.Frame] = {}
@@ -930,6 +985,35 @@ class BookReader:
         # Apply to notes too so the whole window reads consistently
         try: self.notes_area.configure(font=(self.font_family, 13))
         except Exception: pass
+
+    def _on_voice_change(self, value=None) -> None:
+        voice = self.voice_var.get()
+        _vlog(f"_on_voice_change ENTER  value_arg={value!r}  voice_var.get()={voice!r}  is_reading={getattr(self, 'is_reading', False)}")
+        # If a read is mid-flight, stop it so the next 🔊 Read aloud
+        # picks up the new voice cleanly — otherwise the worker thread
+        # keeps using the path it had when the chunk loop started.
+        if getattr(self, "is_reading", False):
+            try:
+                self.stop_reading()
+            except Exception:
+                pass
+        if voice == "Microsoft System":
+            self.tts_mode = "powershell"
+            self.current_piper_voice = None
+            self.set_status(
+                f"Voice: Microsoft System (Windows SAPI). "
+                "Click 🔊 Read aloud to test."
+            )
+        else:
+            self.tts_mode = "piper"
+            self.current_piper_voice = self._voice_paths.get(voice)
+            voice_path = self.current_piper_voice or "(no path)"
+            self.set_status(
+                f"Voice: {voice} (Piper neural). "
+                f"Model: {os.path.basename(voice_path)}. "
+                "Click 🔊 Read aloud to test."
+            )
+        _vlog(f"_on_voice_change EXIT   tts_mode={self.tts_mode!r}  current_piper_voice={self.current_piper_voice!r}")
 
     def _on_highlight_color_change(self, value=None) -> None:
         color = self.HIGHLIGHT_COLORS.get(self.highlight_color_var.get(), "#fde047")
@@ -1046,10 +1130,11 @@ class BookReader:
 
         Override with env var BOOK_READER_TTS=piper|powershell|pyttsx3.
         """
+        self._on_voice_change()
+        
         force = os.environ.get("BOOK_READER_TTS", "").strip().lower()
 
-        if force in ("", "piper") and HAS_PIPER:
-            self.tts_mode = "piper"
+        if force in ("", "piper") and self.tts_mode == "piper":
             self.set_status("Ready (Piper neural voice). "
                              "Click 📂 Open a book to begin.")
             return
@@ -3400,11 +3485,12 @@ class BookReader:
                 return
 
         self.is_reading = True
+        _vlog(f"read_aloud  tts_mode={self.tts_mode!r}  current_piper_voice={self.current_piper_voice!r}  voice_var={self.voice_var.get()!r}  text_len={len(text)}")
         # Status now shows WHICH engine is active so the user can tell at
         # a glance whether they're getting Piper neural voice or a SAPI
         # fallback. Engine name is upper-cased for visibility.
         engine_label = {
-            "piper":      "Piper neural · amy",
+            "piper":      f"Piper neural · {self.voice_var.get()}",
             "powershell": "PowerShell SAPI (Windows voice)",
             "pyttsx3":    "pyttsx3 SAPI (Windows voice)",
             "none":       "no engine",
@@ -3655,7 +3741,12 @@ class BookReader:
             self._on_speech_done()
             return
         self._highlight_queue = queue.Queue()
-        self._pump_after_id = self.root.after(50, self._pump_highlights)
+        # Reuse the SAPI path's queue poller — events are identical
+        # ("highlight" / "done" / "error"). The original code referenced
+        # _pump_highlights which never existed; that AttributeError was
+        # caught by read_aloud's except clause and silently flipped every
+        # Piper read into a SAPI fallback (the "only one voice plays" bug).
+        self._pump_after_id = self.root.after(50, self._ps_poll_queue)
 
         def _run() -> None:
             for char_s, char_e, tk_s, tk_e in chunks:
@@ -3673,8 +3764,9 @@ class BookReader:
                     # Capture stderr so subprocess failures are visible
                     # (Piper logs voice-load + RTF info to stderr on
                     # success; a non-zero exit means real trouble).
+                    _vlog(f"  piper.Popen  --model {self.current_piper_voice!r}  chunk_len={len(chunk_text)}")
                     proc = subprocess.Popen(
-                        [PIPER_EXE, "--model", PIPER_VOICE,
+                        [PIPER_EXE, "--model", self.current_piper_voice,
                           "--output_file", wav_path],
                         stdin=subprocess.PIPE,
                         stdout=subprocess.DEVNULL,
@@ -3761,16 +3853,40 @@ class BookReader:
                         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
                         "$s.Speak($t)"
                     )
+                    _vlog(f"  SAPI.Popen   chunk_len={len(chunk_text)}  tmp={tmp!r}")
+                    # Capture stderr so SAPI failures surface in the
+                    # status bar instead of producing silent no-audio.
                     proc = subprocess.Popen(
                         ["powershell", "-NoProfile", "-Command", ps_cmd],
                         stdin=subprocess.DEVNULL,
                         stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                     )
                     self._ps_proc = proc
-                    proc.wait()
+                    _stderr_bytes = b""
+                    try:
+                        _, _stderr_bytes = proc.communicate(timeout=120)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        _, _stderr_bytes = proc.communicate()
+                        self._highlight_queue.put((
+                            "error",
+                            "Microsoft System voice timed out after 120s. "
+                            "SAPI may be busy with another process.",
+                        ))
+                        return
                     self._ps_proc = None
+                    if proc.returncode != 0:
+                        err_tail = (_stderr_bytes or b"").decode("utf-8", "replace").strip()[-500:]
+                        if not err_tail:
+                            err_tail = ("PowerShell exited with code "
+                                        f"{proc.returncode} but produced no stderr.")
+                        self._highlight_queue.put((
+                            "error",
+                            f"Microsoft System voice failed: {err_tail}",
+                        ))
+                        return
                 except Exception as e:
                     self._highlight_queue.put(("error", str(e)))
                     return
@@ -4437,22 +4553,108 @@ try {
         else:
             self._start_timer()
 
-    def _start_timer(self, duration_min: int | None = None) -> None:
-        """Start the Pomodoro timer. If `duration_min` is given, use it
-        directly (this is how the Matrix's block "▶ Start" button hands
-        off to the timer). Otherwise fall back to the dropdown preset."""
+    def _start_timer(self, duration_min: int | None = None,
+                     phase: str = "work") -> None:
+        """Start the Pomodoro timer.
+
+        External callers (the topbar Start button and the Matrix's block
+        "▶ Start" button) always invoke this with phase='work' (the
+        default). The cycle then auto-transitions through 'short_break'
+        and 'long_break' phases by calling this method recursively from
+        `_timer_done` — those phases are not meant to be triggered by
+        the user directly.
+
+        If `duration_min` is omitted, the duration is chosen from the
+        preset dropdown (for work) or the POMO_*_BREAK_MIN constants
+        (for breaks)."""
         if duration_min is None:
-            preset = self.timer_preset_var.get()
-            duration_min = self._timer_presets.get(preset, 10)
+            if phase == "work":
+                preset = self.timer_preset_var.get()
+                duration_min = self._timer_presets.get(preset, 10)
+            elif phase == "short_break":
+                duration_min = POMO_SHORT_BREAK_MIN
+            elif phase == "long_break":
+                duration_min = POMO_LONG_BREAK_MIN
+            else:
+                duration_min = 10
+        # Starting a work phase captures that duration so subsequent
+        # work phases in the same cycle use the same length.
+        if phase == "work":
+            self._pomo_work_duration_min = int(duration_min)
+        self._pomo_phase = phase
+        # Cancel any leftover pending tick from a previous phase so the
+        # new countdown starts from a clean state.
+        if self._timer_after_id is not None:
+            try:
+                self.root.after_cancel(self._timer_after_id)
+            except Exception:
+                pass
+            self._timer_after_id = None
         self._timer_remaining_seconds = int(duration_min) * 60
         self._timer_running = True
         self.timer_button.configure(text="Stop", bg=ACCENT_RED,
                                      activebackground=ACCENT_RED)
         self._update_timer_display()
         self._tick_timer()
+        _vlog(
+            f"pomo: start phase={phase!r} duration_min={duration_min} "
+            f"cycles_done={self._pomo_work_cycles_done}"
+        )
+        label = self._pomo_phase_label()
         self.set_status(
-            f"⏱ Timer started — {duration_min} minute"
+            f"⏱ {label} started — {duration_min} minute"
             f"{'s' if duration_min != 1 else ''}.")
+        # Mirror phase + remaining duration into the Do Now panel so the
+        # user can see WHICH phase is running (work / break) without
+        # having to look at the topbar. Only updates if the panel has
+        # been built (it lives on the Matrix tab of the Study window).
+        self._pomo_sync_do_now_panel(duration_min)
+
+    def _pomo_phase_label(self) -> str:
+        """Human-readable label for the current Pomodoro phase, used
+        by the status bar and timer display."""
+        if self._pomo_phase == "work":
+            n = self._pomo_work_cycles_done + 1
+            return f"🔥 Work {n}/{POMO_CYCLES_PER_LONG_BREAK}"
+        if self._pomo_phase == "short_break":
+            return "☕ Short break"
+        if self._pomo_phase == "long_break":
+            return "🛋 Long break"
+        return ""
+
+    def _pomo_sync_do_now_panel(self, duration_min: int) -> None:
+        """Push the current Pomodoro phase + duration into the Do Now
+        panel so it stops showing the original block's '25 minutes'
+        line when a break is actually running. Silently no-ops if the
+        panel hasn't been built yet (Study window not open / Matrix
+        tab not visited)."""
+        try:
+            duration_var = getattr(self, "_do_now_duration_var", None)
+            status_var   = getattr(self, "_do_now_status_var", None)
+            if duration_var is None or status_var is None:
+                return
+            label = self._pomo_phase_label()
+            if self._pomo_phase == "idle":
+                # On Stop we let _refresh_do_now_panel drive the panel
+                # back to the block's own duration; nothing to do here.
+                return
+            duration_var.set(
+                f"{duration_min} min  ({label})"
+                if label else f"{duration_min} min"
+            )
+            # Status line shows where we are in the cycle group so
+            # the user can glance and see "1/4 work cycles done".
+            done = self._pomo_work_cycles_done
+            if self._pomo_phase == "work":
+                status_var.set(
+                    f"Cycle in progress · {done} work block"
+                    f"{'s' if done != 1 else ''} done so far")
+            else:
+                status_var.set(
+                    f"Break in progress · {done} work block"
+                    f"{'s' if done != 1 else ''} done — next work block resumes after the break")
+        except tk.TclError:
+            pass
 
     def _tick_timer(self) -> None:
         if not self._timer_running:
@@ -4467,11 +4669,20 @@ try {
     def _update_timer_display(self) -> None:
         secs = max(0, self._timer_remaining_seconds)
         m, s = divmod(secs, 60)
-        self.timer_display_var.set(f"{m:02d}:{s:02d}")
+        icon = {"work": "🔥", "short_break": "☕",
+                "long_break": "🛋"}.get(self._pomo_phase, "")
+        if icon:
+            self.timer_display_var.set(f"{icon} {m:02d}:{s:02d}")
+        else:
+            self.timer_display_var.set(f"{m:02d}:{s:02d}")
 
     def _stop_timer(self, announce: bool = True) -> None:
-        """Cancel the countdown and reset the UI to idle."""
+        """Cancel the countdown and reset the UI to idle. Also resets
+        the Pomodoro cycle counter — stopping is an explicit user
+        action that ends the cycle group."""
         self._timer_running = False
+        self._pomo_phase = "idle"
+        self._pomo_work_cycles_done = 0
         if self._timer_after_id is not None:
             try:
                 self.root.after_cancel(self._timer_after_id)
@@ -4484,28 +4695,69 @@ try {
             self.timer_display_var.set("00:00")
         except Exception:
             pass
+        # Restore Do Now panel to whatever the active block actually says
+        # (cleans up the "Cycle in progress" status the cycle wrote in).
+        try:
+            self._refresh_blocks_for_selected_day()
+        except Exception:
+            pass
         if announce:
             self.set_status("⏱ Timer stopped.")
 
     def _timer_done(self) -> None:
-        """Countdown reached zero — play a beep, reset the button,
-        and pop up a non-blocking 'Time's up' notice."""
-        self._timer_running = False
+        """Countdown reached zero. Auto-transition to the next phase
+        of the Pomodoro cycle (work → short break → … → long break
+        after POMO_CYCLES_PER_LONG_BREAK work cycles → repeat). The
+        Stop button breaks out of the cycle at any point."""
         self._timer_after_id = None
+        finished_phase = self._pomo_phase
+        _vlog(
+            f"pomo: done phase={finished_phase!r} "
+            f"cycles_done={self._pomo_work_cycles_done}"
+        )
+        # System chime — same one regardless of phase. Cheap audible
+        # cue that the timer rolled over.
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except Exception:
+            pass
+
+        if finished_phase == "work":
+            self._pomo_work_cycles_done += 1
+            if self._pomo_work_cycles_done >= POMO_CYCLES_PER_LONG_BREAK:
+                self._pomo_work_cycles_done = 0
+                self.set_status(
+                    f"⏱ 🔥 Work done — long break "
+                    f"({POMO_LONG_BREAK_MIN} min) starting now.")
+                self._start_timer(phase="long_break")
+            else:
+                self.set_status(
+                    f"⏱ 🔥 Work done — short break "
+                    f"({POMO_SHORT_BREAK_MIN} min) starting now.")
+                self._start_timer(phase="short_break")
+            return
+
+        if finished_phase in ("short_break", "long_break"):
+            kind = "Long" if finished_phase == "long_break" else "Short"
+            self.set_status(
+                f"⏱ {kind} break over — back to work "
+                f"({self._pomo_work_duration_min} min).")
+            self._start_timer(
+                duration_min=self._pomo_work_duration_min, phase="work")
+            return
+
+        # finished_phase == "idle" or anything unexpected: fall back to
+        # the legacy single-shot behavior (beep + popup, no cycle).
+        self._timer_running = False
+        self._pomo_phase = "idle"
         try:
             self.timer_button.configure(text="Start", bg=ACCENT_GREEN,
                                          activebackground=ACCENT_GREEN)
             self.timer_display_var.set("00:00")
         except Exception:
             pass
-        # System chime — works without any extra dependency on Windows.
-        try:
-            import winsound
-            winsound.MessageBeep(winsound.MB_ICONASTERISK)
-        except Exception:
-            pass
         self.set_status("⏱ Time's up!")
-        # Use root.after so the popup doesn't block the after() callback chain.
         self.root.after(50, lambda: messagebox.showinfo(
             "⏱ Timer", "Time's up!"))
 
@@ -7913,6 +8165,8 @@ try {
 
         Bottom half stays free-form (👥 Delegate, 🗑 Eliminate) — for
         anything that doesn't fit a time slot."""
+        import traceback
+        _vlog("matrix: _build_tab_eisenhower ENTER")
         # Reset state so a workspace reopen rebuilds cleanly.
         self._eisenhower_widgets = {}
         self._eisenhower_save_after_ids = {}
@@ -7943,30 +8197,58 @@ try {
         # is the free-form delegate/eliminate notepads.
         grid = tk.Frame(parent, bg=BG_DARK, padx=8, pady=4)
         grid.pack(fill=tk.BOTH, expand=True)
-        grid.grid_rowconfigure(0, weight=1)
-        grid.grid_rowconfigure(1, weight=1)
+        # minsize=240 on both rows: the bottom-row ScrolledText widgets
+        # request a huge natural size (~80x24 char default ≈ 600x400 px),
+        # which Tk's grid layout interprets as "row 1 needs all the
+        # available height," squeezing row 0 (Do Now + Schedule) to 1 px.
+        # Forcing a 240 px floor on each row guarantees the top row
+        # actually has room to render. (Diagnosed via matrix:GEOM log.)
+        grid.grid_rowconfigure(0, weight=1, minsize=240)
+        grid.grid_rowconfigure(1, weight=1, minsize=240)
         grid.grid_columnconfigure(0, weight=1)
         grid.grid_columnconfigure(1, weight=1)
 
+        # Build the four cells with per-cell try/except so a failure in
+        # one (e.g. the Do Now panel) doesn't take out the whole tab —
+        # and every entry/exit/exception lands in voice_debug.log.
+        def _safe_build(name, fn, *args):
+            _vlog(f"matrix:   {name} ENTER")
+            try:
+                fn(*args)
+                _vlog(f"matrix:   {name} EXIT ok")
+            except Exception as e:
+                tb = traceback.format_exc()
+                _vlog(f"matrix:   {name} RAISED {type(e).__name__}: {e}\n{tb}")
+
         do_cell = tk.Frame(grid, bg=BG_DARK)
         do_cell.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        self._build_matrix_do_now_panel(do_cell)
+        _safe_build("_build_matrix_do_now_panel", self._build_matrix_do_now_panel, do_cell)
 
         sched_cell = tk.Frame(grid, bg=BG_DARK)
         sched_cell.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
-        self._build_matrix_schedule_panel(sched_cell)
+        _safe_build("_build_matrix_schedule_panel", self._build_matrix_schedule_panel, sched_cell)
 
         deleg_cell = tk.Frame(grid, bg=BG_DARK)
         deleg_cell.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
-        self._build_matrix_freeform_quadrant(
-            deleg_cell, "delegate", "👥 Delegate",
-            "Urgent, Not Important", ACCENT_AMBER)
+        _safe_build("_build_matrix_freeform_quadrant(delegate)",
+                    self._build_matrix_freeform_quadrant,
+                    deleg_cell, "delegate", "👥 Delegate",
+                    "Urgent, Not Important", ACCENT_AMBER)
 
         elim_cell = tk.Frame(grid, bg=BG_DARK)
         elim_cell.grid(row=1, column=1, sticky="nsew", padx=4, pady=4)
-        self._build_matrix_freeform_quadrant(
-            elim_cell, "eliminate", "🗑 Eliminate",
-            "Neither", ACCENT_SLATE)
+        _safe_build("_build_matrix_freeform_quadrant(eliminate)",
+                    self._build_matrix_freeform_quadrant,
+                    elim_cell, "eliminate", "🗑 Eliminate",
+                    "Neither", ACCENT_SLATE)
+
+        # Save references for the post-show geometry dump (proof #3).
+        self._matrix_dbg_cells = {
+            "do_cell": do_cell, "sched_cell": sched_cell,
+            "deleg_cell": deleg_cell, "elim_cell": elim_cell,
+            "grid": grid, "parent": parent,
+        }
+        _vlog("matrix: _build_tab_eisenhower EXIT")
 
     # ---- Day picker ----------------------------------------------------
     def _build_matrix_day_picker(self, parent: tk.Frame) -> None:
@@ -8290,7 +8572,10 @@ try {
             value=str(existing["duration_min"]) if existing else "25")
         dur_row = tk.Frame(dlg, bg=BG_DARK, padx=14)
         dur_row.pack(fill=tk.X)
-        for v in ("15", "20", "25"):
+        # Match the topbar timer dropdown's preset list (5/10/15/20/25).
+        # Used to be only 15/20/25 here, which forced every short block
+        # through the Custom field and made 25 min the de-facto default.
+        for v in ("5", "10", "15", "20", "25"):
             tk.Radiobutton(
                 dur_row, text=f"{v} min", variable=duration_var, value=v,
                 bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_INPUT,
@@ -8532,9 +8817,58 @@ try {
         `_refresh_tab_<key>` convention used by every other tab.
         (Without this naming match the day-picker buttons stay as
         their '—' placeholders because the refresh never runs.)"""
+        import traceback
+        _vlog(f"matrix: _refresh_tab_matrix ENTER  block_listbox={'present' if self._block_listbox is not None else 'NONE'}  ew_count={len(self._eisenhower_widgets)}")
         # Top half — calendar
-        self._refresh_day_picker()
-        self._refresh_blocks_for_selected_day()
+        try:
+            self._refresh_day_picker()
+            _vlog("matrix:   _refresh_day_picker ok")
+        except Exception as e:
+            _vlog(f"matrix:   _refresh_day_picker RAISED {type(e).__name__}: {e}\n{traceback.format_exc()}")
+        try:
+            self._refresh_blocks_for_selected_day()
+            _vlog("matrix:   _refresh_blocks_for_selected_day ok")
+        except Exception as e:
+            _vlog(f"matrix:   _refresh_blocks_for_selected_day RAISED {type(e).__name__}: {e}\n{traceback.format_exc()}")
+
+        # Geometry dump — fires 250 ms after the tab is shown so Tk has
+        # had time to map and lay out the widgets. Logs each cell's
+        # actual size, child count, and first-child background, which
+        # tells us whether the top row is zero-sized, color-blended, or
+        # actually fine and the bug is elsewhere (proof #3 action).
+        def _dump_matrix_geometry():
+            try:
+                cells = getattr(self, "_matrix_dbg_cells", None) or {}
+                for name, w in cells.items():
+                    try:
+                        geom = w.winfo_geometry()
+                        wpx  = w.winfo_width()
+                        hpx  = w.winfo_height()
+                        children = w.winfo_children()
+                        first = children[0] if children else None
+                        first_info = "(no children)"
+                        if first is not None:
+                            try:
+                                fbg = first.cget("bg")
+                            except Exception:
+                                fbg = "?"
+                            first_info = (
+                                f"first_child={type(first).__name__} "
+                                f"geom={first.winfo_geometry()} "
+                                f"bg={fbg!r}"
+                            )
+                        _vlog(
+                            f"matrix:GEOM  {name:<11} geom={geom}  "
+                            f"size={wpx}x{hpx}  children={len(children)}  {first_info}"
+                        )
+                    except Exception as ge:
+                        _vlog(f"matrix:GEOM  {name} ERROR {type(ge).__name__}: {ge}")
+            except Exception as e:
+                _vlog(f"matrix:GEOM dump RAISED {type(e).__name__}: {e}")
+        try:
+            self.root.after(250, _dump_matrix_geometry)
+        except Exception:
+            pass
         # Bottom half — free-form quadrants
         if not self._eisenhower_widgets:
             return
