@@ -20,6 +20,15 @@ import re
 import shutil
 import sqlite3
 import sys
+
+from lyceum.db.study_db import (
+    STUDY_DB,
+    STUDY_DIR,
+    connect as _db_connect,
+    db_exec as _db_exec_fn,
+    db_query as _db_query_fn,
+    init_study_db,
+)
 import subprocess
 import tempfile
 import threading
@@ -131,13 +140,8 @@ LIBRARY_ZONE_LOAD_DEFAULT = {"GREEN": 8, "YELLOW": 5, "RED": 2}
 LIBRARY_ZONE_LOAD_RANGE   = {"GREEN": (7, 10), "YELLOW": (4, 6), "RED": (1, 3)}
 
 # ---- Study workspace storage --------------------------------------------
-# Design borrowed from e-Sword: source content (books) lives separately
-# from user content (highlights/bookmarks/topics/glossary/journal). Here
-# everything that's "yours" goes into a single SQLite database that
-# OneDrive backs up automatically. Highlights and bookmarks are anchored
-# to a (book_key, char_offset) pair, so they survive re-opens.
-STUDY_DIR = os.path.expanduser(r"~\OneDrive\Documents\BookReader")
-STUDY_DB  = os.path.join(STUDY_DIR, "study.db")
+# STUDY_DIR / STUDY_DB — lyceum.db.study_db (SQLite). Same folder also holds
+# session.json and HANDOFF_STATE.json below.
 # Session Header state: cognitive load (1–10), derived zone, last-seen
 # timestamp. Persisted to JSON so the topbar slider remembers across
 # launches. Spec source: snapshots/Forge-Stack-A1/03_FRONT_END/
@@ -4210,189 +4214,18 @@ try {
     # religious — the schema, labels, and workflow are all general-purpose.
     # ====================================================================
 
-    # ---- Database helpers ----------------------------------------------
+    # ---- Database helpers (implementation in lyceum.db.study_db) -------
     def _init_study_db(self) -> None:
-        """Create the study database and its tables if they don't exist."""
-        try:
-            os.makedirs(STUDY_DIR, exist_ok=True)
-        except Exception as e:
-            print(f"[book_reader] Could not create {STUDY_DIR}: {e}",
-                  file=sys.stderr)
-            return
-        try:
-            con = self._db()
-            con.executescript("""
-                CREATE TABLE IF NOT EXISTS highlights (
-                    id INTEGER PRIMARY KEY,
-                    book TEXT NOT NULL,
-                    start_offset INTEGER NOT NULL,
-                    end_offset INTEGER NOT NULL,
-                    text TEXT,
-                    color TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_highlights_book ON highlights(book);
-
-                CREATE TABLE IF NOT EXISTS topics (
-                    id INTEGER PRIMARY KEY,
-                    title TEXT NOT NULL UNIQUE,
-                    created_at TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS topic_entries (
-                    id INTEGER PRIMARY KEY,
-                    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-                    text TEXT NOT NULL,
-                    source_book TEXT,
-                    source_offset INTEGER,
-                    created_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_entries_topic ON topic_entries(topic_id);
-
-                CREATE TABLE IF NOT EXISTS bookmarks (
-                    id INTEGER PRIMARY KEY,
-                    book TEXT NOT NULL,
-                    position INTEGER NOT NULL,
-                    label TEXT,
-                    created_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book);
-
-                CREATE TABLE IF NOT EXISTS glossary (
-                    id INTEGER PRIMARY KEY,
-                    term TEXT NOT NULL COLLATE NOCASE UNIQUE,
-                    definition TEXT NOT NULL,
-                    source TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS journal (
-                    id INTEGER PRIMARY KEY,
-                    entry_date TEXT NOT NULL,
-                    body TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_journal_date ON journal(entry_date);
-
-                /* Eisenhower priority matrix — one row per quadrant.
-                   Keys are 'do' (urgent+important), 'schedule' (important
-                   only), 'delegate' (urgent only), 'eliminate' (neither). */
-                CREATE TABLE IF NOT EXISTS eisenhower (
-                    quadrant TEXT PRIMARY KEY,
-                    body TEXT NOT NULL DEFAULT '',
-                    updated_at TEXT NOT NULL
-                );
-
-                /* Study Notes — one freeform notepad scoped to the
-                   Study workspace (separate from the always-visible
-                   Notes panel). Single-row by design; the CHECK keeps
-                   it that way. Highlights can be sent here via the
-                   right-click menu in the Highlights tab. */
-                CREATE TABLE IF NOT EXISTS study_notes (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
-                    body TEXT NOT NULL DEFAULT '',
-                    updated_at TEXT NOT NULL
-                );
-
-                /* Day blocks — the new Matrix Do-Now / Schedule layer.
-                   One row per Pomodoro block: which day it's for, how
-                   long it runs, its title, and flags for done / active.
-                   slot_order keeps them in user-chosen order within a day. */
-                CREATE TABLE IF NOT EXISTS day_blocks (
-                    id INTEGER PRIMARY KEY,
-                    block_date TEXT NOT NULL,
-                    slot_order INTEGER NOT NULL,
-                    duration_min INTEGER NOT NULL,
-                    title TEXT NOT NULL,
-                    notes TEXT NOT NULL DEFAULT '',
-                    done INTEGER NOT NULL DEFAULT 0,
-                    is_current INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_blocks_date
-                    ON day_blocks(block_date);
-
-                /* Workflow folders. Each row pairs metadata (color,
-                   title, date label) with a real directory under
-                   WORKFLOW_DIR, named after `name`. UNIQUE(name) is
-                   case-insensitive so the disk-folder rename stays
-                   collision-free. */
-                CREATE TABLE IF NOT EXISTS workflow_folders (
-                    id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    title TEXT NOT NULL DEFAULT '',
-                    date_label TEXT NOT NULL DEFAULT '',
-                    color TEXT NOT NULL DEFAULT 'green',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(name COLLATE NOCASE)
-                );
-
-                /* Audit rubric (Walkenbach / Sentinel Prime audit pattern).
-                   One row per audit session. Findings live as a JSON array
-                   in `findings_json` to keep the schema flat — each entry
-                   is {finding, location, grade, fix}. The 5-column rubric
-                   (# | Finding | Where | Grade | Recommended fix) is
-                   reconstructed at render time. */
-                CREATE TABLE IF NOT EXISTS audits (
-                    id INTEGER PRIMARY KEY,
-                    title TEXT NOT NULL DEFAULT '',
-                    subject TEXT NOT NULL DEFAULT '',
-                    overall_grade TEXT NOT NULL DEFAULT '',
-                    mentors_note TEXT NOT NULL DEFAULT '',
-                    findings_json TEXT NOT NULL DEFAULT '[]',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-
-                /* Prompt journal — schema matches the Google Prompting
-                   Essentials prompt-library template verbatim
-                   (docs/prompt-library/prompt-library-template.md).
-                   Eight user-facing fields; `refs` is named to avoid
-                   collision with the SQL keyword REFERENCES. */
-                CREATE TABLE IF NOT EXISTS prompts (
-                    id INTEGER PRIMARY KEY,
-                    prompt TEXT NOT NULL DEFAULT '',
-                    purpose TEXT NOT NULL DEFAULT '',
-                    refs TEXT NOT NULL DEFAULT '',
-                    iterations TEXT NOT NULL DEFAULT '',
-                    ai_tools TEXT NOT NULL DEFAULT '',
-                    input_type TEXT NOT NULL DEFAULT '',
-                    output_type TEXT NOT NULL DEFAULT '',
-                    notes TEXT NOT NULL DEFAULT '',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-            """)
-            con.commit()
-            con.close()
-        except sqlite3.Error as e:
-            print(f"[book_reader] DB init error: {e}", file=sys.stderr)
+        init_study_db()
 
     def _db(self) -> sqlite3.Connection:
-        """Return a fresh connection. Each caller closes it after use."""
-        con = sqlite3.connect(STUDY_DB)
-        con.execute("PRAGMA foreign_keys = ON")
-        return con
+        return _db_connect()
 
     def _db_query(self, sql: str, params: tuple = ()) -> list[tuple]:
-        con = self._db()
-        try:
-            return con.execute(sql, params).fetchall()
-        finally:
-            con.close()
+        return _db_query_fn(sql, params)
 
     def _db_exec(self, sql: str, params: tuple = ()) -> int:
-        """Execute a write; return the last inserted rowid (or 0)."""
-        con = self._db()
-        try:
-            cur = con.execute(sql, params)
-            con.commit()
-            return cur.lastrowid or 0
-        finally:
-            con.close()
+        return _db_exec_fn(sql, params)
 
     def _book_key(self, path: str | None) -> str | None:
         """Stable identifier for a book. Use a path relative to LIBRARY_DIR
