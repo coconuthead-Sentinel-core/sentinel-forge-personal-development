@@ -117,6 +117,12 @@ Beyond reading, the app is a study and focus workstation:
   you ever feel it. Log a raise (e.g. $21→$22/hr) and it splits the increase
   50/50 — lifestyle vs. wealth — tracks your committed monthly/yearly savings,
   and can sweep it into your Financial Independence balance.
+- **🌱 Compound Simulator (Rule of 72)** — compound interest is the most powerful
+  force there is. Plug in a few dollars a week, a return rate, and your age, and
+  a **growth graph** forecasts the fortune it becomes by retirement (e.g.
+  *$20/week at 8% → ~$179,000 by 65, only $36k of it your own money*). Shows how
+  often your money doubles (Rule of 72). Open it whenever you feel poor or stuck
+  and *see* your future wealth — instant hope.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

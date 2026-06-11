@@ -248,6 +248,7 @@ ACCENT_ORANGE = "#ea580c"   # 5-4-3-2-1 Momentum / Launch button
 ACCENT_EMERALD = "#059669"  # Pay Yourself First (money / savings)
 ACCENT_GOLD    = "#ca8a04"  # Money hub (at-a-glance summary)
 ACCENT_TEAL    = "#0d9488"  # Save More Tomorrow (raise wedge)
+ACCENT_LIME    = "#65a30d"  # Rule-of-72 compound growth simulator
 
 # "Winner's Time Log" categories — one quick tap files where the last hour
 # went. (label, pie color). High-value first so the eye lands on A-1 work;
@@ -534,6 +535,7 @@ class BookReader:
         btn(money, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
         btn(money, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
         btn(money, "📈 Save More", self.open_save_more_tomorrow, ACCENT_TEAL)
+        btn(money, "🌱 Compound", self.open_compound_simulator, ACCENT_LIME)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -5149,6 +5151,217 @@ class BookReader:
                 borderwidth=0).pack(anchor="e", pady=(4, 0))
 
         _render()
+
+    # ---- Rule of 72 compound-interest simulator ------------------------
+    @staticmethod
+    def _compound_series(weekly, rate_pct, years, start=0.0):
+        """Year-by-year balance of weekly savings compounding at rate_pct.
+        Returns a list of length years+1 (balance at the end of each year)."""
+        r = float(rate_pct) / 100.0
+        annual = float(weekly) * 52.0
+        bal = float(start)
+        out = [bal]
+        for _ in range(max(0, int(years))):
+            bal = bal * (1 + r) + annual
+            out.append(bal)
+        return out
+
+    def _draw_growth(self, canvas, series, start_age):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W, H = 560, 240
+        if W < 30:
+            W = 560
+        if H < 30:
+            H = 240
+        pl, pr, pt, pb = 10, 12, 10, 20
+        pw = W - pl - pr; ph = H - pt - pb
+        n = len(series) - 1
+        mx = max(series) or 1.0
+        if n <= 0:
+            canvas.create_text(W // 2, H // 2, text="Set your numbers above",
+                               fill=FG_MUTED, font=("Segoe UI", 11))
+            return
+        pts = []
+        for i, b in enumerate(series):
+            xx = pl + (i / n) * pw
+            yy = pt + ph - (b / mx) * ph
+            pts.append((xx, yy))
+        poly = [pl, pt + ph] + [c for p in pts for c in p] + [pl + pw, pt + ph]
+        canvas.create_polygon(poly, fill="#14532d", outline="")
+        canvas.create_line([c for p in pts for c in p], fill="#22c55e", width=3)
+        canvas.create_line(pl, pt + ph, pl + pw, pt + ph, fill="#334155")
+        # Rule-of-72 doubling gridlines (each doubling of the FINAL value)
+        final = series[-1]
+        d = final
+        while d > mx * 0.06:
+            gy = pt + ph - (d / mx) * ph
+            canvas.create_line(pl, gy, pl + pw, gy, fill="#1e293b", dash=(2, 3))
+            d /= 2
+        canvas.create_text(pl, H - 6, text=f"age {start_age}", fill=FG_MUTED,
+                           anchor="w", font=("Segoe UI", 8))
+        canvas.create_text(pl + pw, H - 6, text=f"age {start_age + n}",
+                           fill=FG_MUTED, anchor="e", font=("Segoe UI", 8))
+        canvas.create_text(pl + pw, pt + 2, text=self._money_fmt(final),
+                           fill="#4ade80", anchor="ne", font=("Segoe UI", 12, "bold"))
+
+    def open_compound_simulator(self) -> None:
+        """The Rule of 72: compound interest is the most powerful force there
+        is. A few dollars a week, never touched, grows into a fortune. When you
+        feel poor or stuck, open this and watch your future wealth — hope you
+        can see."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_compound_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        st = self._load_handoff_state() or {}
+
+        def _g(k, d):
+            try:
+                return float(st.get(k, d))
+            except (TypeError, ValueError):
+                return d
+        weekly0 = _g("r72_weekly", 20); rate0 = _g("r72_rate", 8)
+        age0 = _g("r72_age", 30); retire0 = _g("r72_retire", 65)
+        start0 = _g("r72_start", 0)
+
+        win = tk.Toplevel(self.root)
+        self._compound_win = win
+        win.title("🌱 Rule of 72 — Compound Simulator")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(820, max(600, sw - 70)); h = min(680, max(480, sh - 100))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(600, 480)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._compound_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🌱 Compound Simulator", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Compound interest is the most powerful force in the "
+                 "universe. Put a little away, never touch it, and it grows into "
+                 "a fortune.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        # ---- inputs ----
+        inp = tk.Frame(win, bg=BG_DARK, padx=12); inp.pack(fill=tk.X)
+        weekly_var = tk.StringVar(value=f"{weekly0:g}")
+        rate_var = tk.StringVar(value=f"{rate0:g}")
+        age_var = tk.StringVar(value=f"{age0:g}")
+        retire_var = tk.StringVar(value=f"{retire0:g}")
+        start_var = tk.StringVar(value=(f"{start0:g}" if start0 else ""))
+
+        def _field(col, label, var, width, suffix=""):
+            cell = tk.Frame(inp, bg=BG_DARK); cell.grid(row=0, column=col,
+                                                        sticky="w", padx=(0, 10))
+            tk.Label(cell, text=label, bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w")
+            r = tk.Frame(cell, bg=BG_DARK); r.pack(anchor="w")
+            e = tk.Entry(r, textvariable=var, width=width, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 12, "bold"))
+            e.pack(side=tk.LEFT, ipady=2)
+            if suffix:
+                tk.Label(r, text=suffix, bg=BG_DARK, fg=FG_MUTED,
+                         font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(2, 0))
+            return e
+        e1 = _field(0, "SAVE / WEEK  $", weekly_var, 7, "")
+        e2 = _field(1, "RETURN", rate_var, 5, "%")
+        e3 = _field(2, "MY AGE", age_var, 4, "")
+        e4 = _field(3, "RETIRE AT", retire_var, 4, "")
+        e5 = _field(4, "ALREADY SAVED  $", start_var, 9, "")
+
+        # ---- big result ----
+        big_var = tk.StringVar(); sub_var = tk.StringVar()
+        tk.Label(win, textvariable=big_var, bg=BG_DARK, fg="#4ade80",
+                 font=("Segoe UI", 19, "bold"), wraplength=w - 30,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(8, 0))
+        tk.Label(win, textvariable=sub_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10), wraplength=w - 30, justify=tk.LEFT,
+                 padx=14).pack(fill=tk.X, pady=(2, 4))
+
+        # ---- graph ----
+        graph = tk.Canvas(win, height=250, bg="#0b1220", highlightthickness=0)
+        graph.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 12))
+
+        def _save():
+            stt = self._load_handoff_state() or {}
+            stt["r72_weekly"] = self._money_parse(weekly_var.get()) or 0.0
+            try:
+                stt["r72_rate"] = float(rate_var.get() or 0)
+                stt["r72_age"] = float(age_var.get() or 0)
+                stt["r72_retire"] = float(retire_var.get() or 0)
+            except ValueError:
+                pass
+            stt["r72_start"] = self._money_parse(start_var.get()) or 0.0
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+
+        def _recompute(*_a):
+            weekly = self._money_parse(weekly_var.get()) or 0.0
+            start = self._money_parse(start_var.get()) or 0.0
+            try:
+                rate = float(rate_var.get() or 0)
+                age = int(float(age_var.get() or 0))
+                retire = int(float(retire_var.get() or 0))
+            except ValueError:
+                rate, age, retire = 8.0, 30, 65
+            years = max(0, retire - age)
+            series = self._compound_series(weekly, rate, years, start)
+            self._draw_growth(graph, series, age)
+            final = series[-1]
+            contributed = start + weekly * 52 * years
+            growth = final - contributed
+            big_var.set(f"By age {retire}: ≈ {self._money_fmt(final)}")
+            if rate > 0 and years > 0:
+                dbl = 72.0 / rate
+                sub_var.set(
+                    f"You put in {self._money_fmt(contributed)} — compounding "
+                    f"added {self._money_fmt(growth)} for free. At {rate:g}%, "
+                    f"your money doubles every {dbl:.0f} years (Rule of 72). "
+                    f"That's {self._money_fmt(weekly)}/week, never touched.")
+            else:
+                sub_var.set("Enter a return rate and a retirement age to see the "
+                            "magic.")
+
+        for e in (e1, e2, e3, e4, e5):
+            e.bind("<KeyRelease>", _recompute)
+            e.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
+        graph.bind("<Configure>", lambda _e: _recompute())
+
+        _recompute()
+        e1.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
