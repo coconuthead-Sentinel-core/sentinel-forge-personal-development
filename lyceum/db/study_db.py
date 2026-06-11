@@ -272,6 +272,20 @@ CREATE TABLE IF NOT EXISTS time_log (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_timelog_date ON time_log(log_date);
+
+-- "After-Action Review" (Brian Tracy / James Clear): experience alone doesn't
+-- improve you — EVALUATED experience does. One reflection per day, two
+-- questions ("what did I do right?" / "what would I do differently?") plus an
+-- optional 1-5 self-rating, so the week can be reviewed and habits fine-tuned.
+CREATE TABLE IF NOT EXISTS daily_review (
+    id INTEGER PRIMARY KEY,
+    review_date TEXT NOT NULL UNIQUE,   -- YYYY-MM-DD, one review per day
+    did_right TEXT NOT NULL DEFAULT '',
+    do_differently TEXT NOT NULL DEFAULT '',
+    rating INTEGER NOT NULL DEFAULT 0,  -- 0 = unrated, else 1-5
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 

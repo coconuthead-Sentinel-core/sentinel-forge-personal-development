@@ -243,6 +243,7 @@ ACCENT_SLATE  = "#475569"
 ACCENT_MIC    = "#0ea5e9"   # mic button idle (sky-blue); turns red while recording
 ACCENT_AMBER  = "#d97706"   # paste-from-clipboard button
 ACCENT_PINK   = "#db2777"   # save-for-Claude button
+ACCENT_INDIGO = "#4f46e5"   # After-Action Review (daily reflection)
 
 # "Winner's Time Log" categories — one quick tap files where the last hour
 # went. (label, pie color). High-value first so the eye lands on A-1 work;
@@ -499,6 +500,7 @@ class BookReader:
         btn(topbar, "🎯  Focus",             self.open_focus_mode,      ACCENT_PURPLE)
         btn(topbar, "🚫  Not-To-Do",         self.open_not_to_do,       ACCENT_RED)
         btn(topbar, "⏱  Time Log",           self.open_time_log,        ACCENT_CYAN)
+        self._review_btn = btn(topbar, "🪞  Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(topbar, "🗒  Prompt Library",    self.open_prompt_library,  ACCENT_GREEN)
         btn(topbar, "🔊  Read aloud",        self.read_aloud,           ACCENT_GREEN)
         btn(topbar, "■  Stop",               self.stop_reading,         ACCENT_SLATE)
@@ -2444,6 +2446,293 @@ class BookReader:
                               fill=color_of.get(label, "#888888"),
                               outline=BG_DARK, width=2)
             start += extent
+
+    # ---- After-Action Review (Tracy/Clear daily reflection) ------------
+    def _review_load(self, day: str) -> tuple[str, str, int]:
+        try:
+            rows = self._db_query(
+                "SELECT did_right, do_differently, rating FROM daily_review "
+                "WHERE review_date=?", (day,))
+        except Exception:
+            rows = []
+        if rows:
+            r = rows[0]
+            return (r[0] or "", r[1] or "", int(r[2] or 0))
+        return ("", "", 0)
+
+    def _review_save(self, day: str, did_right: str, do_differently: str,
+                     rating: int) -> bool:
+        now = datetime.now().isoformat()
+        try:
+            self._db_exec(
+                "INSERT INTO daily_review (review_date,did_right,do_differently,"
+                "rating,created_at,updated_at) VALUES (?,?,?,?,?,?) "
+                "ON CONFLICT(review_date) DO UPDATE SET "
+                "did_right=excluded.did_right, "
+                "do_differently=excluded.do_differently, "
+                "rating=excluded.rating, updated_at=excluded.updated_at",
+                (day, did_right, do_differently, int(rating), now, now))
+            return True
+        except Exception:
+            return False
+
+    def _review_dates(self) -> list[str]:
+        try:
+            rows = self._db_query(
+                "SELECT review_date FROM daily_review ORDER BY review_date DESC")
+        except Exception:
+            rows = []
+        return [r[0] for r in rows]
+
+    def _review_has_today(self) -> bool:
+        dr, dd, _ = self._review_load(date.today().strftime("%Y-%m-%d"))
+        return bool(dr.strip() or dd.strip())
+
+    def _review_read_widget(self, widget: tk.Text) -> None:
+        """🔊 Listen button shared by both reflection boxes (toggles to stop)."""
+        if self.is_reading:
+            self.stop_reading(); return
+        try:
+            if not widget.get("1.0", tk.END).strip():
+                return
+        except tk.TclError:
+            return
+        chex = self.HIGHLIGHT_COLORS.get("Yellow", "#fde047")
+        try:
+            widget.tag_configure("reading", background=chex, foreground="#0f172a")
+            widget.tag_raise("reading", "sel")
+        except tk.TclError:
+            pass
+        self._read_widget = widget
+        try:
+            widget.mark_set(tk.INSERT, "1.0"); widget.focus_set()
+        except tk.TclError:
+            pass
+        self.read_aloud()
+
+    @staticmethod
+    def _review_pretty_date(day: str) -> str:
+        try:
+            return datetime.strptime(day, "%Y-%m-%d").strftime("%a, %b %d %Y")
+        except ValueError:
+            return day
+
+    def open_after_action_review(self) -> None:
+        """Brian Tracy's end-of-day review — 'What did I do right?' and 'What
+        would I do differently next time?' — plus an optional 1-5 day rating.
+        Past days are listed so the week can be reviewed (James Clear). One
+        reflection per day."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_review_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        today_str = date.today().strftime("%Y-%m-%d")
+        self._review_current_day = today_str
+        self._review_list_dates = []
+
+        win = tk.Toplevel(self.root)
+        self._review_win = win
+        win.title("🪞 After-Action Review")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(880, max(640, sw - 80)); h = min(680, max(470, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(640, 470)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        rating_var = tk.StringVar(value="—")
+
+        def _refresh_list():
+            listbox.delete(0, tk.END)
+            dates = self._review_dates()
+            if today_str not in dates:
+                dates = [today_str] + dates
+            self._review_list_dates = dates
+            for d in dates:
+                dr, dd, rt = self._review_load(d)
+                star = f"  {'★' * rt}" if rt else ""
+                flag = "" if (dr.strip() or dd.strip()) else "  (empty)"
+                bullet = "● " if d == today_str else "   "
+                listbox.insert(tk.END, f"{bullet}{d}{star}{flag}")
+
+        def _load(day):
+            dr, dd, rt = self._review_load(day)
+            self._review_current_day = day
+            prefix = "Today — " if day == today_str else ""
+            date_var.set(prefix + self._review_pretty_date(day))
+            rating_var.set(str(rt) if rt else "—")
+            box1.delete("1.0", tk.END); box1.insert("1.0", dr)
+            box2.delete("1.0", tk.END); box2.insert("1.0", dd)
+
+        def _save(silent=False):
+            day = self._review_current_day
+            try:
+                dr = box1.get("1.0", tk.END).strip()
+                dd = box2.get("1.0", tk.END).strip()
+            except tk.TclError:
+                return False
+            rv = rating_var.get()
+            rt = int(rv) if rv.isdigit() else 0
+            ok = self._review_save(day, dr, dd, rt)
+            if ok and not silent:
+                self.set_status(f"🪞 Review saved for {day}.")
+                _refresh_list()
+                try:
+                    idx = self._review_list_dates.index(day)
+                    listbox.selection_clear(0, tk.END)
+                    listbox.selection_set(idx)
+                except (ValueError, tk.TclError):
+                    pass
+            return ok
+
+        def _close():
+            try: _save(silent=True)
+            except Exception: pass
+            self._review_win = None
+            try: win.destroy()
+            except tk.TclError: pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🪞 After-Action Review", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Experience alone doesn't make you better — "
+                 "evaluated experience does. Two minutes now compounds.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 2))
+
+        paned = tk.PanedWindow(win, orient=tk.HORIZONTAL, sashwidth=6,
+                               bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
+        paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
+
+        # ---- left: past reviews ----
+        left = tk.Frame(paned, bg=BG_DARK)
+        tk.Label(left, text="Past reviews", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(
+                     fill=tk.X, pady=(0, 4))
+        lwrap = tk.Frame(left, bg=BG_DARK); lwrap.pack(fill=tk.BOTH, expand=True)
+        listbox = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT,
+                             selectbackground=ACCENT_INDIGO, selectforeground="white",
+                             font=("Consolas", 10), relief=tk.FLAT, bd=0,
+                             highlightthickness=0, activestyle="none", width=22)
+        lsb = tk.Scrollbar(lwrap, command=listbox.yview, width=16)
+        listbox.configure(yscrollcommand=lsb.set)
+        lsb.pack(side=tk.RIGHT, fill=tk.Y)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _on_select(_e=None):
+            sel = listbox.curselection()
+            if not sel:
+                return
+            day = self._review_list_dates[sel[0]]
+            if day == self._review_current_day:
+                return
+            _save(silent=True)
+            _load(day)
+        listbox.bind("<<ListboxSelect>>", _on_select)
+        paned.add(left, minsize=180)
+
+        # ---- right: the two questions ----
+        right = tk.Frame(paned, bg=BG_DARK)
+        date_var = tk.StringVar(value="")
+        tk.Label(right, textvariable=date_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 14, "bold"), anchor=tk.W).pack(
+                     fill=tk.X, padx=2)
+
+        # rating + save row reserved (rating top, save at BOTTOM so it's never clipped)
+        rrow = tk.Frame(right, bg=BG_DARK); rrow.pack(fill=tk.X, pady=(2, 4))
+        tk.Label(rrow, text="Rate the day:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT)
+        rmenu = tk.OptionMenu(rrow, rating_var, "—", "1", "2", "3", "4", "5")
+        _style_optionmenu(rmenu); rmenu.configure(width=4, font=("Segoe UI", 10, "bold"))
+        rmenu.pack(side=tk.LEFT, padx=(6, 0))
+        tk.Label(rrow, text="🎤 Tip: click a box, then the toolbar 🎤 Voice note "
+                 "dictates into it.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(12, 0))
+
+        srow = tk.Frame(right, bg=BG_DARK); srow.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
+        tk.Button(srow, text="💾 Save review", command=lambda: _save(False),
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        def _q_box(label_text):
+            tk.Label(right, text=label_text, bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(
+                         fill=tk.X, padx=2, pady=(8, 0))
+            box = scrolledtext.ScrolledText(
+                right, wrap=tk.WORD, font=("Segoe UI", 12), height=6,
+                bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                padx=12, pady=10, relief=tk.FLAT, undo=True)
+            box.pack(fill=tk.BOTH, expand=True, padx=2)
+            box.bind("<FocusIn>",
+                     lambda _e, b=box: self._set_mic_target(b), add="+")
+            tk.Button(right, text="🔊 Listen", command=lambda b=box: self._review_read_widget(b),
+                      font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                      activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10,
+                      pady=2, cursor="hand2", borderwidth=0).pack(anchor="e", padx=2, pady=(2, 0))
+            return box
+
+        box1 = _q_box("✅  What did I do right today?")
+        box2 = _q_box("🔄  What would I do differently next time?")
+        paned.add(right)
+
+        _refresh_list()
+        _load(today_str)
+        try:
+            listbox.selection_set(0)
+        except tk.TclError:
+            pass
+
+    def _maybe_evening_review_nudge(self) -> None:
+        """Late-evening reminder to run the After-Action Review if today's is
+        still blank. Gentle: a status line + one flash of the 🪞 Review button."""
+        try:
+            if datetime.now().hour < 20:
+                return
+            if self._review_has_today():
+                return
+            self.set_status("🪞 Before you log off: a 30-second After-Action "
+                            "Review — what went right, what you'd do differently.")
+            self._flash_review_button()
+        except Exception:
+            pass
+
+    def _flash_review_button(self, times: int = 6) -> None:
+        btn = getattr(self, "_review_btn", None)
+        if btn is None:
+            return
+
+        def _pulse(n):
+            try:
+                if not btn.winfo_exists():
+                    return
+                btn.configure(bg=ACCENT_PINK if n % 2 else ACCENT_INDIGO,
+                              activebackground=ACCENT_PINK if n % 2 else ACCENT_INDIGO)
+            except tk.TclError:
+                return
+            if n > 0:
+                self.root.after(350, lambda: _pulse(n - 1))
+        _pulse(times)
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
@@ -12815,6 +13104,8 @@ def main() -> None:
     root.after(1200, app._maybe_evening_planning_nudge)
     # Winner's Time Log: start the recurring "where did the hour go?" check-in.
     root.after(1800, app._start_time_auditor)
+    # After-Action Review: late-evening nudge if today's reflection is blank.
+    root.after(2200, app._maybe_evening_review_nudge)
     # Warm the Whisper speech model in the background so the first 🎤 click
     # doesn't pause to load it.
     root.after(1500, app._preload_whisper)

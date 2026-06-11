@@ -56,6 +56,12 @@ Beyond reading, the app is a study and focus workstation:
   time actually went (A-1 task, studying, distracted, …). Toggle it on/off
   and pick the interval from the ⏱ Time Log window. In Ziglar's words,
   knowing where your minutes go is a *freeing* factor, not a limiting one.
+- **🪞 After-Action Review (daily reflection)** — Brian Tracy's end-of-day
+  questions, *"What did I do right?"* and *"What would I do differently next
+  time?"*, plus an optional 1–5 day rating. One reflection per day, with a
+  list of past days so the week can be reviewed (James Clear). A gentle
+  evening nudge reminds you if today's is still blank. *Experience alone
+  doesn't make you better — evaluated experience does.*
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 
