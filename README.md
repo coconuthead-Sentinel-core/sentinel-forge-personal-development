@@ -32,6 +32,25 @@
   is running on localhost, the in-app Ask Library button scores every
   excerpt against your question and surfaces matches with snippets
 
+## Study workspace & dashboard
+
+Beyond reading, the app is a study and focus workstation:
+
+- **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
+  dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
+  Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊
+  read-aloud.
+- **🎤 Voice dictation (Whisper)** — on-device, offline speech-to-text
+  with a Fast / Accurate / Best accuracy selector.
+- **🚀 Performance dashboard** (4DX + Ziglar): a **🏆 Compelling
+  Scoreboard** of daily lead measures with streaks, a **🧠 Idea
+  Warehouse** (ABCDE priorities, Big-Three, schedule-to-planner,
+  implementation intentions), **🎯 Focus Mode** with timed focus blocks,
+  a **🚫 Not-To-Do list + website blocker**, **☸ Wheel of Life** and
+  **🎯 Goals**, and **🧭 Weekly Roles**.
+- **SQLite-backed** — all of the above persists in a local database
+  managed by `lyceum/db/study_db.py`.
+
 ## Why it exists
 
 I built this for myself — a CNA → AI-systems-developer transition who

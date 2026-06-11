@@ -124,6 +124,138 @@ CREATE TABLE IF NOT EXISTS prompts (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Prompt Library: a standalone archive of prompt + response pairs,
+-- deliberately separate from the Books library (which is .md files on
+-- disk). Surfaced by the green "Prompt Library" toolbar button.
+CREATE TABLE IF NOT EXISTS prompt_library (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    prompt TEXT NOT NULL DEFAULT '',
+    response TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- Daily Planner (Sunsama-style): one row per task, assigned to a day,
+-- with a time estimate and done flag. Surfaced by the 🗓 Planner study tab.
+CREATE TABLE IF NOT EXISTS planner_tasks (
+    id INTEGER PRIMARY KEY,
+    day TEXT NOT NULL,                 -- YYYY-MM-DD
+    title TEXT NOT NULL DEFAULT '',
+    minutes INTEGER NOT NULL DEFAULT 25,
+    done INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_planner_day ON planner_tasks(day);
+
+-- Zig Ziglar Performance Planner, folded into the 🗓 Planner calendar.
+-- wheel_of_life: one row per dated self-assessment snapshot, each of the
+-- 7 "spokes" rated 1 (poor) - 10 (excellent). Keeping snapshots lets you
+-- watch the wheel get rounder over time.
+CREATE TABLE IF NOT EXISTS wheel_of_life (
+    id INTEGER PRIMARY KEY,
+    snapshot_date TEXT NOT NULL,       -- YYYY-MM-DD
+    mental INTEGER NOT NULL DEFAULT 5,
+    spiritual INTEGER NOT NULL DEFAULT 5,
+    physical INTEGER NOT NULL DEFAULT 5,
+    family INTEGER NOT NULL DEFAULT 5,
+    financial INTEGER NOT NULL DEFAULT 5,
+    career INTEGER NOT NULL DEFAULT 5,
+    social INTEGER NOT NULL DEFAULT 5,
+    created_at TEXT NOT NULL
+);
+
+-- goals: Ziglar's goal-setting worksheet. Each goal is tied to one life
+-- area (a Wheel spoke) and carries the "why", obstacles, what you need,
+-- a plan of action, target date, and a 0-100 progress reading.
+CREATE TABLE IF NOT EXISTS goals (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    life_area TEXT NOT NULL DEFAULT 'mental',
+    why TEXT NOT NULL DEFAULT '',          -- benefits / what's in it for me
+    obstacles TEXT NOT NULL DEFAULT '',
+    skills_needed TEXT NOT NULL DEFAULT '',
+    people_needed TEXT NOT NULL DEFAULT '',
+    action_plan TEXT NOT NULL DEFAULT '',
+    target_date TEXT NOT NULL DEFAULT '',  -- YYYY-MM-DD or ''
+    progress INTEGER NOT NULL DEFAULT 0,   -- 0-100
+    status TEXT NOT NULL DEFAULT 'active', -- active | done | parked
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_goals_area ON goals(life_area);
+
+-- Idea Warehouse (Ziglar's "master list" / idea warehouse): capture every
+-- task the moment it comes to mind so nothing is trusted to memory. Each
+-- item carries an ABCDE priority (A=must-do … E=eliminate), a "Big Three"
+-- flag (the Rule of Three — the 3 tasks worth 90% of the value), and, once
+-- scheduled onto the calendar, the day it was sent to.
+CREATE TABLE IF NOT EXISTS master_tasks (
+    id INTEGER PRIMARY KEY,
+    text TEXT NOT NULL DEFAULT '',
+    priority TEXT NOT NULL DEFAULT '',      -- '' or A | B | C | D | E
+    big_three INTEGER NOT NULL DEFAULT 0,   -- 1 = a "Big Three" for today
+    scheduled_day TEXT NOT NULL DEFAULT '', -- YYYY-MM-DD once sent to calendar
+    status TEXT NOT NULL DEFAULT 'open',    -- open | done | scheduled
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_master_status ON master_tasks(status);
+
+-- Quadrant-II weekly roles (Covey): organize the week by the roles you play
+-- (Student, Parent, CNA, …) and set 1-2 important-but-not-urgent goals for
+-- each, so planning rises above day-to-day urgency. One row per role per week.
+CREATE TABLE IF NOT EXISTS weekly_roles (
+    id INTEGER PRIMARY KEY,
+    week_monday TEXT NOT NULL,        -- YYYY-MM-DD, the Monday of the week
+    role TEXT NOT NULL DEFAULT '',
+    goal1 TEXT NOT NULL DEFAULT '',
+    goal2 TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_roles_week ON weekly_roles(week_monday);
+
+-- Compelling Scoreboard (4 Disciplines of Execution): track 2-3 daily LEAD
+-- measures (the activities you control — "studied 20 min" — not lag results
+-- like "lost 5 lbs"). `lead_measures` holds the definitions; `lead_measure_marks`
+-- records which measure was checked off on which day, so streaks can be counted.
+CREATE TABLE IF NOT EXISTS lead_measures (
+    id INTEGER PRIMARY KEY,
+    text TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lead_measure_marks (
+    measure_id INTEGER NOT NULL,
+    day TEXT NOT NULL,                 -- YYYY-MM-DD
+    done INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (measure_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_lmm_day ON lead_measure_marks(day);
+
+-- "Not-To-Do" list (Brian Tracy) + distraction blocklist (James Clear's
+-- "make it invisible"). kind='rule' is a low-value behavior to STOP doing
+-- (a commitment you keep by seeing it); kind='site' is a domain the blocker
+-- redirects in the hosts file while a focus block is active.
+CREATE TABLE IF NOT EXISTS not_to_do (
+    id INTEGER PRIMARY KEY,
+    text TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'rule',   -- 'rule' (behavior) | 'site' (domain)
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nottodo_kind ON not_to_do(kind);
 """
 
 

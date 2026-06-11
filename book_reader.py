@@ -32,6 +32,7 @@ from lyceum.db.study_db import (
 import subprocess
 import tempfile
 import threading
+import time
 
 # Optional: send2trash sends deleted files to the Windows Recycle Bin
 # instead of permanently unlinking them. The Library 🗑 Remove button
@@ -159,6 +160,17 @@ PIPER_EXE     = os.path.join(_BR_BASE, "tts", "piper.exe")
 _VOICES_DIR   = os.path.join(_BR_BASE, "tts", "voices")
 HAS_PIPER     = os.path.exists(PIPER_EXE) and os.path.isdir(_VOICES_DIR) and any(f.endswith('.onnx') for f in os.listdir(_VOICES_DIR))
 
+# Modern speech-to-text: faster-whisper (a Whisper implementation) + a mic
+# capture lib. Checked lightly via find_spec so we don't pay the heavy import
+# cost at startup — the real imports happen lazily when the mic first starts.
+import importlib.util as _ilu
+HAS_WHISPER = (_ilu.find_spec("faster_whisper") is not None
+               and _ilu.find_spec("sounddevice") is not None)
+# Optional mic noise suppression applied before Whisper. (RNNoise's Python
+# binding conflicts with faster-whisper's `av` dependency, so we use the
+# conflict-free `noisereduce` spectral-gating engine to the same end.)
+HAS_DENOISE = _ilu.find_spec("noisereduce") is not None
+
 # Pomodoro cycle constants. The work duration comes from the active
 # block (or the preset dropdown for a freestanding timer). Breaks are
 # fixed at the classic Pomodoro defaults.
@@ -254,27 +266,36 @@ class BookReader:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         root.title("Sentinel Forge")
-        root.geometry("1100x780")
+        # Size the main window to FIT the screen and centre it, so nothing
+        # runs off the bottom on smaller displays (e.g. ~1097x617 laptops).
+        try:
+            sw = root.winfo_screenwidth()
+            sh = root.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(1100, max(720, sw - 80))
+        h = min(780, max(460, sh - 96))    # leave room for the taskbar
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2 - 24)
+        root.geometry(f"{w}x{h}+{x}+{y}")
         root.configure(bg=BG_DARK)
         # Try to give the window a sensible minimum size
-        root.minsize(720, 480)
+        root.minsize(640, 420)
 
         # ---- New-feature state (Three-Zone Library, Session Header,
         # Start/End wizards, Audit tab, Prompts tab) ------------------
         # These must be initialized BEFORE the dashboard widgets are
-        # built, because the Session Header UI reads self._cognitive_load
+        # built, because library/excerpt code reads self._cognitive_load
         # during construction. Keeping them all together at the top
         # avoids the "attribute X doesn't exist" class of bug when
         # widgets fire callbacks mid-construction.
         # Three-Zone Library
         self._library_zone_filter: str | None = None   # None = "All"
         self._library_zone_filter_btns: dict[str, tk.Button] = {}
-        # Session Header (cognitive load + protocol indicators)
+        # Library zone default (fixed internal value; the user-facing
+        # energy/cognitive-load dial has been removed). Still feeds the
+        # zone written into saved excerpts.
         self._cognitive_load: int = 7
-        self._cognitive_load_var: tk.IntVar | None = None
-        self._cognitive_load_label: tk.Label | None = None
-        self._cognitive_zone_chip: tk.Label | None = None
-        self._protocol_labels: dict[str, tk.Label] = {}
         self._load_session_state()
         # Session Start / End wizards (Toplevel singletons)
         self._session_start_win: tk.Toplevel | None = None
@@ -296,6 +317,15 @@ class BookReader:
         self._prompts_current_id: int | None = None
         self._prompts_fields: dict[str, tk.Widget] = {}
         self._prompts_save_after_id: str | None = None
+        # Prompt Library (green-button window: prompt + response archive,
+        # separate from the Books library)
+        self._prompt_lib_win: tk.Toplevel | None = None
+        self._prompt_lib_listbox: tk.Listbox | None = None
+        self._prompt_lib_items: list[tuple] = []
+        self._prompt_lib_current_id: int | None = None
+        self._prompt_lib_title_var: tk.StringVar | None = None
+        self._prompt_lib_prompt_txt: tk.Text | None = None
+        self._prompt_lib_response_txt: tk.Text | None = None
 
         # ---- Scrollable dashboard container ----------------------------
         # When the user bumps system font size for readability, the
@@ -386,6 +416,11 @@ class BookReader:
             dash_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
         root.bind_all("<MouseWheel>", _on_dash_mousewheel)
+        # Keep a reference so secondary windows with their own scroll areas
+        # can RESTORE the dashboard's wheel handler when the pointer leaves
+        # them — rebinding bind_all replaces the single class binding, so
+        # unbind_all would otherwise kill dashboard scrolling.
+        self._dash_mousewheel = _on_dash_mousewheel
 
         # ---- Session Header --------------------------------------------
         # Persistent strip above the action topbar. Cognitive load (1–10)
@@ -397,55 +432,6 @@ class BookReader:
                                 highlightbackground=BG_DARK,
                                 highlightthickness=0)
         session_bar.pack(fill=tk.X)
-
-        tk.Label(session_bar, text="Energy:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 10, "bold")
-                 ).pack(side=tk.LEFT, padx=(0, 6))
-        self._cognitive_load_var = tk.IntVar(value=self._cognitive_load)
-        load_slider = tk.Scale(
-            session_bar, from_=1, to=10, orient=tk.HORIZONTAL,
-            showvalue=False, length=180, sliderlength=18,
-            variable=self._cognitive_load_var,
-            bg=BG_PANEL, fg=FG_TEXT,
-            troughcolor=BG_INPUT, activebackground=ACCENT_CYAN,
-            highlightthickness=0, borderwidth=0,
-            command=lambda v: self._set_cognitive_load(int(float(v))),
-        )
-        load_slider.pack(side=tk.LEFT)
-        self._cognitive_load_label = tk.Label(
-            session_bar, text=f"{self._cognitive_load}/10",
-            bg=BG_PANEL, fg=FG_TEXT,
-            font=("Segoe UI", 11, "bold"), width=5,
-        )
-        self._cognitive_load_label.pack(side=tk.LEFT, padx=(6, 14))
-
-        # Zone chip — color and label derived from the current load.
-        _initial_zone = self._zone_for_load(self._cognitive_load)
-        self._cognitive_zone_chip = tk.Label(
-            session_bar,
-            text=f"{LIBRARY_ZONE_EMOJI[_initial_zone]} {_initial_zone} ZONE",
-            bg=LIBRARY_ZONE_COLOR[_initial_zone], fg="white",
-            font=("Segoe UI", 10, "bold"), padx=10, pady=3,
-        )
-        self._cognitive_zone_chip.pack(side=tk.LEFT, padx=(0, 16))
-
-        # Protocol indicators (Onset Omega 1 + Joy + Coconut Head).
-        # Joy lights up at load ≥ 7; the other two are always on per
-        # protocol_activation.md.
-        self._protocol_labels = {}
-        def proto_chip(key: str, text_on: str, text_off: str, active: bool):
-            lbl = tk.Label(
-                session_bar,
-                text=text_on if active else text_off,
-                bg=ACCENT_GREEN if active else ACCENT_SLATE, fg="white",
-                font=("Segoe UI", 9, "bold"), padx=8, pady=2,
-            )
-            lbl.pack(side=tk.LEFT, padx=2)
-            self._protocol_labels[key] = lbl
-        proto_chip("omega",   "Ω1 ✓",          "Ω1",          True)
-        proto_chip("joy",     "🥥 Joy ✓",      "🥥 Joy",
-                    self._cognitive_load >= 7)
-        proto_chip("coconut", "🧠 Coconut ✓",  "🧠 Coconut",  True)
 
         # Right side: date stamp + Session Start / End wizard launchers.
         tk.Label(
@@ -470,28 +456,46 @@ class BookReader:
             cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=2)
 
+        # ---- Compelling Scoreboard (daily lead measures) ---------------
+        # A glance-in-5-seconds strip of today's 2-3 lead measures: click a
+        # card to mark it done (turns green + a little reward); the summary
+        # tells you instantly whether you're winning the day.
+        self._scoreboard_cards_frame = None
+        self._scoreboard_summary_var = tk.StringVar(value="")
+        self._build_scoreboard(dash)
+
         # ---- Top action bar --------------------------------------------
-        topbar = tk.Frame(dash, bg=BG_PANEL, padx=12, pady=12)
+        topbar = tk.Frame(dash, bg=BG_PANEL, padx=8, pady=8)
         topbar.pack(fill=tk.X)
 
         def btn(parent, text, cmd, color, w=None):
             b = tk.Button(
                 parent, text=text, command=cmd,
-                font=("Segoe UI", 13, "bold"),
+                font=("Segoe UI", 10, "bold"),
                 bg=color, fg="white", activebackground=color,
-                relief=tk.FLAT, padx=18, pady=10, cursor="hand2",
+                relief=tk.FLAT, padx=8, pady=5, cursor="hand2",
                 borderwidth=0,
             )
             if w: b.configure(width=w)
-            b.pack(side=tk.LEFT, padx=4)
+            b.pack(side=tk.LEFT, padx=2)
             return b
 
-        btn(topbar, "📂  Open",              self.open_file,            ACCENT_CYAN)
-        btn(topbar, "📚  Library",           self.open_library,         ACCENT_PURPLE)
-        btn(topbar, "📋  Paste",             self.paste_text,           ACCENT_AMBER)
+        # (📂 Open and 📚 Library moved into the Study workspace.)
+        self._ideas_btn = btn(topbar, "🧠  Ideas", self.open_idea_warehouse, ACCENT_AMBER)
+        btn(topbar, "🎯  Focus",             self.open_focus_mode,      ACCENT_PURPLE)
+        btn(topbar, "🚫  Not-To-Do",         self.open_not_to_do,       ACCENT_RED)
+        btn(topbar, "🗒  Prompt Library",    self.open_prompt_library,  ACCENT_GREEN)
         btn(topbar, "🔊  Read aloud",        self.read_aloud,           ACCENT_GREEN)
         btn(topbar, "■  Stop",               self.stop_reading,         ACCENT_SLATE)
         self.mic_btn = btn(topbar, "🎤  Voice note", self.toggle_mic,   ACCENT_MIC)
+        # Mic accuracy: Fast (base) / Accurate (small) / Best (medium).
+        self._whisper_quality_var = tk.StringVar(value="Accurate")
+        _mq = tk.OptionMenu(topbar, self._whisper_quality_var,
+                            "Fast", "Accurate", "Best",
+                            command=self._set_mic_quality)
+        _style_optionmenu(_mq)
+        _mq.configure(width=8, font=("Segoe UI", 10, "bold"))
+        _mq.pack(side=tk.LEFT, padx=(0, 2))
         btn(topbar, "💾  Save",              self.save_excerpt,         ACCENT_PINK)
         btn(topbar, "📓  Study",             self.open_study_workspace, ACCENT_RED)
 
@@ -602,38 +606,17 @@ class BookReader:
         voice_menu.configure(width=16)
         voice_menu.pack(side=tk.LEFT, padx=(0, 12))
 
-        # ---- Reading timer (Pomodoro-style, 5 / 10 / 15 / 20 / 25 min)
-        # Lives on the right side of the controls row. Visual order is
-        # "⏱ Timer:  [preset ▾]  [Start]   MM:SS" — we pack right-to-left
-        # so the countdown sits on the far right and stays in view.
+        # ---- Reading timer REMOVED from the UI at the user's request -----
+        # The preset map, variables, and methods are kept (dormant and
+        # invisible, timer_button = None) so the Schedule "Do-Now" block
+        # timer and the shutdown handler that reference them keep working.
         self._timer_presets: dict[str, int] = {
             "5 min":  5, "10 min": 10, "15 min": 15,
             "20 min": 20, "25 min": 25,
         }
         self.timer_display_var = tk.StringVar(value="00:00")
-        tk.Label(
-            controls_row, textvariable=self.timer_display_var,
-            bg=BG_PANEL, fg=FG_TEXT, font=("Consolas", 13, "bold"),
-            padx=8,
-        ).pack(side=tk.RIGHT)
-        self.timer_button = tk.Button(
-            controls_row, text="Start", command=self.toggle_timer,
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-            relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
-        )
-        self.timer_button.pack(side=tk.RIGHT, padx=(6, 8))
         self.timer_preset_var = tk.StringVar(value="10 min")
-        preset_menu = tk.OptionMenu(
-            controls_row, self.timer_preset_var, *self._timer_presets.keys(),
-        )
-        _style_optionmenu(preset_menu)
-        preset_menu.configure(width=8)
-        preset_menu.pack(side=tk.RIGHT, padx=(0, 6))
-        tk.Label(
-            controls_row, text="⏱  Timer:", bg=BG_PANEL, fg=FG_TEXT,
-            font=("Segoe UI", 11, "bold"),
-        ).pack(side=tk.RIGHT, padx=(20, 6))
+        self.timer_button = None
 
         # ---- Status line -----------------------------------------------
         self.status_var = tk.StringVar(value="Click 📂  Open a book to begin.")
@@ -870,6 +853,10 @@ class BookReader:
         self._tts_iter_after_id: str | None = None
         self._tts_word_token = None
         self._tts_end_token = None
+        # Read-aloud target. None → the main reading board. The Prompt
+        # Library points this at its Prompt/Response box so the yellow
+        # follow-along highlight tracks there instead.
+        self._read_widget: tk.Text | None = None
         # Pre-computed spans for live highlighting at each granularity.
         # Each tuple is (char_start, char_end, tk_start, tk_end).
         self._word_spans: list[tuple[int, int, str, str]] = []
@@ -887,6 +874,28 @@ class BookReader:
         self._mic_queue: queue.Queue | None = None
         self._mic_thread: threading.Thread | None = None
         self._mic_poll_after_id: str | None = None
+        # Whisper (faster-whisper) speech-to-text state. Model is loaded
+        # lazily on first use and cached. base.en is a good speed/accuracy
+        # balance on CPU.
+        self._whisper_model = None
+        self._whisper_model_name = "small.en"   # "Accurate" default
+        self._whisper_stop: threading.Event | None = None
+        self._whisper_lock = threading.Lock()
+        self._whisper_quality_var = None        # toolbar Fast/Accurate/Best
+        # Noise-suppress mic audio before transcription (cleaner = more
+        # accurate). Toggle-able; on by default when the library is present.
+        self._mic_denoise = HAS_DENOISE
+        # Daily Planner (Sunsama-style) state
+        self._planner_monday = None          # Monday date of the shown week
+        self._planner_listboxes: dict = {}   # "YYYY-MM-DD" -> Listbox
+        self._planner_records: dict = {}     # "YYYY-MM-DD" -> list of task rows
+        self._planner_total_vars: dict = {}  # "YYYY-MM-DD" -> StringVar (header)
+        self._planner_entries: dict = {}     # "YYYY-MM-DD" -> Entry (add box)
+        self._planner_week_var = None
+        self._planner_mic_btn = None
+        self._planner_mic_btns: dict = {}    # "YYYY-MM-DD" -> per-day 🎤 button
+        self._planner_active_mic = None      # the day mic currently recording
+        self._planner_sel: dict = {}         # "YYYY-MM-DD" -> selected note idx
         # Library window state (only one open at a time)
         self._library_win: tk.Toplevel | None = None
         self._library_tree: ttk.Treeview | None = None
@@ -897,6 +906,11 @@ class BookReader:
         self._library_current_book_idx: int | None = None
         self._library_stats_var: tk.StringVar | None = None
         self._library_search_var: tk.StringVar | None = None
+        # In-window reading view (title + chapters + pages + readable text)
+        self._library_title_label: tk.Label | None = None
+        self._library_pages_tree: ttk.Treeview | None = None
+        self._library_read_text = None
+        self._library_page_offsets: list[int] = []
         # (State-init for the new feature blocks was moved to the top of
         # __init__ above the dashboard build so widgets that read them
         # during construction see real values, not AttributeError.)
@@ -1193,7 +1207,80 @@ class BookReader:
         )
         if not path:
             return
+        # Keep a copy in the Library (named by the book's title) so opened
+        # books accumulate there, then load that copy.
+        path = self._ensure_book_in_library(path)
         self._load_book(path)
+        try:
+            if (self._library_win is not None
+                    and self._library_win.winfo_exists()):
+                self._refresh_library_list()
+        except Exception:
+            pass
+
+    def _ensure_book_in_library(self, path: str) -> str:
+        """Keep a copy of an opened book in the Library folder, named by the
+        book's title, so the Library accumulates everything you read.
+
+        Returns the path to actually load: the Library copy if we stored one,
+        else the original. Never raises — if the copy fails, the book still
+        opens from its original location.
+        """
+        try:
+            if not os.path.isfile(path):
+                return path
+            abspath = os.path.abspath(path)
+            lib_abs = os.path.abspath(LIBRARY_DIR)
+            # Already inside the Library? Nothing to copy.
+            if (abspath.lower() == lib_abs.lower()
+                    or abspath.lower().startswith(lib_abs.lower() + os.sep)):
+                return path
+            os.makedirs(LIBRARY_DIR, exist_ok=True)
+            ext = os.path.splitext(path)[1]
+            title = Path(path).stem.strip() or "Untitled book"
+            # Strip characters Windows won't allow in a filename.
+            safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', " ", title).strip()
+            safe = re.sub(r"\s+", " ", safe) or "Untitled book"
+            dest = os.path.join(LIBRARY_DIR, safe + ext)
+            if os.path.exists(dest):
+                # Same file already in the Library, or an identical copy →
+                # reuse it rather than making duplicates.
+                try:
+                    if os.path.samefile(dest, path):
+                        return dest
+                except OSError:
+                    pass
+                try:
+                    if os.path.getsize(dest) == os.path.getsize(path):
+                        return dest
+                except OSError:
+                    pass
+                # A different book already owns this title — pick a free name.
+                base, e2 = os.path.splitext(dest)
+                n = 2
+                while os.path.exists(dest):
+                    dest = f"{base} ({n}){e2}"
+                    n += 1
+            shutil.copy2(path, dest)
+            # Sidecar so it shows in the Library with a zone + title.
+            try:
+                self._save_meta(dest, {
+                    "doc_id":         Path(dest).stem,
+                    "zone":           LIBRARY_ZONE_DEFAULT,
+                    "cognitive_load": LIBRARY_ZONE_LOAD_DEFAULT[LIBRARY_ZONE_DEFAULT],
+                    "source_book":    abspath,
+                    "title":          title,
+                    "timestamp":      datetime.now().isoformat(timespec="seconds"),
+                    "tags":           [],
+                })
+            except Exception:
+                pass
+            self.set_status(f"📚 Added to Library: {title}")
+            return dest
+        except Exception as e:
+            print(f"[book_reader] could not store book in library: {e}",
+                  file=sys.stderr)
+            return path
 
     def _load_book(self, path: str) -> None:
         """Extract text from `path` and place it in the reading area.
@@ -1300,16 +1387,16 @@ class BookReader:
                                bg=BG_PANEL, fg=FG_TEXT,
                                activebackground=ACCENT_SLATE,
                                activeforeground="white")
-        matrix_menu.add_command(label="🔥  Do  (Urgent & Important)",
+        matrix_menu.add_command(label="🔥  Do Now  (Urgent & Important)",
             command=lambda: self.add_selection_to_matrix_quadrant(
                 "do", source_widget=self.notes_area))
-        matrix_menu.add_command(label="🗓  Schedule  (Important, Not Urgent)",
+        matrix_menu.add_command(label="🗓  Scheduled  (Important, Not Urgent)",
             command=lambda: self.add_selection_to_matrix_quadrant(
                 "schedule", source_widget=self.notes_area))
         matrix_menu.add_command(label="👥  Delegate  (Urgent, Not Important)",
             command=lambda: self.add_selection_to_matrix_quadrant(
                 "delegate", source_widget=self.notes_area))
-        matrix_menu.add_command(label="🗑  Eliminate  (Neither)",
+        matrix_menu.add_command(label="⏳  Do Later  (Lower priority)",
             command=lambda: self.add_selection_to_matrix_quadrant(
                 "eliminate", source_widget=self.notes_area))
         m.add_cascade(label="🎯  Add to Matrix", menu=matrix_menu)
@@ -1491,6 +1578,10 @@ class BookReader:
                     key,
                 )
                 return f"Matrix → {label}"
+        pents = getattr(self, "_planner_entries", {}) or {}
+        for dstr, w in pents.items():
+            if w is widget:
+                return f"Planner → {dstr}"
         return "Notes"
 
     def _build_text_context_menu(self) -> None:
@@ -1527,6 +1618,8 @@ class BookReader:
         m.add_cascade(label="🖍  Highlight selection", menu=hl)
         m.add_command(label="📌  Add to topic…",        command=self.add_selection_to_topic)
         m.add_command(label="📝  Add to Study Notes",   command=self.add_selection_to_study_notes)
+        m.add_command(label="🗒  Save to Prompt Library",
+                      command=self.save_board_to_prompt_library)
         # 🎯 Send the reader selection straight to a Matrix quadrant.
         matrix_menu_r = tk.Menu(m, tearoff=0,
                                  bg=BG_PANEL, fg=FG_TEXT,
@@ -1835,10 +1928,11 @@ class BookReader:
         except tk.TclError:
             pass
 
-    # ---- Session Header helpers ----------------------------------------
-    # Cognitive load (1–10) → zone (GREEN/YELLOW/RED) → protocol gating.
-    # The Library, Joy Protocol indicator, and zone chip all read from
-    # self._cognitive_load. State is persisted to STUDY_DIR/session.json.
+    # ---- Library zone helpers ------------------------------------------
+    # self._cognitive_load is a fixed internal default (no longer a user
+    # dial). It still maps to a library zone (GREEN/YELLOW/RED) so saved
+    # excerpts get a zone + cognitive_load value in their front-matter,
+    # which the FastAPI platform reads. Persisted to STUDY_DIR/session.json.
     @staticmethod
     def _zone_for_load(load: int) -> str:
         if load >= 7:
@@ -1877,48 +1971,6 @@ class BookReader:
                 )
         except OSError:
             pass
-
-    def _set_cognitive_load(self, load: int) -> None:
-        """Authoritative setter — updates internal state, the three
-        Session Header widgets, and persists. Called from the slider
-        command callback every time the user drags."""
-        try:
-            load = max(1, min(10, int(load)))
-        except (TypeError, ValueError):
-            return
-        if load == self._cognitive_load and self._cognitive_load_label is not None:
-            # Slider drag fires on every pixel even if the integer value
-            # didn't change; bail early to avoid pointless redraws.
-            return
-        self._cognitive_load = load
-        zone = self._zone_for_load(load)
-        # Numeric readout
-        if self._cognitive_load_label is not None:
-            try:
-                self._cognitive_load_label.configure(text=f"{load}/10")
-            except tk.TclError:
-                pass
-        # Zone chip
-        if self._cognitive_zone_chip is not None:
-            try:
-                self._cognitive_zone_chip.configure(
-                    text=f"{LIBRARY_ZONE_EMOJI[zone]} {zone} ZONE",
-                    bg=LIBRARY_ZONE_COLOR[zone],
-                )
-            except tk.TclError:
-                pass
-        # Joy Protocol activates at load ≥ 7 (per protocol_activation spec)
-        joy = self._protocol_labels.get("joy")
-        if joy is not None:
-            try:
-                active = load >= 7
-                joy.configure(
-                    bg=ACCENT_GREEN if active else ACCENT_SLATE,
-                    text="🥥 Joy ✓" if active else "🥥 Joy",
-                )
-            except tk.TclError:
-                pass
-        self._save_session_state()
 
     # ---- Handoff state helpers ------------------------------------------
     # The handoff file is the cross-session memory: every session-end
@@ -1963,6 +2015,50 @@ class BookReader:
         except tk.TclError:
             pass
 
+    def _maybe_evening_planning_nudge(self) -> None:
+        """Ziglar's night-before rule: 'every minute spent planning saves ten
+        in execution; the best time to make tomorrow's list is the night
+        before.' In the evening (6pm+), if there are open ideas not yet
+        scheduled for tomorrow, nudge the user to plan — a gentle status
+        message + a flashing 🧠 Ideas button, not a modal."""
+        try:
+            if datetime.now().hour < 18:
+                return
+            tomorrow = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+            try:
+                open_n = self._db_query(
+                    "SELECT COUNT(*) FROM master_tasks "
+                    "WHERE status='open' OR (status='scheduled' "
+                    "AND scheduled_day<>?)", (tomorrow,))[0][0]
+            except Exception:
+                open_n = 0
+            if not open_n:
+                return
+            self.set_status("🌙 Evening — plan tomorrow now: open 🧠 Ideas, then "
+                            "“🌙 Plan tomorrow.” A minute planning saves ten.")
+            self._flash_ideas_button()
+        except Exception:
+            pass
+
+    def _flash_ideas_button(self, times: int = 6) -> None:
+        """Pulse the 🧠 Ideas button between amber and green a few times to
+        draw the eye to the evening planning nudge."""
+        btn = getattr(self, "_ideas_btn", None)
+        if btn is None:
+            return
+
+        def _pulse(n):
+            try:
+                if not btn.winfo_exists():
+                    return
+                btn.configure(bg=ACCENT_GREEN if n % 2 else ACCENT_AMBER,
+                              activebackground=ACCENT_GREEN if n % 2 else ACCENT_AMBER)
+            except tk.TclError:
+                return
+            if n > 0:
+                self.root.after(350, lambda: _pulse(n - 1))
+        _pulse(times)
+
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
         """One-screen modal: shows last session's handoff message,
@@ -1983,8 +2079,17 @@ class BookReader:
         win = tk.Toplevel(self.root)
         self._session_start_win = win
         win.title("🎯  Session Start")
-        win.geometry("580x560")
-        win.minsize(480, 460)
+        # Screen-fitted so the richer, tabbed layout never runs off a small
+        # display (usable height can be ~617px on this laptop).
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(880, max(560, sw - 80))
+        h = min(720, max(500, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 480)
         win.configure(bg=BG_DARK)
         win.transient(self.root)
         try:
@@ -2000,7 +2105,38 @@ class BookReader:
                  bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
                  ).pack(side=tk.RIGHT)
 
-        body = tk.Frame(win, bg=BG_DARK, padx=18, pady=12)
+        # ---- Tabs: Start / Wheel of Life / Goals. The Ziglar Performance
+        # Planner now lives here, each piece in its own panel. ------------
+        tabbar = tk.Frame(win, bg=BG_PANEL, padx=10)
+        tabbar.pack(fill=tk.X, pady=(0, 8))
+        content = tk.Frame(win, bg=BG_DARK)
+        content.pack(fill=tk.BOTH, expand=True)
+        ss_frames: dict = {}
+        ss_buttons: dict = {}
+
+        def _show_ss(key):
+            for f in ss_frames.values():
+                f.pack_forget()
+            ss_frames[key].pack(fill=tk.BOTH, expand=True)
+            for k, b in ss_buttons.items():
+                b.configure(bg=ACCENT_SLATE if k == key else BG_INPUT,
+                            fg="white" if k == key else FG_TEXT)
+
+        for key, label in (("start", "🎯 Start"),
+                           ("wheel", "☸ Wheel of Life"),
+                           ("goals", "🎯 Goals")):
+            b = tk.Button(tabbar, text=label,
+                          command=lambda k=key: _show_ss(k),
+                          font=("Segoe UI", 10, "bold"), bg=BG_INPUT, fg=FG_TEXT,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=10, pady=6, cursor="hand2",
+                          borderwidth=0)
+            b.pack(side=tk.LEFT, padx=(0, 3))
+            ss_buttons[key] = b
+            ss_frames[key] = tk.Frame(content, bg=BG_DARK)
+
+        # The original Session Start flow becomes the "Start" panel.
+        body = tk.Frame(ss_frames["start"], bg=BG_DARK, padx=18, pady=12)
         body.pack(fill=tk.BOTH, expand=True)
 
         # ---- Last session summary -----
@@ -2020,24 +2156,6 @@ class BookReader:
                      font=("Segoe UI", 10, "italic")
                      ).pack(anchor=tk.W, pady=(0, 14))
 
-        # ---- Energy slider -----
-        tk.Label(body, text="How's your energy right now? (1–10)",
-                 bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
-                 ).pack(anchor=tk.W)
-        energy_var = tk.IntVar(value=self._cognitive_load)
-        energy_row = tk.Frame(body, bg=BG_DARK)
-        energy_row.pack(fill=tk.X, pady=(4, 14))
-        tk.Scale(
-            energy_row, from_=1, to=10, orient=tk.HORIZONTAL, showvalue=True,
-            variable=energy_var, length=320, sliderlength=18,
-            bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
-            activebackground=ACCENT_CYAN, highlightthickness=0, borderwidth=0,
-        ).pack(side=tk.LEFT)
-        tk.Label(energy_row,
-                 text="(7–10 → 🟢 GREEN · 4–6 → 🟡 YELLOW · 1–3 → 🔴 RED)",
-                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9)
-                 ).pack(side=tk.LEFT, padx=10)
-
         # ---- Primary task -----
         tk.Label(body, text="One primary task for this session",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
@@ -2056,16 +2174,23 @@ class BookReader:
         )
         task_entry.pack(fill=tk.X, ipady=6, pady=(4, 14))
 
-        # ---- Protocols (informational) -----
-        proto_row = tk.Frame(body, bg=BG_DARK)
-        proto_row.pack(fill=tk.X, pady=(0, 12))
-        tk.Label(proto_row, text="Active protocols:",
-                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10)
-                 ).pack(side=tk.LEFT, padx=(0, 8))
-        for txt in ("Ω1 always on", "🥥 Joy at load ≥ 7", "🧠 Coconut always on"):
-            tk.Label(proto_row, text=txt, bg=ACCENT_SLATE, fg="white",
-                     font=("Segoe UI", 9), padx=6, pady=2
-                     ).pack(side=tk.LEFT, padx=2)
+        # ---- Session notes -----
+        tk.Label(body, text="Session notes",
+                 bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
+                 ).pack(anchor=tk.W)
+        tk.Label(body,
+                 text="(Anything you want to remember for this session — "
+                      "saved with your handoff.)",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic")
+                 ).pack(anchor=tk.W)
+        notes_text = tk.Text(
+            body, height=5,
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            font=("Segoe UI", 10), relief=tk.FLAT, bd=0, wrap=tk.WORD,
+        )
+        notes_text.pack(fill=tk.BOTH, expand=True, pady=(4, 14))
+        if state and state.get("session_notes"):
+            notes_text.insert("1.0", state["session_notes"])
 
         # ---- Buttons -----
         btn_row = tk.Frame(body, bg=BG_DARK)
@@ -2079,20 +2204,11 @@ class BookReader:
                 pass
 
         def _begin():
-            energy = int(energy_var.get())
-            # Push the energy through the same setter the topbar uses so
-            # the slider, zone chip, and Joy chip all update in lockstep.
-            if self._cognitive_load_var is not None:
-                try:
-                    self._cognitive_load_var.set(energy)
-                except tk.TclError:
-                    pass
-            self._set_cognitive_load(energy)
             cur = self._load_handoff_state() or {}
             cur["session_start_iso"]   = datetime.now().isoformat(timespec="seconds")
             cur["session_start_date"]  = date.today().isoformat()
             cur["session_primary_task"] = primary_task_var.get().strip()
-            cur["session_start_energy"] = energy
+            cur["session_notes"] = notes_text.get("1.0", tk.END).strip()
             self._save_handoff_state(cur)
             task = primary_task_var.get().strip() or "(none)"
             self.set_status(f"🎯 Session started — primary task: {task}")
@@ -2110,6 +2226,12 @@ class BookReader:
                   relief=tk.FLAT, padx=12, pady=6,
                   cursor="hand2", borderwidth=0
                   ).pack(side=tk.LEFT)
+
+        # Build the two Ziglar panels, then reveal the Start panel first.
+        self._build_wheel_panel(ss_frames["wheel"],
+                                goto_goals=lambda: _show_ss("goals"))
+        self._build_goals_panel(ss_frames["goals"])
+        _show_ss("start")
 
         win.protocol("WM_DELETE_WINDOW", _close)
         task_entry.focus_set()
@@ -2185,17 +2307,6 @@ class BookReader:
                  font=("Segoe UI", 11), relief=tk.FLAT, bd=0
                  ).pack(fill=tk.X, ipady=6)
 
-        tk.Label(body, text="End energy (1–10)",
-                 bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 10, "bold")
-                 ).pack(anchor=tk.W, pady=(10, 2))
-        end_energy_var = tk.IntVar(value=self._cognitive_load)
-        tk.Scale(body, from_=1, to=10, orient=tk.HORIZONTAL, showvalue=True,
-                 variable=end_energy_var, length=320, sliderlength=18,
-                 bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
-                 activebackground=ACCENT_CYAN, highlightthickness=0,
-                 borderwidth=0
-                 ).pack(anchor=tk.W)
-
         btn_row = tk.Frame(body, bg=BG_DARK)
         btn_row.pack(fill=tk.X, pady=(14, 0))
 
@@ -2218,18 +2329,10 @@ class BookReader:
                 "tasks_remaining":            remaining.get("1.0", tk.END).strip(),
                 "blockers":                   blockers.get("1.0", tk.END).strip(),
                 "next_session_primary_task":  next_task_var.get().strip(),
-                "start_energy":               state.get("session_start_energy"),
-                "end_energy":                 int(end_energy_var.get()),
+                "session_notes":              state.get("session_notes"),
             }
             data["handoff_message"] = self._format_handoff_message(data)
             self._save_handoff_state(data)
-            # Mirror end energy into the topbar slider too.
-            if self._cognitive_load_var is not None:
-                try:
-                    self._cognitive_load_var.set(int(end_energy_var.get()))
-                except tk.TclError:
-                    pass
-            self._set_cognitive_load(int(end_energy_var.get()))
             nxt = next_task_var.get().strip() or "(none)"
             self.set_status(f"⏹ Handoff saved — next task: {nxt}")
             _close()
@@ -2339,10 +2442,23 @@ class BookReader:
         win = tk.Toplevel(self.root)
         self._library_win = win
         win.title("📚 Library")
-        win.geometry("820x600")
-        win.minsize(540, 360)
+        # Size the window to FIT the screen and center it, so nothing (the
+        # Pages list, the action buttons) ever runs off the bottom edge.
+        try:
+            sw = win.winfo_screenwidth()
+            sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(1280, max(760, sw - 60))
+        h = min(860, max(480, sh - 96))    # use more of the screen height
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2 - 30)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 380)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # NOT transient: a transient window only gets a Close (X) button.
+        # A normal top-level window gets the full title-bar controls —
+        # minimize (—), maximize/restore (the two-panes icon), and close.
 
         # Drag-and-drop: drop files from Explorer onto the Library
         # window to add them. tkinterdnd2 hands us a single string with
@@ -2378,6 +2494,44 @@ class BookReader:
         tk.Label(header, textvariable=self._library_stats_var, bg=BG_PANEL,
                  fg=FG_MUTED, font=("Segoe UI", 10)).pack(side=tk.RIGHT)
 
+        # Reading toolbar at the very top: highlight color, highlight the
+        # current selection, and the read-aloud voice — the same controls as
+        # the main reader, acting on the Library's reading pane. Colour/voice
+        # share the reader's variables so the two stay in sync.
+        lib_tools = tk.Frame(win, bg=BG_PANEL, padx=10, pady=5)
+        lib_tools.pack(fill=tk.X)
+        tk.Label(lib_tools, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        lib_color_menu = tk.OptionMenu(
+            lib_tools, self.highlight_color_var,
+            *list(self.HIGHLIGHT_COLORS.keys()))
+        _style_optionmenu(lib_color_menu)
+        lib_color_menu.configure(width=7, font=("Segoe UI", 10, "bold"))
+        lib_color_menu.pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(
+            lib_tools, text="🖍  Highlight selection",
+            command=lambda: self._library_highlight_selection(
+                self.highlight_color_var.get()),
+            font=("Segoe UI", 10, "bold"),
+            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
+            relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(
+            lib_tools, text="✕ Unhighlight",
+            command=self._library_remove_highlight,
+            font=("Segoe UI", 10, "bold"),
+            bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
+            relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Label(lib_tools, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(4, 4))
+        lib_voice_menu = tk.OptionMenu(
+            lib_tools, self.voice_var, *self.available_voices,
+            command=self._on_voice_change)
+        _style_optionmenu(lib_voice_menu)
+        lib_voice_menu.configure(width=13, font=("Segoe UI", 10, "bold"))
+        lib_voice_menu.pack(side=tk.LEFT, padx=(0, 8))
+
         # Path hint
         path_hint = tk.Label(
             win,
@@ -2389,27 +2543,9 @@ class BookReader:
         )
         path_hint.pack(fill=tk.X)
 
-        # Zone filter — Three-Zone Library (Sentinel Prime spec). Buttons
-        # double as the legend for the zone-emoji prefix on each row.
-        zone_row = tk.Frame(win, bg=BG_DARK, padx=14, pady=(8, 0))
-        zone_row.pack(fill=tk.X)
-        tk.Label(zone_row, text="Zone:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(0, 8))
+        # (Zones removed — the Library is a plain book list + reader now.)
+        self._library_zone_filter = None
         self._library_zone_filter_btns = {}
-        def zbtn(label: str, zone_val: str | None, color: str) -> None:
-            b = tk.Button(
-                zone_row, text=label,
-                command=lambda z=zone_val: self._library_set_zone_filter(z),
-                font=("Segoe UI", 10, "bold"),
-                bg=color, fg="white", activebackground=color,
-                relief=tk.FLAT, padx=10, pady=3, cursor="hand2", borderwidth=0,
-            )
-            b.pack(side=tk.LEFT, padx=2)
-            self._library_zone_filter_btns[zone_val or "__ALL__"] = b
-        zbtn("All",        None,     ACCENT_SLATE)
-        zbtn("🟢 GREEN",   "GREEN",  LIBRARY_ZONE_COLOR["GREEN"])
-        zbtn("🟡 YELLOW",  "YELLOW", LIBRARY_ZONE_COLOR["YELLOW"])
-        zbtn("🔴 RED",     "RED",    LIBRARY_ZONE_COLOR["RED"])
 
         # Search
         search_row = tk.Frame(win, bg=BG_DARK, padx=14, pady=8)
@@ -2426,6 +2562,38 @@ class BookReader:
         self._library_search_var.trace_add(
             "write", lambda *_: self._refresh_library_list()
         )
+
+        # Action row — packed at the BOTTOM and BEFORE the list area so it can
+        # never be clipped off the bottom edge on a short screen.
+        btn_row = tk.Frame(win, bg=BG_DARK, padx=14, pady=10)
+        btn_row.pack(side=tk.BOTTOM, fill=tk.X)
+
+        def lbtn(parent, text, cmd, color):
+            return tk.Button(
+                parent, text=text, command=cmd,
+                font=("Segoe UI", 10, "bold"),
+                bg=color, fg="white", activebackground=color,
+                relief=tk.FLAT, padx=10, pady=5, cursor="hand2", borderwidth=0,
+            )
+
+        lbtn(btn_row, "🔊  Read aloud", self._library_read_aloud,
+             ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
+        lbtn(btn_row, "■  Stop",        self.stop_reading,
+             ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, 14))
+        lbtn(btn_row, "+  Add files…",  self._library_add_files,
+             ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
+        lbtn(btn_row, "🗑  Remove",      self._library_remove_selected,
+             ACCENT_RED).pack(side=tk.LEFT, padx=6)
+        lbtn(btn_row, "📂  Open folder", self._library_open_folder,
+             ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
+        lbtn(btn_row, "🔄  Refresh",     self._refresh_library_list,
+             ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
+        lbtn(btn_row, "✨  Ask Library", self._library_ask_platform,
+             ACCENT_PURPLE).pack(side=tk.LEFT, padx=(12, 6))
+        lbtn(btn_row, "Open in reader", self._open_selected_library_book,
+             ACCENT_CYAN).pack(side=tk.RIGHT, padx=(6, 0))
+        lbtn(btn_row, "Close", _on_close,
+             ACCENT_SLATE).pack(side=tk.RIGHT, padx=6)
 
         # Two-pane list, e-Sword style: Book Name on the left, Chapter on
         # the right. Click a book → chapters populate. Double-click a
@@ -2460,11 +2628,32 @@ class BookReader:
             background=[("active", BG_PANEL)],
         )
 
+        # Thick, raised, colored sashes so the dividers are easy to grab and
+        # drag — the user can resize every area to taste.
         panes = tk.PanedWindow(
-            list_frame, orient=tk.HORIZONTAL, bg=BG_DARK,
-            sashrelief=tk.FLAT, sashwidth=4, borderwidth=0,
+            list_frame, orient=tk.HORIZONTAL, bg=ACCENT_SLATE,
+            sashrelief=tk.RAISED, sashwidth=8, borderwidth=0,
         )
         panes.pack(fill=tk.BOTH, expand=True)
+
+        # A chunky, clearly-visible scrollbar ("slider") used by every list
+        # so each one is easy to see and drag up and down.
+        def slider(parent, command):
+            return tk.Scrollbar(
+                parent, command=command, width=18,
+                troughcolor=BG_PANEL, bg=ACCENT_SLATE,
+                activebackground=ACCENT_CYAN, relief=tk.FLAT, borderwidth=0,
+            )
+
+        # Let the mouse wheel scroll a list when the pointer is over it, so
+        # scrolling works without having to grab the slider thumb.
+        def wheel(widget):
+            widget.bind(
+                "<MouseWheel>",
+                lambda e: (widget.yview_scroll(
+                    int(-1 * (e.delta / 120)), "units"), "break")[1],
+                add="+",
+            )
 
         # ---- Left pane: book list ---------------------------------------
         books_frame = tk.Frame(panes, bg=BG_DARK)
@@ -2477,95 +2666,151 @@ class BookReader:
         )
         self._library_tree.heading("name", text="Book Name", anchor=tk.W)
         self._library_tree.column("name", anchor=tk.W, width=320, stretch=True)
-        books_sb = tk.Scrollbar(books_frame, command=self._library_tree.yview)
+        books_sb = slider(books_frame, self._library_tree.yview)
         self._library_tree.configure(yscrollcommand=books_sb.set)
         books_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        wheel(self._library_tree)
         self._library_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # ---- Right pane: chapter list -----------------------------------
-        chapters_frame = tk.Frame(panes, bg=BG_DARK)
-        self._library_chapter_tree = ttk.Treeview(
-            chapters_frame,
-            columns=("chapter",),
-            show="headings",
-            style="Library.Treeview",
-            selectmode="browse",
+        # ---- Right side: in-window reading view -------------------------
+        # Book title at the top, a chapters + pages navigator on the left,
+        # and the readable book text on the right.
+        read_frame = tk.Frame(panes, bg=BG_DARK)
+        self._library_title_label = tk.Label(
+            read_frame, text="Select a book on the left to read it here",
+            bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 12, "bold"),
+            anchor=tk.W, padx=6, justify=tk.LEFT, wraplength=560,
         )
-        self._library_chapter_tree.heading("chapter", text="Chapter", anchor=tk.W)
-        self._library_chapter_tree.column("chapter", anchor=tk.W, width=200, stretch=True)
-        ch_sb = tk.Scrollbar(chapters_frame, command=self._library_chapter_tree.yview)
+        self._library_title_label.pack(fill=tk.X, pady=(0, 4))
+
+        read_split = tk.PanedWindow(
+            read_frame, orient=tk.HORIZONTAL, bg=ACCENT_SLATE,
+            sashrelief=tk.RAISED, sashwidth=8, borderwidth=0,
+        )
+        read_split.pack(fill=tk.BOTH, expand=True)
+
+        # Navigator: Chapters over Pages in their OWN draggable vertical
+        # split, so the two start equal and you can resize each by dragging
+        # the divider between them.
+        nav_split = tk.PanedWindow(
+            read_split, orient=tk.VERTICAL, bg=ACCENT_SLATE,
+            sashrelief=tk.RAISED, sashwidth=8, borderwidth=0,
+        )
+
+        # ---- Chapters (top) ---------------------------------------------
+        chapters_section = tk.Frame(nav_split, bg=BG_DARK)
+        tk.Label(chapters_section, text="Chapters", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold"), anchor=tk.W, padx=8, pady=4
+                 ).pack(fill=tk.X)
+        ch_holder = tk.Frame(chapters_section, bg=BG_DARK)
+        ch_holder.pack(fill=tk.BOTH, expand=True)
+        self._library_chapter_tree = ttk.Treeview(
+            ch_holder, columns=("chapter",), show="headings",
+            style="Library.Treeview", selectmode="browse", height=4,
+        )
+        self._library_chapter_tree.heading("chapter", text="#  Chapter", anchor=tk.W)
+        self._library_chapter_tree.column("chapter", anchor=tk.W, width=180, stretch=True)
+        ch_sb = slider(ch_holder, self._library_chapter_tree.yview)
         self._library_chapter_tree.configure(yscrollcommand=ch_sb.set)
         ch_sb.pack(side=tk.RIGHT, fill=tk.Y)
         self._library_chapter_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        wheel(self._library_chapter_tree)
 
-        panes.add(books_frame,    minsize=220, stretch="always")
-        panes.add(chapters_frame, minsize=140, stretch="always")
+        # ---- Pages (bottom) ---------------------------------------------
+        pages_section = tk.Frame(nav_split, bg=BG_DARK)
+        tk.Label(pages_section, text="Pages", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold"), anchor=tk.W, padx=8, pady=4
+                 ).pack(fill=tk.X)
+        pg_holder = tk.Frame(pages_section, bg=BG_DARK)
+        pg_holder.pack(fill=tk.BOTH, expand=True)
+        self._library_pages_tree = ttk.Treeview(
+            pg_holder, columns=("page",), show="headings",
+            style="Library.Treeview", selectmode="browse", height=4,
+        )
+        self._library_pages_tree.heading("page", text="Page", anchor=tk.W)
+        self._library_pages_tree.column("page", anchor=tk.W, width=90, stretch=True)
+        pg_sb = slider(pg_holder, self._library_pages_tree.yview)
+        self._library_pages_tree.configure(yscrollcommand=pg_sb.set)
+        pg_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._library_pages_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        wheel(self._library_pages_tree)
 
-        # Book pane bindings: selecting populates the chapter pane;
-        # double-click / Enter opens the book.
-        self._library_tree.bind(
-            "<<TreeviewSelect>>",
-            lambda _e: self._library_load_chapters_for_selection(),
+        nav_split.add(chapters_section, minsize=70, stretch="always")
+        nav_split.add(pages_section,    minsize=70, stretch="always")
+
+        # The reading area — the book text, readable right here.
+        text_holder = tk.Frame(read_split, bg=BG_DARK)
+        self._library_read_text = scrolledtext.ScrolledText(
+            text_holder, wrap=tk.WORD, bg=BG_INPUT, fg=FG_TEXT,
+            insertbackground=FG_TEXT, font=(self.font_family, self.font_size),
+            relief=tk.FLAT, bd=0, padx=12, pady=10, height=10, width=40,
         )
+        self._library_read_text.pack(fill=tk.BOTH, expand=True)
+        # Yellow follow-along highlight for Read aloud (same as the boards).
+        _yellow = self.HIGHLIGHT_COLORS.get("Yellow", "#fde047")
+        self._library_read_text.tag_configure(
+            "reading", background=_yellow, foreground="#0f172a")
+        self._library_read_text.tag_raise("reading", "sel")
+        self._attach_clipboard_menu(self._library_read_text)
+
+        read_split.add(nav_split,   minsize=150, stretch="always")
+        read_split.add(text_holder, minsize=280, stretch="always")
+
+        panes.add(books_frame, minsize=140, stretch="always")
+        panes.add(read_frame,  minsize=340, stretch="always")
+
+        # Bindings: select a book → load it into the reading view; a chapter
+        # or page click jumps the reading area there. Double-click still
+        # opens the book in the main reader for the full-screen experience.
         self._library_tree.bind(
-            "<Double-Button-1>", lambda _e: self._open_selected_library_book()
-        )
+            "<<TreeviewSelect>>", lambda _e: self._library_show_selected_book())
         self._library_tree.bind(
-            "<Return>", lambda _e: self._open_selected_library_book()
-        )
-        # Chapter pane bindings: double-click / Enter opens the book at
-        # the selected chapter.
+            "<Double-Button-1>", lambda _e: self._open_selected_library_book())
+        self._library_tree.bind(
+            "<Return>", lambda _e: self._open_selected_library_book())
         self._library_chapter_tree.bind(
-            "<Double-Button-1>", lambda _e: self._open_selected_library_book()
-        )
-        self._library_chapter_tree.bind(
-            "<Return>", lambda _e: self._open_selected_library_book()
-        )
+            "<<TreeviewSelect>>", lambda _e: self._library_jump_to_chapter())
+        self._library_pages_tree.bind(
+            "<<TreeviewSelect>>", lambda _e: self._library_jump_to_page())
 
-        # Action row
-        btn_row = tk.Frame(win, bg=BG_DARK, padx=14, pady=12)
-        btn_row.pack(fill=tk.X)
+        # Show every book in the folder (no zones).
+        self._library_zone_filter = None
+        self._refresh_library_list()
+        # Auto-open the LARGEST file (most likely a real book with plenty of
+        # chapters/pages) so the reading area, Chapters and Pages are
+        # populated right away — that's what makes the sliders appear and be
+        # draggable (an empty or short list has nothing to scroll).
+        try:
+            items = self._library_items
+            if items:
+                biggest = max(range(len(items)), key=lambda i: items[i][2])
+                iid = str(biggest)
+                if self._library_tree.exists(iid):
+                    self._library_tree.selection_set(iid)
+                    self._library_tree.see(iid)
+                    self._library_tree.focus(iid)
+                    self._library_show_selected_book()
+        except Exception:
+            pass
 
-        def lbtn(parent, text, cmd, color):
-            return tk.Button(
-                parent, text=text, command=cmd,
-                font=("Segoe UI", 11, "bold"),
-                bg=color, fg="white", activebackground=color,
-                relief=tk.FLAT, padx=14, pady=8, cursor="hand2", borderwidth=0,
-            )
-
-        lbtn(btn_row, "+  Add files…",  self._library_add_files,
-             ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
-        lbtn(btn_row, "🗑  Remove",      self._library_remove_selected,
-             ACCENT_RED).pack(side=tk.LEFT, padx=6)
-        lbtn(btn_row, "📂  Open folder", self._library_open_folder,
-             ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
-        lbtn(btn_row, "🔄  Refresh",     self._refresh_library_list,
-             ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
-        # Ask Library — cross-excerpt AI search via the Sentinel Forge
-        # platform (http://127.0.0.1:8000/api/library/ask). Requires the
-        # dashboard service to be running; degrades gracefully with a
-        # helpful prompt if it isn't.
-        lbtn(btn_row, "✨  Ask Library", self._library_ask_platform,
-             ACCENT_PURPLE).pack(side=tk.LEFT, padx=(12, 6))
-        # Zone migration — moves the selected book to GREEN/YELLOW/RED.
-        # Cognitive load auto-snaps into the destination zone's range.
-        lbtn(btn_row, "→ 🟢",  lambda: self._library_migrate_selected("GREEN"),
-             LIBRARY_ZONE_COLOR["GREEN"]).pack(side=tk.LEFT, padx=(12, 2))
-        lbtn(btn_row, "→ 🟡",  lambda: self._library_migrate_selected("YELLOW"),
-             LIBRARY_ZONE_COLOR["YELLOW"]).pack(side=tk.LEFT, padx=2)
-        lbtn(btn_row, "→ 🔴",  lambda: self._library_migrate_selected("RED"),
-             LIBRARY_ZONE_COLOR["RED"]).pack(side=tk.LEFT, padx=2)
-        lbtn(btn_row, "Open in reader", self._open_selected_library_book,
-             ACCENT_CYAN).pack(side=tk.RIGHT, padx=(6, 0))
-        lbtn(btn_row, "Close", _on_close,
-             ACCENT_SLATE).pack(side=tk.RIGHT, padx=6)
-
-        # Library opens with its filter defaulted to the active
-        # cognitive zone (Sentinel Forge behavior: high load → GREEN
-        # books, low load → RED archive). User can click "All" or
-        # another zone to override.
-        self._library_set_zone_filter(self._zone_for_load(self._cognitive_load))
+        # Give the panes sensible starting proportions once the window has a
+        # real size: a slim book list, a medium navigator, the rest reading;
+        # Chapters and Pages split evenly. The user can drag any divider.
+        def _init_sashes():
+            try:
+                win.update_idletasks()
+                total_w = panes.winfo_width()
+                if total_w > 1:
+                    panes.sash_place(0, int(total_w * 0.24), 1)
+                rf_w = read_frame.winfo_width()
+                if rf_w > 1:
+                    read_split.sash_place(0, min(240, int(rf_w * 0.30)), 1)
+                nav_h = nav_split.winfo_height()
+                if nav_h > 1:
+                    nav_split.sash_place(0, 1, nav_h // 2)
+            except Exception:
+                pass
+        win.after(150, _init_sashes)
         search_entry.focus_set()
 
     # ---- Ask Library (cross-excerpt AI search via the platform) --------
@@ -2863,7 +3108,6 @@ class BookReader:
         self._library_item_metas = metas
         total_bytes = sum(it[2] for it in items)
         for idx, ((rel, _full, _size, _mtime), meta) in enumerate(zip(items, metas)):
-            emoji = LIBRARY_ZONE_EMOJI.get(meta.get("zone", LIBRARY_ZONE_DEFAULT), "")
             stem = Path(rel).stem
             # Friendly labels for saved excerpts: instead of the long
             # technical filename "BOOKREADER-EXCERPT-a2_..._v001", show
@@ -2878,9 +3122,9 @@ class BookReader:
                     short_ts = datetime.fromisoformat(ts).strftime("%Y-%m-%d %H:%M")
                 except (ValueError, TypeError):
                     short_ts = ts[:16].replace("T", " ")
-                display = f"{emoji}  📝 from {src_stem} · {short_ts}"
+                display = f"📝 from {src_stem} · {short_ts}"
             else:
-                display = f"{emoji}  {stem}"
+                display = stem
             tree.insert("", tk.END, iid=str(idx), values=(display,))
         # Clear the chapter pane since the book selection is gone.
         if self._library_chapter_tree is not None:
@@ -2927,51 +3171,236 @@ class BookReader:
         )
         self._refresh_library_list()
 
-    def _library_load_chapters_for_selection(self) -> None:
-        """Populate the right (Chapter) pane based on the currently
-        selected book in the left pane. Called on every TreeviewSelect.
-        Chapter detection re-uses the same `_extract_text_with_chapters`
-        path used when opening a book in the reader."""
-        if self._library_tree is None or self._library_chapter_tree is None:
+    def _library_show_selected_book(self) -> None:
+        """Load the selected book into the in-window reading view: title at
+        the top, chapters (numbered) + page numbers on the left, and the
+        readable book text on the right. Re-uses the same
+        `_extract_text_with_chapters` path the main reader uses."""
+        if self._library_tree is None:
             return
         ch_tree = self._library_chapter_tree
-        ch_tree.delete(*ch_tree.get_children())
-        self._library_chapters = []
+        pg_tree = self._library_pages_tree
+        rt = self._library_read_text
         sel = self._library_tree.selection()
         if not sel:
             self._library_current_book_idx = None
             return
-        idx = int(sel[0])
+        try:
+            idx = int(sel[0])
+        except ValueError:
+            return  # a hint/empty row, not a real book
         if idx >= len(self._library_items):
             self._library_current_book_idx = None
             return
-        # Skip re-extraction if the same book is already loaded — clicking
-        # twice on the same row shouldn't re-parse a 500-page PDF.
+        # Don't re-parse a 500-page PDF when the same row is re-selected.
         if self._library_current_book_idx == idx and self._library_chapters:
             return
         self._library_current_book_idx = idx
         _rel, full, _size, _mtime = self._library_items[idx]
-        self.set_status(f"Reading chapters from {os.path.basename(full)}…")
+        title = Path(full).stem
+        if self._library_title_label is not None:
+            self._library_title_label.configure(text=title)
+        self.set_status(f"Opening {os.path.basename(full)}…")
         try:
             self.root.update_idletasks()
         except tk.TclError:
             pass
         try:
-            _text, chapters = self._extract_text_with_chapters(full)
-        except Exception:
-            chapters = []
+            text, chapters = self._extract_text_with_chapters(full)
+        except Exception as e:
+            text, chapters = (f"(Could not read this book: {e})", [])
         self._library_chapters = chapters
-        if not chapters:
-            ch_tree.insert("", tk.END, iid="none",
-                           values=("(no chapters detected)",))
-            self.set_status(f"No chapters detected in {os.path.basename(full)}.")
-            return
-        for c_idx, (label, _offset) in enumerate(chapters):
-            ch_tree.insert("", tk.END, iid=str(c_idx), values=(label,))
+
+        # Fill the reading area.
+        if rt is not None:
+            rt.delete("1.0", tk.END)
+            rt.insert("1.0", text)
+            rt.see("1.0")
+
+        # Chapters: numbered "1.  Title".
+        if ch_tree is not None:
+            ch_tree.delete(*ch_tree.get_children())
+            if chapters:
+                for c_idx, (label, _off) in enumerate(chapters):
+                    ch_tree.insert("", tk.END, iid=str(c_idx),
+                                   values=(f"{c_idx + 1}.  {label}",))
+            else:
+                ch_tree.insert("", tk.END, iid="none",
+                               values=("(no chapters detected)",))
+
+        # Pages: synthetic, evenly sized (most formats have no real pages).
+        self._library_page_offsets = [off for _n, off in self._library_paginate(text)]
+        if pg_tree is not None:
+            pg_tree.delete(*pg_tree.get_children())
+            for p_idx in range(len(self._library_page_offsets)):
+                pg_tree.insert("", tk.END, iid=str(p_idx),
+                               values=(f"Page {p_idx + 1}",))
+
         self.set_status(
-            f"{len(chapters)} chapter{'s' if len(chapters) != 1 else ''} "
-            f"in {os.path.basename(full)}"
-        )
+            f"{title} — {len(chapters)} chapter(s), "
+            f"{len(self._library_page_offsets)} page(s)")
+
+    @staticmethod
+    def _library_paginate(text: str, chars_per_page: int = 1800
+                          ) -> list[tuple[int, int]]:
+        """Split text into synthetic, evenly-sized pages. Most book formats
+        (txt/docx/md) carry no real page breaks, so we approximate roughly one
+        paperback page worth of characters each. Returns [(page_no, offset)]."""
+        n = len(text)
+        if n == 0:
+            return [(1, 0)]
+        out: list[tuple[int, int]] = []
+        pos, num = 0, 1
+        while pos < n:
+            out.append((num, pos))
+            pos += chars_per_page
+            num += 1
+        return out
+
+    def _library_jump_to_chapter(self) -> None:
+        """Click a chapter → scroll the reading area to it."""
+        ct = self._library_chapter_tree
+        if ct is None:
+            return
+        sel = ct.selection()
+        if not sel:
+            return
+        try:
+            c_idx = int(sel[0])
+        except ValueError:
+            return
+        if 0 <= c_idx < len(self._library_chapters):
+            self._library_scroll_read_to(self._library_chapters[c_idx][1])
+
+    def _library_jump_to_page(self) -> None:
+        """Click a page number → scroll the reading area to it."""
+        pt = self._library_pages_tree
+        if pt is None:
+            return
+        sel = pt.selection()
+        if not sel:
+            return
+        try:
+            p_idx = int(sel[0])
+        except ValueError:
+            return
+        if 0 <= p_idx < len(self._library_page_offsets):
+            self._library_scroll_read_to(self._library_page_offsets[p_idx])
+
+    def _library_scroll_read_to(self, char_offset: int) -> None:
+        rt = self._library_read_text
+        if rt is None:
+            return
+        try:
+            tk_idx = rt.index(f"1.0 + {int(char_offset)} chars")
+            rt.see(tk_idx)
+            rt.mark_set(tk.INSERT, tk_idx)
+            rt.focus_set()
+        except tk.TclError:
+            pass
+
+    def _library_read_aloud(self) -> None:
+        """Read the book in the Library's reading pane aloud, with the yellow
+        follow-along highlight tracking inside that pane. Reads the selection
+        if one exists, otherwise from the top of the book."""
+        rt = self._library_read_text
+        if rt is None or not rt.get("1.0", tk.END).strip():
+            messagebox.showinfo(
+                "Read aloud", "Open a book in the Library first, then click "
+                "🔊 Read aloud.")
+            return
+        if self.is_reading:
+            self.stop_reading()
+        self._read_widget = rt
+        # No selection → start from the top of the book.
+        try:
+            has_sel = bool(rt.tag_ranges(tk.SEL))
+        except tk.TclError:
+            has_sel = False
+        if not has_sel:
+            rt.mark_set(tk.INSERT, "1.0")
+        rt.focus_set()
+        self.read_aloud()
+
+    def _library_highlight_selection(self, color_name: str = "Yellow") -> None:
+        """Color-highlight the current selection in the Library reading pane.
+        Clears the selection afterwards so the colour is immediately visible
+        (otherwise the blue selection sits on top and hides it)."""
+        rt = self._library_read_text
+        if rt is None:
+            return
+        try:
+            s_idx = rt.index(tk.SEL_FIRST)
+            e_idx = rt.index(tk.SEL_LAST)
+            text = rt.get(s_idx, e_idx)
+        except tk.TclError:
+            messagebox.showinfo(
+                "Nothing selected",
+                "Select some text in the reading pane first, then click a "
+                "highlight colour (Yellow / Indigo / Teal).")
+            return
+        if not text.strip():
+            return
+        color = color_name if color_name in self.HIGHLIGHT_COLORS else "Yellow"
+        color_hex = self.HIGHLIGHT_COLORS[color]
+        tag = f"hl_{color.lower()}"
+        try:
+            rt.tag_configure(tag, background=color_hex, foreground="#0f172a")
+            rt.tag_add(tag, s_idx, e_idx)
+            # Colour above the selection, read-aloud guide above the colour.
+            rt.tag_raise(tag, "sel")
+            try:
+                rt.tag_raise("reading", tag)
+            except tk.TclError:
+                pass
+            # Drop the selection so the new colour shows right away.
+            rt.tag_remove(tk.SEL, "1.0", tk.END)
+        except tk.TclError:
+            pass
+        self.set_status(f"🖍 Highlighted in {color}.")
+
+    def _library_remove_highlight(self) -> None:
+        """Remove colour highlights. Works whether or not text is selected:
+        it clears the WHOLE highlighted run(s) overlapping the selection, or —
+        if nothing is selected — the highlight under the cursor. If neither
+        finds a highlight, offers to clear them all."""
+        rt = self._library_read_text
+        if rt is None:
+            return
+        # Target range: the selection if there is one, else the cursor spot.
+        try:
+            t0 = rt.index(tk.SEL_FIRST)
+            t1 = rt.index(tk.SEL_LAST)
+        except tk.TclError:
+            ins = rt.index(tk.INSERT)
+            t0, t1 = ins, f"{ins}+1c"
+
+        removed = False
+        for cname in self.HIGHLIGHT_COLORS:
+            tag = f"hl_{cname.lower()}"
+            ranges = rt.tag_ranges(tag)
+            # Walk each (start, end) run; remove any run that overlaps target.
+            for i in range(0, len(ranges), 2):
+                r0, r1 = ranges[i], ranges[i + 1]
+                if rt.compare(r0, "<", t1) and rt.compare(t0, "<", r1):
+                    rt.tag_remove(tag, r0, r1)
+                    removed = True
+
+        try:
+            rt.tag_remove(tk.SEL, "1.0", tk.END)
+        except tk.TclError:
+            pass
+
+        if removed:
+            self.set_status("Highlight removed.")
+            return
+        # Nothing under the selection/cursor — offer to clear the whole book.
+        if messagebox.askyesno(
+                "Remove highlights",
+                "No highlight here.\n\nRemove ALL highlights in this book?"):
+            for cname in self.HIGHLIGHT_COLORS:
+                rt.tag_remove(f"hl_{cname.lower()}", "1.0", tk.END)
+            self.set_status("All highlights removed.")
 
     @staticmethod
     def _format_size(b: float) -> str:
@@ -3405,6 +3834,12 @@ class BookReader:
         self.set_status("Commentary cleared.")
 
     # ---- Read aloud — main-thread pyttsx3 with PowerShell fallback ------
+    def _rw(self):
+        """The widget read-aloud reads from and highlights into. Defaults to
+        the main reading board; the Prompt Library redirects it to its own
+        Prompt/Response box."""
+        return self._read_widget if self._read_widget is not None else self.text_area
+
     def read_aloud(self) -> None:
         # Wrap the whole entry point — historically a crash here left
         # is_reading=True and the UI looked frozen. Any uncaught error
@@ -3450,16 +3885,17 @@ class BookReader:
         # IMPORTANT: do NOT strip the text — chunk offsets are computed
         # relative to `speech_start_idx`, so leading whitespace must be
         # preserved or the yellow highlight lands in the wrong place.
+        rw = self._rw()
         try:
-            text = self.text_area.get(tk.SEL_FIRST, tk.SEL_LAST)
-            speech_start_idx = self.text_area.index(tk.SEL_FIRST)
+            text = rw.get(tk.SEL_FIRST, tk.SEL_LAST)
+            speech_start_idx = rw.index(tk.SEL_FIRST)
             start_label = "selection"
         except tk.TclError:
             try:
-                speech_start_idx = self.text_area.index(tk.INSERT)
+                speech_start_idx = rw.index(tk.INSERT)
             except tk.TclError:
                 speech_start_idx = "1.0"
-            text = self.text_area.get(speech_start_idx, tk.END)
+            text = rw.get(speech_start_idx, tk.END)
             start_label = ("top of book" if speech_start_idx == "1.0"
                            else f"cursor (line {speech_start_idx.split('.')[0]})")
         if not text.strip():
@@ -3654,9 +4090,10 @@ class BookReader:
         """Move the reading guide to `start..end` and scroll to it.
         Always called on the main thread."""
         try:
-            self.text_area.tag_remove("reading", "1.0", tk.END)
-            self.text_area.tag_add("reading", start, end)
-            self.text_area.see(start)
+            rw = self._rw()
+            rw.tag_remove("reading", "1.0", tk.END)
+            rw.tag_add("reading", start, end)
+            rw.see(start)
         except tk.TclError as e:
             self.set_status(f"Highlight error: {e}")
 
@@ -3680,8 +4117,9 @@ class BookReader:
             if not text[s:e].strip():
                 continue
             try:
-                tk_s = self.text_area.index(f"{start_index} + {s} chars")
-                tk_e = self.text_area.index(f"{start_index} + {e} chars")
+                rw = self._rw()
+                tk_s = rw.index(f"{start_index} + {s} chars")
+                tk_e = rw.index(f"{start_index} + {e} chars")
             except tk.TclError:
                 continue
             spans.append((s, e, tk_s, tk_e))
@@ -3691,7 +4129,7 @@ class BookReader:
         """Speech ended — tear down the loop and clear the highlight."""
         self._teardown_tts_loop()
         try:
-            self.text_area.tag_remove("reading", "1.0", tk.END)
+            self._rw().tag_remove("reading", "1.0", tk.END)
         except tk.TclError:
             pass
         self._on_speech_done()
@@ -3718,10 +4156,14 @@ class BookReader:
 
     def _on_speech_done(self) -> None:
         self.is_reading = False
+        self._read_widget = None
+        self._matrix_set_read_btn(False)
         self.set_status("Done reading.")
 
     def _on_speech_error(self, msg: str) -> None:
         self.is_reading = False
+        self._read_widget = None
+        self._matrix_set_read_btn(False)
         self.set_status(f"Read aloud error: {msg}")
 
     # ---- Piper path: neural voice, chunked highlighting ------------------
@@ -3933,7 +4375,7 @@ class BookReader:
             except Exception: pass
             self._pump_after_id = None
         try:
-            self.text_area.tag_remove("reading", "1.0", tk.END)
+            self._rw().tag_remove("reading", "1.0", tk.END)
         except tk.TclError:
             pass
         self._on_speech_done()
@@ -3966,9 +4408,11 @@ class BookReader:
                 except Exception: pass
                 self._pump_after_id = None
         try:
-            self.text_area.tag_remove("reading", "1.0", tk.END)
+            self._rw().tag_remove("reading", "1.0", tk.END)
         except tk.TclError:
             pass
+        self._read_widget = None
+        self._matrix_set_read_btn(False)
         self.set_status("Stopped.")
 
     # ---- Microphone / voice note ---------------------------------------
@@ -4048,47 +4492,23 @@ try {
         self._start_mic()
 
     def _start_mic(self) -> None:
-        """Spawn the PowerShell dictation process and start a stdout reader."""
-        try:
-            self._mic_proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-Command", self._MIC_PS_SCRIPT],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                text=True, encoding="utf-8", errors="replace",
-                bufsize=1,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-        except Exception as e:
-            messagebox.showerror("Microphone could not start", str(e))
-            return
-
+        """Start dictation. Uses faster-whisper (modern STT) when available,
+        otherwise falls back to Windows System.Speech via PowerShell."""
         self._mic_queue = queue.Queue()
         self.is_listening = True
 
-        def reader() -> None:
-            try:
-                assert self._mic_proc is not None and self._mic_proc.stdout is not None
-                for raw in self._mic_proc.stdout:
-                    line = raw.rstrip("\r\n")
-                    if not line:
-                        continue
-                    if line.startswith("STT_ERROR:"):
-                        self._mic_queue.put(("error", line[len("STT_ERROR:"):].strip()))
-                    elif line == "__MIC_READY__":
-                        self._mic_queue.put(("ready",))
-                    else:
-                        self._mic_queue.put(("text", line))
-            except Exception:
-                pass
-            self._mic_queue.put(("done",))
-
-        self._mic_thread = threading.Thread(target=reader, daemon=True)
-        self._mic_thread.start()
-
-        # Mic UI: red "Stop mic" while recording.
+        # Mic UI: red "Stop" while recording.
         self.mic_btn.configure(text="■  Stop mic", bg=ACCENT_RED,
                                activebackground=ACCENT_RED)
+        for _attr in ("_matrix_mic_btn", "_study_notes_mic_btn",
+                      "_journal_mic_btn", "_planner_mic_btn"):
+            _mmb = getattr(self, _attr, None)
+            if _mmb is not None:
+                try:
+                    _mmb.configure(text="■ Stop", bg=ACCENT_RED,
+                                   activebackground=ACCENT_RED)
+                except tk.TclError:
+                    pass
 
         # Lock the dictation target for this listening session. We use
         # whichever text widget the user last clicked into — falls back
@@ -4103,17 +4523,233 @@ try {
         self._mic_active_target = target
         try:
             target.focus_set()
-            target.mark_set(tk.INSERT, tk.INSERT)
-            target.see(tk.INSERT)
-        except tk.TclError:
+            if isinstance(target, (tk.Entry, ttk.Entry)):
+                # Entry widgets (e.g. the Planner day boxes) don't have
+                # Text's mark_set/see — position the caret at the end instead.
+                target.icursor(tk.END)
+            else:
+                target.mark_set(tk.INSERT, tk.INSERT)
+                target.see(tk.INSERT)
+        except (tk.TclError, AttributeError):
             pass
-
         target_name = self._mic_target_label(target)
         self._mic_target_name = target_name
-        self.set_status(
-            f"🎤 Starting microphone… dictation will go to {target_name}.")
+
+        if HAS_WHISPER:
+            # Modern path: capture audio + transcribe with faster-whisper.
+            self._whisper_stop = threading.Event()
+            self._mic_thread = threading.Thread(
+                target=self._whisper_record_loop, daemon=True)
+            self._mic_thread.start()
+            self.set_status(
+                f"🎤 Starting Whisper… dictation will go to {target_name}.")
+        else:
+            # Fallback: Windows System.Speech via PowerShell.
+            try:
+                self._mic_proc = subprocess.Popen(
+                    ["powershell", "-NoProfile", "-Command", self._MIC_PS_SCRIPT],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    text=True, encoding="utf-8", errors="replace", bufsize=1,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except Exception as e:
+                self.is_listening = False
+                messagebox.showerror("Microphone could not start", str(e))
+                self._stop_mic()
+                return
+
+            def reader() -> None:
+                try:
+                    assert self._mic_proc is not None and self._mic_proc.stdout is not None
+                    for raw in self._mic_proc.stdout:
+                        line = raw.rstrip("\r\n")
+                        if not line:
+                            continue
+                        if line.startswith("STT_ERROR:"):
+                            self._mic_queue.put(("error", line[len("STT_ERROR:"):].strip()))
+                        elif line == "__MIC_READY__":
+                            self._mic_queue.put(("ready",))
+                        else:
+                            self._mic_queue.put(("text", line))
+                except Exception:
+                    pass
+                self._mic_queue.put(("done",))
+
+            self._mic_thread = threading.Thread(target=reader, daemon=True)
+            self._mic_thread.start()
+            self.set_status(
+                f"🎤 Starting microphone… dictation will go to {target_name}.")
 
         self._mic_poll_after_id = self.root.after(50, self._mic_poll_queue)
+
+    def _ensure_whisper_model(self):
+        """Load the Whisper model once (thread-safe). Returns the model."""
+        if self._whisper_model is None:
+            with self._whisper_lock:
+                if self._whisper_model is None:
+                    from faster_whisper import WhisperModel
+                    t0 = time.time()
+                    self._whisper_model = WhisperModel(
+                        self._whisper_model_name, device="cpu",
+                        compute_type="int8")
+                    _vlog(f"mic: whisper model loaded in {time.time()-t0:.1f}s")
+        return self._whisper_model
+
+    def _set_mic_quality(self, val: str) -> None:
+        """Switch the speech model: Fast=base.en, Accurate=small.en,
+        Best=medium.en (more accurate, slower, ~1.5 GB first-time download)."""
+        mapping = {"Fast": "base.en", "Accurate": "small.en", "Best": "medium.en"}
+        name = mapping.get(val, "small.en")
+        if name == self._whisper_model_name:
+            return
+        if self.is_listening:
+            self._stop_mic()
+        self._whisper_model_name = name
+        self._whisper_model = None   # force reload of the new model
+        note = " (large download the first time)" if val == "Best" else ""
+        self.set_status(f"🎤 Mic accuracy: {val} — loading {name}{note}…")
+        self._preload_whisper()
+
+    def _preload_whisper(self) -> None:
+        """Warm the Whisper model in the background at startup so the first
+        🎤 click doesn't pause to load it."""
+        if not HAS_WHISPER:
+            return
+
+        def _load():
+            try:
+                self._ensure_whisper_model()
+                _vlog("mic: model pre-warmed at startup")
+            except Exception as e:
+                _vlog(f"mic: preload failed: {e}")
+        threading.Thread(target=_load, daemon=True).start()
+
+    def _whisper_record_loop(self) -> None:
+        """Capture mic audio CONTINUOUSLY (callback) and transcribe phrases with
+        faster-whisper. Capture runs in PortAudio's own thread, so audio is
+        never dropped while a phrase is being transcribed — fixing words lost
+        between phrases. Quiet mics are gain-boosted before recognition."""
+        try:
+            import numpy as np
+            import sounddevice as sd
+            import queue as _q
+            from faster_whisper import WhisperModel
+        except Exception as e:
+            self._mic_queue.put(("error", f"Whisper unavailable: {e}"))
+            return
+        try:
+            import noisereduce as _nr
+        except Exception:
+            _nr = None
+        SR = 16000
+        FRAME = int(SR * 0.1)      # 100 ms blocks
+        MAX_SIL = 1.0              # trailing silence (s) that ends a phrase
+        MAX_UTT = 18.0             # force-flush a very long phrase (s)
+        MIN_UTT = 0.25             # ignore blips shorter than this (s)
+        try:
+            self._ensure_whisper_model()
+        except Exception as e:
+            self._mic_queue.put(("error", f"Could not load Whisper model: {e}"))
+            return
+
+        def _rms(c):
+            return float(np.sqrt(np.mean(c * c)) + 1e-12)
+
+        def _process(frames, dur):
+            """Denoise → gain-normalize → transcribe → emit a buffered phrase."""
+            if not frames:
+                return
+            audio = np.concatenate(frames)
+            if len(audio) < int(SR * MIN_UTT):
+                return
+            if _nr is not None and self._mic_denoise:
+                try:
+                    audio = _nr.reduce_noise(
+                        y=audio, sr=SR, stationary=True,
+                        prop_decrease=0.9).astype(np.float32)
+                except Exception:
+                    pass
+            # Boost quiet mics: normalize peak toward ~0.3 (cap the gain so we
+            # don't amplify pure noise to absurd levels).
+            peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
+            if 0 < peak < 0.3:
+                audio = (audio * min(8.0, 0.3 / peak)).astype(np.float32)
+            text = self._whisper_transcribe(audio)
+            _vlog(f"mic: phrase {dur:.1f}s peak={peak:.4f} -> {text!r}")
+            if text:
+                self._mic_queue.put(("text", text))
+
+        audio_q: "queue.Queue" = _q.Queue()
+
+        def _cb(indata, _frames, _t, status):
+            try:
+                audio_q.put(indata[:, 0].copy())
+            except Exception:
+                pass
+
+        # RELIABLE design: record EVERYTHING from the moment the stream opens
+        # (no gate that can drop quiet/early speech). Energy is used only to
+        # decide *when* to flush a chunk for transcription — on a pause, or a
+        # max length, or when the user clicks Stop. Whisper's own VAD trims any
+        # silence inside each chunk, so whatever you say always gets typed.
+        FLUSH_SIL = 1.4            # pause (s) that flushes a chunk for liveness
+        MAX_BUF = 16.0            # also flush if a chunk gets this long (s)
+        buf, sil, had_sound, loud = [], 0.0, False, 0.0
+        SIL_THRESH = 0.01         # provisional; refined after a few frames
+        stop = self._whisper_stop
+        calib, calibrated = [], False
+        try:
+            with sd.InputStream(samplerate=SR, channels=1, dtype="float32",
+                                blocksize=FRAME, callback=_cb):
+                self._mic_queue.put(("ready",))
+                while stop is not None and not stop.is_set():
+                    try:
+                        chunk = audio_q.get(timeout=0.2)
+                    except _q.Empty:
+                        continue
+                    buf.append(chunk)                 # ALWAYS keep the audio
+                    r = _rms(chunk)
+                    loud = max(loud, r)
+                    # Calibrate the pause threshold from the first ~0.4s.
+                    if not calibrated:
+                        calib.append(r)
+                        if len(calib) >= 4:
+                            floor = float(np.median(calib))
+                            SIL_THRESH = max(0.008, min(0.05, floor * 3.0 + 0.005))
+                            calibrated = True
+                            _vlog(f"mic: floor={floor:.5f} flush_thresh={SIL_THRESH:.5f}")
+                    if r > SIL_THRESH:
+                        sil = 0.0
+                        had_sound = True
+                    else:
+                        sil += len(chunk) / SR
+                    dur = sum(len(c) for c in buf) / SR
+                    # Flush on a clear pause after speech, or on max length.
+                    if (had_sound and sil >= FLUSH_SIL) or dur >= MAX_BUF:
+                        frames, buf, sil, had_sound = buf, [], 0.0, False
+                        _process(frames, dur)
+                # On Stop: transcribe everything still buffered (so a short or
+                # quiet utterance is never lost).
+                if buf:
+                    _process(buf, sum(len(c) for c in buf) / SR)
+                _vlog(f"mic: stopped. loudest frame RMS this session={loud:.5f} "
+                      f"(flush threshold {SIL_THRESH:.5f})")
+        except Exception as e:
+            _vlog(f"mic: ERROR {type(e).__name__}: {e}")
+            self._mic_queue.put(("error", f"Microphone: {e}"))
+            return
+        self._mic_queue.put(("done",))
+
+    def _whisper_transcribe(self, audio) -> str:
+        """Transcribe one audio phrase to text. Beam search (beam_size=5) for
+        better accuracy — affordable now that capture is continuous."""
+        try:
+            segments, _ = self._whisper_model.transcribe(
+                audio, language="en", beam_size=5, vad_filter=True)
+            return " ".join(s.text.strip() for s in segments).strip()
+        except Exception:
+            return ""
 
     def _mic_poll_queue(self) -> None:
         """Drain the mic queue on the main thread and apply updates."""
@@ -4151,6 +4787,15 @@ try {
         if not text:
             return
         target = getattr(self, "_mic_active_target", None) or self.notes_area
+        # Entry widgets (e.g. the Planner day boxes) take plain end-insertion.
+        if isinstance(target, (tk.Entry, ttk.Entry)):
+            try:
+                cur = target.get()
+                lead = "" if (not cur or cur.endswith(" ")) else " "
+                target.insert(tk.END, lead + text + " ")
+            except tk.TclError:
+                pass
+            return
         try:
             prev_char = target.get("insert -1c", "insert")
         except tk.TclError:
@@ -4166,12 +4811,41 @@ try {
         # debounce-save to disk. Reader writes are session-only.
 
     def _stop_mic(self, error: str | None = None) -> None:
-        """Tear down the dictation process and reset the button to idle."""
+        """Tear down dictation (Whisper thread or PowerShell) and reset UI."""
         self.is_listening = False
         if self._mic_poll_after_id is not None:
             try: self.root.after_cancel(self._mic_poll_after_id)
             except Exception: pass
             self._mic_poll_after_id = None
+        # Stop the Whisper capture thread if it's running.
+        if self._whisper_stop is not None:
+            self._whisper_stop.set()
+            th = self._mic_thread
+            if th is not None and th.is_alive() and th is not threading.current_thread():
+                try: th.join(timeout=4)
+                except Exception: pass
+            self._whisper_stop = None
+            # Drain any final recognized text the thread queued as it stopped,
+            # so the last phrase isn't lost once polling ends.
+            if self._mic_queue is not None:
+                try:
+                    while True:
+                        msg = self._mic_queue.get_nowait()
+                        if msg and msg[0] == "text":
+                            self._append_dictation(msg[1])
+                except Exception:
+                    pass
+            # If dictation was going into a Planner day box, add it as a note
+            # for that day automatically (so "talk -> note on the calendar").
+            tgt = getattr(self, "_mic_active_target", None)
+            pents = getattr(self, "_planner_entries", {}) or {}
+            for _ds, _w in pents.items():
+                if _w is tgt:
+                    try:
+                        self._planner_add_task(_ds)
+                    except Exception:
+                        pass
+                    break
         if self._mic_proc is not None:
             try: self._mic_proc.terminate()
             except Exception: pass
@@ -4186,6 +4860,23 @@ try {
                                    activebackground=ACCENT_MIC)
         except Exception:
             pass
+        for _attr in ("_matrix_mic_btn", "_study_notes_mic_btn",
+                      "_journal_mic_btn", "_planner_mic_btn"):
+            _mmb = getattr(self, _attr, None)
+            if _mmb is not None:
+                try:
+                    _mmb.configure(text="🎤 Voice", bg=ACCENT_MIC,
+                                   activebackground=ACCENT_MIC)
+                except tk.TclError:
+                    pass
+        # Reset the per-day Planner mic (short label).
+        _pam = getattr(self, "_planner_active_mic", None)
+        if _pam is not None:
+            try:
+                _pam.configure(text="🎤", bg=ACCENT_MIC, activebackground=ACCENT_MIC)
+            except tk.TclError:
+                pass
+            self._planner_active_mic = None
         if error:
             log_path = os.path.join(os.environ.get("TEMP", ""),
                                      "bookreader_mic.log")
@@ -4226,6 +4917,347 @@ try {
 
     def _db_exec(self, sql: str, params: tuple = ()) -> int:
         return _db_exec_fn(sql, params)
+
+    # ---- Prompt Library (green-button window) ---------------------------
+    # A standalone archive of prompt + response pairs, stored in the study
+    # SQLite DB (table prompt_library). Deliberately separate from the Books
+    # library (which is .md files in LIBRARY_DIR) — no mixing.
+    def _board_text(self) -> str:
+        """The reader's current selection if there is one, else the whole
+        reading board."""
+        try:
+            sel = self.text_area.get("sel.first", "sel.last")
+            if sel.strip():
+                return sel
+        except tk.TclError:
+            pass
+        return self.text_area.get("1.0", tk.END)
+
+    def save_board_to_prompt_library(self) -> None:
+        """Right-click action on the reader: save the selection (or the whole
+        board) as a new Prompt Library entry, then open the window on it."""
+        text = self._board_text().strip()
+        if not text:
+            messagebox.showinfo(
+                "Prompt Library",
+                "There's nothing on the reader to save yet.")
+            return
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        title = (lines[0][:60] if lines else "") or "Saved from reader"
+        now = datetime.now().isoformat(timespec="seconds")
+        src = self.current_file or "(reader board)"
+        new_id = self._db_exec(
+            "INSERT INTO prompt_library "
+            "(title, prompt, response, source, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (title, text, "", src, now, now))
+        self.set_status(f"🗒 Saved to Prompt Library: {title}")
+        self.open_prompt_library(select_id=new_id)
+
+    def open_prompt_library(self, select_id: int | None = None) -> None:
+        """Open (or focus) the Prompt Library window."""
+        if self._prompt_lib_win is not None:
+            try:
+                if self._prompt_lib_win.winfo_exists():
+                    self._prompt_lib_win.lift()
+                    self._prompt_lib_win.focus_force()
+                    self._prompt_lib_refresh(select_id=select_id)
+                    return
+            except tk.TclError:
+                pass
+            self._prompt_lib_win = None
+
+        win = tk.Toplevel(self.root)
+        self._prompt_lib_win = win
+        win.title("🗒 Prompt Library")
+        win.geometry("960x620")
+        win.minsize(700, 460)
+        win.configure(bg=BG_DARK)
+
+        header = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        header.pack(fill=tk.X)
+        tk.Label(header, text="🗒 Prompt Library", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT)
+        tk.Label(header,
+                 text="Your saved prompts + responses — kept separate from "
+                      "your Books library.",
+                 bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 9)
+                 ).pack(side=tk.LEFT, padx=12)
+
+        panes = tk.PanedWindow(win, orient=tk.HORIZONTAL, bg=BG_DARK,
+                               sashwidth=6, bd=0)
+        panes.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Left: list of entries
+        left = tk.Frame(panes, bg=BG_DARK)
+        lb = tk.Listbox(left, bg=BG_INPUT, fg=FG_TEXT,
+                        selectbackground=ACCENT_CYAN, selectforeground="white",
+                        font=("Segoe UI", 10), relief=tk.FLAT, bd=0,
+                        activestyle="none", highlightthickness=0)
+        lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        lsb = tk.Scrollbar(left, command=lb.yview)
+        lsb.pack(side=tk.RIGHT, fill=tk.Y)
+        lb.configure(yscrollcommand=lsb.set)
+        lb.bind("<<ListboxSelect>>", lambda _e: self._prompt_lib_on_select())
+        self._prompt_lib_listbox = lb
+
+        # Right-click an entry → New / Delete (in addition to the buttons).
+        list_menu = tk.Menu(lb, tearoff=0, bg=BG_PANEL, fg=FG_TEXT,
+                            activebackground=ACCENT_SLATE,
+                            activeforeground="white")
+        list_menu.add_command(label="➕  New entry",
+                              command=self._prompt_lib_new)
+        list_menu.add_command(label="🗑  Delete this entry",
+                              command=self._prompt_lib_delete_current)
+
+        def _pl_list_rclick(event):
+            idx = lb.nearest(event.y)
+            if 0 <= idx < len(self._prompt_lib_items):
+                lb.selection_clear(0, tk.END)
+                lb.selection_set(idx)
+                self._prompt_lib_load(self._prompt_lib_items[idx][0])
+            try:
+                list_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                list_menu.grab_release()
+
+        lb.bind("<Button-3>", _pl_list_rclick)
+        panes.add(left, minsize=240, stretch="always")
+
+        # Right: detail (title + prompt + response + buttons)
+        right = tk.Frame(panes, bg=BG_DARK)
+        tk.Label(right, text="Title", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")
+                 ).pack(anchor=tk.W, padx=10, pady=(6, 2))
+        self._prompt_lib_title_var = tk.StringVar()
+        tk.Entry(right, textvariable=self._prompt_lib_title_var,
+                 bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                 font=("Segoe UI", 11), relief=tk.FLAT, bd=0
+                 ).pack(fill=tk.X, padx=10, ipady=5)
+
+        _yellow = self.HIGHLIGHT_COLORS.get("Yellow", "#fde047")
+        prow = tk.Frame(right, bg=BG_DARK)
+        prow.pack(fill=tk.X, padx=10, pady=(10, 2))
+        tk.Label(prow, text="Prompt  (your message)", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Button(prow, text="🔊 Listen",
+                  command=lambda: self._prompt_lib_read("prompt"),
+                  bg=ACCENT_GREEN, fg="white", font=("Segoe UI", 9, "bold"),
+                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.RIGHT)
+        pt_frame = tk.Frame(right, bg=BG_DARK)
+        pt_frame.pack(fill=tk.BOTH, expand=True, padx=10)
+        pt = tk.Text(pt_frame, height=8, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, font=("Segoe UI", 10),
+                     relief=tk.FLAT, bd=0, wrap=tk.WORD)
+        pt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        pt_sb = tk.Scrollbar(pt_frame, command=pt.yview)
+        pt_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        pt.configure(yscrollcommand=pt_sb.set)
+        pt.tag_configure("reading", background=_yellow, foreground="#0f172a")
+        pt.tag_raise("reading", "sel")
+        self._prompt_lib_prompt_txt = pt
+        self._attach_clipboard_menu(pt)
+
+        rrow = tk.Frame(right, bg=BG_DARK)
+        rrow.pack(fill=tk.X, padx=10, pady=(10, 2))
+        tk.Label(rrow, text="Response  (the reply)", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Button(rrow, text="🔊 Listen",
+                  command=lambda: self._prompt_lib_read("response"),
+                  bg=ACCENT_GREEN, fg="white", font=("Segoe UI", 9, "bold"),
+                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.RIGHT)
+        rt_frame = tk.Frame(right, bg=BG_DARK)
+        rt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 6))
+        rt = tk.Text(rt_frame, height=10, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, font=("Segoe UI", 10),
+                     relief=tk.FLAT, bd=0, wrap=tk.WORD)
+        rt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        rt_sb = tk.Scrollbar(rt_frame, command=rt.yview)
+        rt_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        rt.configure(yscrollcommand=rt_sb.set)
+        rt.tag_configure("reading", background=_yellow, foreground="#0f172a")
+        rt.tag_raise("reading", "sel")
+        self._prompt_lib_response_txt = rt
+        self._attach_clipboard_menu(rt)
+
+        br = tk.Frame(right, bg=BG_DARK)
+        br.pack(fill=tk.X, padx=10, pady=(4, 10))
+
+        def _mk(text, cmd, color):
+            tk.Button(br, text=text, command=cmd, bg=color, fg="white",
+                      font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
+                      padx=12, pady=6, cursor="hand2", borderwidth=0
+                      ).pack(side=tk.LEFT, padx=(0, 6))
+
+        _mk("💾 Save",            self._prompt_lib_save_current,  ACCENT_GREEN)
+        _mk("+ New",             self._prompt_lib_new,           ACCENT_CYAN)
+        _mk("📋 Paste → Response", self._prompt_lib_paste_response, ACCENT_AMBER)
+        _mk("■ Stop",            self.stop_reading,              ACCENT_SLATE)
+        _mk("🗑 Delete",          self._prompt_lib_delete_current, ACCENT_RED)
+        panes.add(right, minsize=380, stretch="always")
+
+        def _close():
+            try:
+                self._prompt_lib_save_current(silent=True)
+            except Exception:
+                pass
+            self._prompt_lib_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+
+        win.protocol("WM_DELETE_WINDOW", _close)
+        self._prompt_lib_refresh(select_id=select_id)
+
+    def _prompt_lib_refresh(self, select_id: int | None = None) -> None:
+        lb = self._prompt_lib_listbox
+        if lb is None:
+            return
+        rows = self._db_query(
+            "SELECT id, title, created_at FROM prompt_library "
+            "ORDER BY updated_at DESC, id DESC")
+        self._prompt_lib_items = rows
+        lb.delete(0, tk.END)
+        for _id, title, created in rows:
+            stamp = (created or "")[:16].replace("T", " ")
+            label = (title or "").strip() or "(untitled)"
+            lb.insert(tk.END, f"{label}    ·    {stamp}")
+        target = (select_id if select_id is not None
+                  else self._prompt_lib_current_id)
+        if target is not None:
+            for i, r in enumerate(rows):
+                if r[0] == target:
+                    lb.selection_clear(0, tk.END)
+                    lb.selection_set(i)
+                    lb.see(i)
+                    self._prompt_lib_load(target)
+                    return
+        if not rows:
+            self._prompt_lib_current_id = None
+            self._prompt_lib_clear_detail()
+
+    def _prompt_lib_on_select(self) -> None:
+        lb = self._prompt_lib_listbox
+        if lb is None:
+            return
+        sel = lb.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        if idx >= len(self._prompt_lib_items):
+            return
+        new_id = self._prompt_lib_items[idx][0]
+        if new_id == self._prompt_lib_current_id:
+            return
+        # Persist edits to the entry we're leaving before loading the next.
+        self._prompt_lib_save_current(silent=True)
+        self._prompt_lib_load(new_id)
+
+    def _prompt_lib_load(self, pid: int) -> None:
+        rows = self._db_query(
+            "SELECT title, prompt, response FROM prompt_library WHERE id=?",
+            (pid,))
+        if not rows:
+            return
+        title, prompt, response = rows[0]
+        self._prompt_lib_current_id = pid
+        if self._prompt_lib_title_var is not None:
+            self._prompt_lib_title_var.set(title or "")
+        if self._prompt_lib_prompt_txt is not None:
+            self._prompt_lib_prompt_txt.delete("1.0", tk.END)
+            self._prompt_lib_prompt_txt.insert("1.0", prompt or "")
+        if self._prompt_lib_response_txt is not None:
+            self._prompt_lib_response_txt.delete("1.0", tk.END)
+            self._prompt_lib_response_txt.insert("1.0", response or "")
+
+    def _prompt_lib_clear_detail(self) -> None:
+        if self._prompt_lib_title_var is not None:
+            self._prompt_lib_title_var.set("")
+        for t in (self._prompt_lib_prompt_txt, self._prompt_lib_response_txt):
+            if t is not None:
+                t.delete("1.0", tk.END)
+
+    def _prompt_lib_save_current(self, silent: bool = False) -> None:
+        if self._prompt_lib_current_id is None or self._prompt_lib_title_var is None:
+            return
+        title = self._prompt_lib_title_var.get().strip()
+        prompt = (self._prompt_lib_prompt_txt.get("1.0", tk.END).strip()
+                  if self._prompt_lib_prompt_txt is not None else "")
+        response = (self._prompt_lib_response_txt.get("1.0", tk.END).strip()
+                    if self._prompt_lib_response_txt is not None else "")
+        now = datetime.now().isoformat(timespec="seconds")
+        self._db_exec(
+            "UPDATE prompt_library SET title=?, prompt=?, response=?, "
+            "updated_at=? WHERE id=?",
+            (title, prompt, response, now, self._prompt_lib_current_id))
+        if not silent:
+            self.set_status("🗒 Prompt Library entry saved.")
+            self._prompt_lib_refresh(select_id=self._prompt_lib_current_id)
+
+    def _prompt_lib_new(self) -> None:
+        self._prompt_lib_save_current(silent=True)
+        now = datetime.now().isoformat(timespec="seconds")
+        new_id = self._db_exec(
+            "INSERT INTO prompt_library "
+            "(title, prompt, response, source, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?)",
+            ("New entry", "", "", "", now, now))
+        self._prompt_lib_current_id = new_id
+        self._prompt_lib_refresh(select_id=new_id)
+        if self._prompt_lib_prompt_txt is not None:
+            self._prompt_lib_prompt_txt.focus_set()
+
+    def _prompt_lib_delete_current(self) -> None:
+        if self._prompt_lib_current_id is None:
+            return
+        if not messagebox.askyesno(
+                "Delete entry?",
+                "Delete this Prompt Library entry? This can't be undone."):
+            return
+        self._db_exec("DELETE FROM prompt_library WHERE id=?",
+                      (self._prompt_lib_current_id,))
+        self._prompt_lib_current_id = None
+        self._prompt_lib_clear_detail()
+        self._prompt_lib_refresh()
+
+    def _prompt_lib_paste_response(self) -> None:
+        """Append the clipboard to the Response box — quick way to drop a
+        copied reply in."""
+        if self._prompt_lib_response_txt is None:
+            return
+        try:
+            clip = self.root.clipboard_get()
+        except tk.TclError:
+            clip = ""
+        if clip:
+            self._prompt_lib_response_txt.insert(tk.END, clip)
+            self._prompt_lib_response_txt.focus_set()
+
+    def _prompt_lib_read(self, which: str) -> None:
+        """Read the Prompt or Response box aloud, with the yellow
+        follow-along highlight tracking inside that box."""
+        widget = (self._prompt_lib_prompt_txt if which == "prompt"
+                  else self._prompt_lib_response_txt)
+        if widget is None:
+            return
+        if not widget.get("1.0", tk.END).strip():
+            messagebox.showinfo(
+                "Read aloud", f"There's no {which} text to read yet.")
+            return
+        if self.is_reading:
+            self.stop_reading()
+        # Route the reader + highlight into this box and read from the top.
+        self._read_widget = widget
+        try:
+            widget.tag_remove(tk.SEL, "1.0", tk.END)
+            widget.mark_set(tk.INSERT, "1.0")
+            widget.focus_set()
+        except tk.TclError:
+            pass
+        self.read_aloud()
 
     def _book_key(self, path: str | None) -> str | None:
         """Stable identifier for a book. Use a path relative to LIBRARY_DIR
@@ -4425,8 +5457,9 @@ try {
             self._timer_after_id = None
         self._timer_remaining_seconds = int(duration_min) * 60
         self._timer_running = True
-        self.timer_button.configure(text="Stop", bg=ACCENT_RED,
-                                     activebackground=ACCENT_RED)
+        if self.timer_button is not None:
+            self.timer_button.configure(text="Stop", bg=ACCENT_RED,
+                                         activebackground=ACCENT_RED)
         self._update_timer_display()
         self._tick_timer()
         _vlog(
@@ -5010,8 +6043,19 @@ try {
         win = tk.Toplevel(self.root)
         self._study_win = win
         win.title("📓 Study workspace")
-        win.geometry("1200x680")
-        win.minsize(640, 420)
+        # Fit the window to the screen and centre it, so the bottom button
+        # rows (Delete / Clear / Save, etc.) never fall off the bottom edge.
+        try:
+            sw = win.winfo_screenwidth()
+            sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(1200, max(700, sw - 60))
+        h = min(820, max(440, sh - 96))    # leave room for the taskbar
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2 - 30)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 380)
         win.configure(bg=BG_DARK)
         # NOTE: do NOT call win.transient(self.root) here. A transient
         # window on Windows doesn't get its own taskbar entry, so once
@@ -5064,85 +6108,51 @@ try {
         self._study_tab_buttons = {}
 
         tabs = [
-            ("highlights",  "🖍 Highlights",  self._build_tab_highlights),
-            ("workflow",    "🗂 Workflow",    self._build_tab_workflow),
             ("study_notes", "📝 Study Notes", self._build_tab_study_notes),
             ("topics",      "📌 Topics",      self._build_tab_topics),
-            ("bookmarks",   "🔖 Bookmarks",   self._build_tab_bookmarks),
             ("glossary",    "📒 Glossary",    self._build_tab_glossary),
             ("journal",     "📅 Journal",     self._build_tab_journal),
             ("matrix",      "🎯 Matrix",      self._build_tab_eisenhower),
-            ("audit",       "🔍 Audit",       self._build_tab_audit),
-            ("prompts",     "💬 Prompts",     self._build_tab_prompts),
+            ("planner",     "🗓 Planner",     self._build_tab_planner),
         ]
         for key, label, builder in tabs:
             b = tk.Button(
                 tabbar, text=label,
                 command=lambda k=key: self._show_study_tab(k),
-                font=("Segoe UI", 11, "bold"),
+                font=("Segoe UI", 9, "bold"),
                 bg=BG_INPUT, fg=FG_TEXT,
                 activebackground=ACCENT_SLATE, activeforeground="white",
-                relief=tk.FLAT, padx=11, pady=8, cursor="hand2", borderwidth=0,
+                relief=tk.FLAT, padx=6, pady=5, cursor="hand2", borderwidth=0,
             )
-            b.pack(side=tk.LEFT, padx=(0, 3))
+            b.pack(side=tk.LEFT, padx=(0, 2))
             self._study_tab_buttons[key] = b
             f = tk.Frame(content, bg=BG_DARK)
             self._study_tab_frames[key] = f
             builder(f)
 
-        # Expand / Restore toggle in the upper-right of the tab bar.
-        # Click to maximize the Study window so the active tab gets the
-        # whole screen; click again to return to the normal size.
-        self._study_expanded = False
-        expand_btn = tk.Button(
-            tabbar, text="⛶  Expand",
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_CYAN, fg="white", activebackground=ACCENT_CYAN,
-            relief=tk.FLAT, padx=14, pady=8, cursor="hand2", borderwidth=0,
-        )
-        def _toggle_expand():
-            try:
-                if self._study_expanded:
-                    win.state("normal")
-                    expand_btn.configure(text="⛶  Expand")
-                    self._study_expanded = False
-                else:
-                    win.state("zoomed")     # Windows full-screen maximize
-                    expand_btn.configure(text="⛶  Restore")
-                    self._study_expanded = True
-            except tk.TclError:
-                # Fallback if the platform doesn't support 'zoomed':
-                # size the window to the full screen manually.
-                try:
-                    if self._study_expanded:
-                        win.geometry("960x680")
-                        expand_btn.configure(text="⛶  Expand")
-                        self._study_expanded = False
-                    else:
-                        sw = win.winfo_screenwidth()
-                        sh = win.winfo_screenheight()
-                        win.geometry(f"{sw}x{sh}+0+0")
-                        expand_btn.configure(text="⛶  Restore")
-                        self._study_expanded = True
-                except Exception:
-                    pass
-        expand_btn.configure(command=_toggle_expand)
-        expand_btn.pack(side=tk.RIGHT, padx=(8, 0))
+        # Open + Library — packed right after the last tab (Matrix), at the
+        # exact same compact size as the tab buttons so the row is uniform.
+        tk.Button(tabbar, text="📂 Open", command=self.open_file,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
+                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=6, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
+        tk.Button(tabbar, text="📚 Library", command=self.open_library,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_PURPLE, fg="white",
+                  activebackground=ACCENT_PURPLE, relief=tk.FLAT, padx=6, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
 
-        # Minimize button — sends the Study window to the taskbar. Sits
-        # to the left of Expand so the upper-right reads [— Minimize][⛶ …].
-        # (Pack order with side=RIGHT means later-packed widgets land
-        # further to the left of earlier ones.)
+        # Minimize button — sends the Study window to the taskbar.
+        # (Expand/Restore removed; use the window's own title-bar controls.)
         min_btn = tk.Button(
             tabbar, text="—  Minimize",
             command=lambda: win.iconify(),
-            font=("Segoe UI", 11, "bold"),
+            font=("Segoe UI", 9, "bold"),
             bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
-            relief=tk.FLAT, padx=14, pady=8, cursor="hand2", borderwidth=0,
+            relief=tk.FLAT, padx=8, pady=5, cursor="hand2", borderwidth=0,
         )
         min_btn.pack(side=tk.RIGHT, padx=(4, 0))
 
-        self._show_study_tab("highlights")
+        self._show_study_tab("study_notes")
 
     # ---- Audit tab ------------------------------------------------------
     # Matches the rubric structure shared by the Walkenbach Excel audits
@@ -6138,6 +7148,18 @@ try {
         tk.Label(left, text="Topics", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 11, "bold"), anchor=tk.W
                  ).pack(fill=tk.X, padx=2, pady=(0, 4))
+        # Buttons reserved at the BOTTOM so Delete is never clipped off-screen.
+        ltbtn = tk.Frame(left, bg=BG_DARK, pady=6)
+        ltbtn.pack(side=tk.BOTTOM, fill=tk.X)
+        def lb_btn(text, cmd, color):
+            return tk.Button(ltbtn, text=text, command=cmd,
+                             font=("Segoe UI", 10, "bold"),
+                             bg=color, fg="white", activebackground=color,
+                             relief=tk.FLAT, padx=8, pady=4,
+                             cursor="hand2", borderwidth=0)
+        lb_btn("+ New",  self._create_new_topic,      ACCENT_GREEN).pack(side=tk.LEFT, padx=(0,4))
+        lb_btn("Rename", self._rename_selected_topic, ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
+        lb_btn("🗑 Delete", self._delete_selected_topic, ACCENT_RED).pack(side=tk.LEFT, padx=4)
         self._topics_listbox = tk.Listbox(
             left, bg=BG_INPUT, fg=FG_TEXT,
             selectbackground=ACCENT_CYAN, selectforeground="white",
@@ -6147,17 +7169,6 @@ try {
         self._topics_listbox.pack(fill=tk.BOTH, expand=True)
         self._topics_listbox.bind("<<ListboxSelect>>",
             lambda _e: self._show_topic_entries())
-        ltbtn = tk.Frame(left, bg=BG_DARK, pady=6)
-        ltbtn.pack(fill=tk.X)
-        def lb_btn(text, cmd, color):
-            return tk.Button(ltbtn, text=text, command=cmd,
-                             font=("Segoe UI", 10, "bold"),
-                             bg=color, fg="white", activebackground=color,
-                             relief=tk.FLAT, padx=10, pady=4,
-                             cursor="hand2", borderwidth=0)
-        lb_btn("+ New",  self._create_new_topic,      ACCENT_GREEN).pack(side=tk.LEFT, padx=(0,4))
-        lb_btn("Rename", self._rename_selected_topic, ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
-        lb_btn("Delete", self._delete_selected_topic, ACCENT_RED).pack(side=tk.LEFT, padx=4)
 
         # Right — entries in selected topic
         right = tk.Frame(paned, bg=BG_DARK)
@@ -6165,6 +7176,18 @@ try {
         tk.Label(right, textvariable=self._topic_entries_label_var,
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 11, "bold"),
                  anchor=tk.W).pack(fill=tk.X, padx=2, pady=(0,4))
+        # Buttons reserved at the BOTTOM so Delete entry is never clipped.
+        rtbtn = tk.Frame(right, bg=BG_DARK, pady=6)
+        rtbtn.pack(side=tk.BOTTOM, fill=tk.X)
+        def rb(text, cmd, color):
+            return tk.Button(rtbtn, text=text, command=cmd,
+                             font=("Segoe UI", 10, "bold"),
+                             bg=color, fg="white", activebackground=color,
+                             relief=tk.FLAT, padx=8, pady=4,
+                             cursor="hand2", borderwidth=0)
+        rb("View / Jump", self._view_or_jump_topic_entry, ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, 4))
+        rb("Copy",   self._copy_topic_entry_text,    ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
+        rb("🗑 Delete entry", self._delete_topic_entry, ACCENT_RED).pack(side=tk.LEFT, padx=4)
         entry_frame = tk.Frame(right, bg=BG_DARK)
         entry_frame.pack(fill=tk.BOTH, expand=True)
         self._topic_entries_listbox = tk.Listbox(
@@ -6181,20 +7204,24 @@ try {
             lambda _e: self._view_or_jump_topic_entry())
         self._topic_entries_listbox.bind("<Return>",
             lambda _e: self._view_or_jump_topic_entry())
-        rtbtn = tk.Frame(right, bg=BG_DARK, pady=6)
-        rtbtn.pack(fill=tk.X)
-        def rb(text, cmd, color):
-            return tk.Button(rtbtn, text=text, command=cmd,
-                             font=("Segoe UI", 10, "bold"),
-                             bg=color, fg="white", activebackground=color,
-                             relief=tk.FLAT, padx=10, pady=4,
-                             cursor="hand2", borderwidth=0)
-        rb("View / Jump", self._view_or_jump_topic_entry, ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, 4))
-        rb("Copy text",   self._copy_topic_entry_text,    ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
-        rb("Delete entry", self._delete_topic_entry,      ACCENT_RED).pack(side=tk.LEFT, padx=4)
 
-        paned.add(left,  minsize=200, stretch="always")
-        paned.add(right, minsize=320, stretch="always")
+        paned.add(left,  minsize=240, stretch="always")
+        paned.add(right, minsize=300, stretch="always")
+
+        # Give the left pane a comfortable width once the tab is shown, so
+        # the +New / Rename / 🗑 Delete buttons are never cut off.
+        self._topics_sash_done = False
+        def _topics_sash(_e=None):
+            if getattr(self, "_topics_sash_done", False):
+                return
+            w = paned.winfo_width()
+            if w > 100:
+                try:
+                    paned.sash_place(0, max(300, int(w * 0.42)), 1)
+                    self._topics_sash_done = True
+                except Exception:
+                    pass
+        paned.bind("<Configure>", _topics_sash, add="+")
 
     def _refresh_tab_topics(self) -> None:
         if not hasattr(self, "_topics_listbox"):
@@ -6570,6 +7597,17 @@ try {
         tk.Label(left, text="Entries (newest first)", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 11, "bold"), anchor=tk.W
                  ).pack(fill=tk.X, padx=2, pady=(0, 4))
+        # Buttons reserved at the bottom so Delete is never clipped off-screen.
+        ltbtn = tk.Frame(left, bg=BG_DARK, pady=6)
+        ltbtn.pack(side=tk.BOTTOM, fill=tk.X)
+        def lb_btn(text, cmd, color):
+            return tk.Button(ltbtn, text=text, command=cmd,
+                             font=("Segoe UI", 10, "bold"),
+                             bg=color, fg="white", activebackground=color,
+                             relief=tk.FLAT, padx=8, pady=4,
+                             cursor="hand2", borderwidth=0)
+        lb_btn("+ Today", self._new_today_journal_entry, ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 4))
+        lb_btn("🗑 Delete",  self._delete_selected_journal,  ACCENT_RED).pack(side=tk.LEFT)
         list_frame = tk.Frame(left, bg=BG_DARK)
         list_frame.pack(fill=tk.BOTH, expand=True)
         self._journal_listbox = tk.Listbox(
@@ -6585,28 +7623,58 @@ try {
         self._journal_listbox.bind("<<ListboxSelect>>",
             lambda _e: self._load_selected_journal_entry())
 
-        ltbtn = tk.Frame(left, bg=BG_DARK, pady=6)
-        ltbtn.pack(fill=tk.X)
-        def lb_btn(text, cmd, color):
-            return tk.Button(ltbtn, text=text, command=cmd,
-                             font=("Segoe UI", 10, "bold"),
-                             bg=color, fg="white", activebackground=color,
-                             relief=tk.FLAT, padx=10, pady=4,
-                             cursor="hand2", borderwidth=0)
-        lb_btn("+ Today", self._new_today_journal_entry, ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 4))
-        lb_btn("Delete",  self._delete_selected_journal,  ACCENT_RED).pack(side=tk.LEFT)
-
         right = tk.Frame(paned, bg=BG_DARK)
         self._journal_date_var = tk.StringVar(value="")
         tk.Label(right, textvariable=self._journal_date_var,
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 14, "bold"),
                  anchor=tk.W).pack(fill=tk.X, padx=2)
+        # Button row reserved at the bottom: Clear (empties this entry) + Save.
+        rtbtn = tk.Frame(right, bg=BG_DARK, pady=4)
+        rtbtn.pack(side=tk.BOTTOM, fill=tk.X)
+        tk.Button(rtbtn, text="Save entry",
+                  command=self._save_current_journal_entry,
+                  font=("Segoe UI", 11, "bold"),
+                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
+                  relief=tk.FLAT, padx=14, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(rtbtn, text="🧹 Clear",
+                  command=self._clear_current_journal_entry,
+                  font=("Segoe UI", 11, "bold"),
+                  bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
+                  relief=tk.FLAT, padx=14, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # 🎤 Voice dictation into the journal entry.
+        self._journal_mic_btn = tk.Button(
+            rtbtn, text="🎤 Voice", command=self._journal_toggle_mic,
+            font=("Segoe UI", 11, "bold"),
+            bg=ACCENT_MIC, fg="white", activebackground=ACCENT_MIC,
+            relief=tk.FLAT, padx=14, pady=6, cursor="hand2", borderwidth=0)
+        self._journal_mic_btn.pack(side=tk.LEFT, padx=(6, 0))
+        # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
+        self._journal_read_btn = tk.Button(
+            rtbtn, text="🔊 Read", command=self._journal_read_toggle,
+            font=("Segoe UI", 11, "bold"),
+            bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
+            relief=tk.FLAT, padx=14, pady=6, cursor="hand2", borderwidth=0)
+        self._journal_read_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self._journal_read_color_var = tk.StringVar(value="Yellow")
+        _j_rc = tk.OptionMenu(rtbtn, self._journal_read_color_var,
+                              "Yellow", "Teal", "Indigo")
+        _style_optionmenu(_j_rc)
+        _j_rc.configure(width=7, font=("Segoe UI", 10, "bold"))
+        _j_rc.pack(side=tk.LEFT, padx=(6, 0))
         self._journal_body = scrolledtext.ScrolledText(
             right, wrap=tk.WORD, font=("Segoe UI", 12),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
             padx=14, pady=12, relief=tk.FLAT, undo=True,
         )
         self._journal_body.pack(fill=tk.BOTH, expand=True, pady=(4, 4))
+        # Read-aloud follow-along highlight (colour set when reading starts).
+        self._journal_body.tag_configure(
+            "reading",
+            background=self.HIGHLIGHT_COLORS.get("Yellow", "#fde047"),
+            foreground="#0f172a")
+        self._journal_body.tag_raise("reading", "sel")
         # Right-click clipboard menu, Ctrl+A select-all, and mic focus
         # tracking — so dictation lands here when the user clicks into
         # this editor before pressing 🎤 Voice note.
@@ -6615,14 +7683,6 @@ try {
             clear_cmd=self._clear_current_journal_entry,
             clear_label="Clear this entry",
         )
-        rtbtn = tk.Frame(right, bg=BG_DARK, pady=4)
-        rtbtn.pack(fill=tk.X)
-        tk.Button(rtbtn, text="Save entry",
-                  command=self._save_current_journal_entry,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-                  relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
 
         paned.add(left,  minsize=200, stretch="never")
         paned.add(right, minsize=320, stretch="always")
@@ -6689,6 +7749,52 @@ try {
             (body, datetime.now().isoformat(), self._journal_current_id))
         self.set_status("Journal entry saved.")
         self._refresh_tab_journal()
+
+    def _journal_toggle_mic(self) -> None:
+        """Voice-dictate into the journal entry (or stop if listening)."""
+        if self.is_listening:
+            self.toggle_mic()
+            return
+        w = getattr(self, "_journal_body", None)
+        if w is not None:
+            w.focus_set()
+            self._set_mic_target(w)
+        self.toggle_mic()
+
+    def _journal_read_toggle(self) -> None:
+        """🔊 Read button: read the journal entry, or stop if already reading."""
+        if self.is_reading:
+            self.stop_reading()
+        else:
+            self._journal_read_aloud()
+
+    def _journal_read_aloud(self) -> None:
+        """Read the current journal entry aloud with a Yellow/Teal/Indigo
+        follow-along highlight; reads the selection if there is one."""
+        rt = getattr(self, "_journal_body", None)
+        if rt is None or not rt.get("1.0", tk.END).strip():
+            messagebox.showinfo(
+                "Read aloud", "This journal entry is empty.")
+            return
+        if self.is_reading:
+            self.stop_reading()
+        color = self._journal_read_color_var.get()
+        chex = self.HIGHLIGHT_COLORS.get(color, "#fde047")
+        try:
+            rt.tag_configure("reading", background=chex, foreground="#0f172a")
+            rt.tag_raise("reading", "sel")
+        except tk.TclError:
+            pass
+        self._read_widget = rt
+        try:
+            has_sel = bool(rt.tag_ranges(tk.SEL))
+        except tk.TclError:
+            has_sel = False
+        if not has_sel:
+            rt.mark_set(tk.INSERT, "1.0")
+        rt.focus_set()
+        self.read_aloud()
+        self._matrix_set_read_btn(reading=True)
 
     def _clear_current_journal_entry(self) -> None:
         """Empty the currently-loaded entry's body and persist the change.
@@ -7445,6 +8551,28 @@ try {
             activebackground=ACCENT_SLATE, relief=tk.FLAT,
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=4)
+        # 🎤 Voice dictation into the study notes.
+        self._study_notes_mic_btn = tk.Button(
+            head, text="🎤 Voice", command=self._study_notes_toggle_mic,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+            activebackground=ACCENT_MIC, relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        )
+        self._study_notes_mic_btn.pack(side=tk.RIGHT, padx=4)
+        # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
+        self._study_notes_read_btn = tk.Button(
+            head, text="🔊 Read", command=self._study_notes_read_toggle,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+            activebackground=ACCENT_GREEN, relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        )
+        self._study_notes_read_btn.pack(side=tk.RIGHT, padx=4)
+        self._study_notes_read_color_var = tk.StringVar(value="Yellow")
+        _sn_rc = tk.OptionMenu(head, self._study_notes_read_color_var,
+                               "Yellow", "Teal", "Indigo")
+        _style_optionmenu(_sn_rc)
+        _sn_rc.configure(width=7, font=("Segoe UI", 10, "bold"))
+        _sn_rc.pack(side=tk.RIGHT, padx=4)
 
         body_frame = tk.Frame(parent, bg=BG_DARK, padx=8, pady=8)
         body_frame.pack(fill=tk.BOTH, expand=True)
@@ -7457,6 +8585,12 @@ try {
             undo=True, autoseparators=True, maxundo=-1,
         )
         editor.pack(fill=tk.BOTH, expand=True)
+        # Read-aloud follow-along highlight (colour set when reading starts).
+        editor.tag_configure(
+            "reading",
+            background=self.HIGHLIGHT_COLORS.get("Yellow", "#fde047"),
+            foreground="#0f172a")
+        editor.tag_raise("reading", "sel")
         editor.bind("<<Modified>>",
                      lambda _e: self._on_study_notes_modified())
         # Same affordances as Reader and Notes: clipboard menu, Ctrl+A,
@@ -7467,6 +8601,52 @@ try {
             clear_label="Clear study notes",
         )
         self._study_notes_widget = editor
+
+    def _study_notes_toggle_mic(self) -> None:
+        """Voice-dictate into the Study Notes editor (or stop if listening)."""
+        if self.is_listening:
+            self.toggle_mic()
+            return
+        w = self._study_notes_widget
+        if w is not None:
+            w.focus_set()
+            self._set_mic_target(w)
+        self.toggle_mic()
+
+    def _study_notes_read_toggle(self) -> None:
+        """🔊 Read button: read the study notes, or stop if already reading."""
+        if self.is_reading:
+            self.stop_reading()
+        else:
+            self._study_notes_read_aloud()
+
+    def _study_notes_read_aloud(self) -> None:
+        """Read the Study Notes aloud with a Yellow/Teal/Indigo follow-along
+        highlight; reads the selection if there is one, else from the top."""
+        rt = self._study_notes_widget
+        if rt is None or not rt.get("1.0", tk.END).strip():
+            messagebox.showinfo(
+                "Read aloud", "There are no study notes to read yet.")
+            return
+        if self.is_reading:
+            self.stop_reading()
+        color = self._study_notes_read_color_var.get()
+        chex = self.HIGHLIGHT_COLORS.get(color, "#fde047")
+        try:
+            rt.tag_configure("reading", background=chex, foreground="#0f172a")
+            rt.tag_raise("reading", "sel")
+        except tk.TclError:
+            pass
+        self._read_widget = rt
+        try:
+            has_sel = bool(rt.tag_ranges(tk.SEL))
+        except tk.TclError:
+            has_sel = False
+        if not has_sel:
+            rt.mark_set(tk.INSERT, "1.0")
+        rt.focus_set()
+        self.read_aloud()
+        self._matrix_set_read_btn(reading=True)
 
     def _refresh_tab_study_notes(self) -> None:
         """Load study_notes body from the DB into the editor."""
@@ -7806,49 +8986,7 @@ try {
         if quadrant_key not in valid:
             return False
 
-        # ---- Calendar half — Do / Schedule ----------------------------
-        if quadrant_key in ("do", "schedule"):
-            # First non-empty line becomes the title; the rest, if any,
-            # goes into the block's notes field.
-            lines = [ln for ln in text.splitlines()]
-            first_nonblank = next(
-                (ln.strip() for ln in lines if ln.strip()),
-                text.strip())
-            title = first_nonblank[:200]
-            extra = "\n".join(lines).strip()
-            if extra == title:
-                notes = ""
-            else:
-                notes = extra
-            if source_label:
-                notes = (notes + ("\n\n" if notes else "")
-                         + f"(from {source_label})")
-            dstr = (self._selected_block_date or date.today()).strftime("%Y-%m-%d")
-            now_iso = datetime.now().isoformat()
-            try:
-                next_order = self._db_query(
-                    "SELECT COALESCE(MAX(slot_order), -1) + 1 "
-                    "FROM day_blocks WHERE block_date = ?",
-                    (dstr,))[0][0]
-                self._db_exec(
-                    "INSERT INTO day_blocks "
-                    "(block_date, slot_order, duration_min, title, notes, "
-                    " done, is_current, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?)",
-                    (dstr, next_order, 25, title, notes, now_iso, now_iso),
-                )
-            except Exception as e:
-                messagebox.showerror("Could not add block", str(e))
-                return False
-            # Live refresh if the Matrix tab is visible.
-            if self._block_listbox is not None:
-                self._refresh_blocks_for_selected_day()
-            short = title if len(title) <= 40 else title[:37] + "…"
-            label = "🔥 Do Now" if quadrant_key == "do" else "🗓 Schedule"
-            self.set_status(f"🎯 Moved to {label}: {short}")
-            return True
-
-        # ---- Free-form half — Delegate / Eliminate --------------------
+        # All four quadrants are free-form notepads — append a bullet.
         try:
             rows = self._db_query(
                 "SELECT body FROM eisenhower WHERE quadrant = ?",
@@ -7979,109 +9117,2443 @@ try {
     # Each cell is its own autosaving editor backed by the `eisenhower`
     # table (one row per quadrant). Edits debounce-save after 1.5 s, and
     # closing the Study window force-saves any pending changes.
+    # ---- Daily Planner (Sunsama-style week of day-columns) -------------
+    def _build_tab_planner(self, parent: tk.Frame) -> None:
+        """A daily planner inspired by Sunsama: a week of day-columns. Add
+        tasks (with a time estimate) to any day, check them off, and see each
+        day's planned total. Tasks persist in the planner_tasks table."""
+        if self._planner_monday is None:
+            today = date.today()
+            self._planner_monday = today - timedelta(days=today.weekday())
+
+        head = tk.Frame(parent, bg=BG_PANEL, padx=12)
+        head.pack(fill=tk.X, pady=(8, 2))
+        tk.Label(head, text="🗓 Planner", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+        tk.Label(head, text="Plan your week — type a task, add minutes like "
+                 "\"Email (15m)\".", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
+        tk.Button(head, text="🧭 Weekly Roles", command=self.open_weekly_roles,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_PURPLE, fg="white",
+                  activebackground=ACCENT_PURPLE, relief=tk.FLAT, padx=10, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
+
+        def _nv(text, cmd):
+            return tk.Button(head, text=text, command=cmd,
+                             font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE,
+                             fg="white", activebackground=ACCENT_SLATE,
+                             relief=tk.FLAT, padx=10, pady=4, cursor="hand2",
+                             borderwidth=0)
+        _nv("Next ▶", self._planner_next_week).pack(side=tk.RIGHT, padx=(6, 0))
+        _nv("Today", self._planner_this_week).pack(side=tk.RIGHT, padx=6)
+        _nv("◀ Prev", self._planner_prev_week).pack(side=tk.RIGHT)
+        # Mic accuracy (shares the main toolbar's setting): Fast/Accurate/Best.
+        if self._whisper_quality_var is None:
+            self._whisper_quality_var = tk.StringVar(value="Accurate")
+        _pmq = tk.OptionMenu(head, self._whisper_quality_var,
+                             "Fast", "Accurate", "Best",
+                             command=self._set_mic_quality)
+        _style_optionmenu(_pmq)
+        _pmq.configure(width=8, font=("Segoe UI", 10, "bold"))
+        _pmq.pack(side=tk.RIGHT, padx=(0, 10))
+        # One 🎤 Voice button up here, beside the nav buttons. It dictates into
+        # the day you last clicked (or today's), and auto-adds the note on Stop.
+        self._planner_mic_btn = tk.Button(
+            head, text="🎤 Voice", command=self._planner_toggle_mic,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+            activebackground=ACCENT_MIC, relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0)
+        self._planner_mic_btn.pack(side=tk.RIGHT, padx=(0, 6))
+        self._planner_week_var = tk.StringVar(value="")
+        tk.Label(head, textvariable=self._planner_week_var, bg=BG_PANEL,
+                 fg=FG_TEXT, font=("Segoe UI", 11, "bold")
+                 ).pack(side=tk.RIGHT, padx=(0, 12))
+
+        grid = tk.Frame(parent, bg=BG_DARK, padx=6, pady=6)
+        grid.pack(fill=tk.BOTH, expand=True)
+        self._planner_listboxes = {}
+        self._planner_records = {}
+        self._planner_total_vars = {}
+        self._planner_entries = {}
+        self._planner_mic_btns = {}
+        self._planner_sel = {}
+        names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for i in range(7):
+            grid.grid_columnconfigure(i, weight=1, uniform="day")
+        grid.grid_rowconfigure(0, weight=1)
+        today_str = date.today().strftime("%Y-%m-%d")
+        for i in range(7):
+            d = self._planner_monday + timedelta(days=i)
+            dstr = d.strftime("%Y-%m-%d")
+            is_today = (dstr == today_str)
+            col = tk.Frame(grid, bg=BG_DARK,
+                           highlightthickness=2 if is_today else 1,
+                           highlightbackground=ACCENT_CYAN if is_today else "#334155")
+            col.grid(row=0, column=i, sticky="nsew", padx=3, pady=3)
+            hdr_bg = ACCENT_CYAN if is_today else BG_PANEL
+            hdr = tk.Frame(col, bg=hdr_bg, padx=6, pady=4)
+            hdr.pack(fill=tk.X)
+            tk.Label(hdr, text=f"{names[i]} {d.strftime('%m-%d')}",
+                     bg=hdr_bg, fg="white", font=("Segoe UI", 10, "bold")
+                     ).pack(side=tk.LEFT)
+            tvar = tk.StringVar(value="")
+            self._planner_total_vars[dstr] = tvar
+            tk.Label(hdr, textvariable=tvar, bg=hdr_bg, fg="white",
+                     font=("Segoe UI", 9)).pack(side=tk.RIGHT)
+
+            # Controls at the TOP: a multi-line input box (so long dictation is
+            # readable as you go), then ➕ Add · 🗑 delete.
+            inp = tk.Text(col, height=2, wrap=tk.WORD, bg=BG_INPUT, fg=FG_TEXT,
+                          insertbackground=FG_TEXT, relief=tk.FLAT,
+                          font=("Segoe UI", 9), padx=5, pady=4,
+                          undo=True)
+            inp.pack(side=tk.TOP, fill=tk.X, padx=3, pady=(4, 2))
+            # Enter adds the note; Shift+Enter inserts a newline.
+            inp.bind("<Return>",
+                     lambda _e, ds=dstr: (self._planner_add_task(ds), "break")[1])
+            inp.bind("<Shift-Return>", lambda _e: None)
+            inp.bind("<FocusIn>",
+                     lambda _e, w=inp: self._set_mic_target(w), add="+")
+            self._planner_entries[dstr] = inp
+
+            btnrow = tk.Frame(col, bg=BG_DARK)
+            btnrow.pack(side=tk.TOP, fill=tk.X, padx=3, pady=(0, 3))
+            tk.Button(btnrow, text="➕ Add",
+                      command=lambda ds=dstr: self._planner_add_task(ds),
+                      font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                      activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6,
+                      pady=1, cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(3, 0))
+            tk.Button(btnrow, text="🗑",
+                      command=lambda ds=dstr: self._planner_delete_selected(ds),
+                      font=("Segoe UI", 10, "bold"), bg=ACCENT_RED, fg="white",
+                      activebackground=ACCENT_RED, relief=tk.FLAT, padx=6,
+                      pady=1, cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+            # Notes display: word-wrapped read-only Text so long notes show in
+            # full. Click a note to select it, double-click to toggle done.
+            disp = tk.Text(col, wrap=tk.WORD, bg=BG_INPUT, fg=FG_TEXT,
+                           relief=tk.FLAT, font=("Segoe UI", 9), padx=5, pady=4,
+                           cursor="arrow", state=tk.DISABLED, highlightthickness=0,
+                           spacing3=4)
+            disp.pack(fill=tk.BOTH, expand=True, padx=3, pady=3)
+            disp.bind("<Button-1>",
+                      lambda e, ds=dstr: self._planner_click(ds, e, False))
+            disp.bind("<Double-Button-1>",
+                      lambda e, ds=dstr: self._planner_click(ds, e, True))
+            self._planner_listboxes[dstr] = disp
+
+        self._refresh_tab_planner()
+
+    def _refresh_tab_planner(self) -> None:
+        if not self._planner_listboxes:
+            return
+        if self._planner_monday is None:
+            today = date.today()
+            self._planner_monday = today - timedelta(days=today.weekday())
+        sunday = self._planner_monday + timedelta(days=6)
+        if self._planner_week_var is not None:
+            self._planner_week_var.set(
+                f"Week of {self._planner_monday.strftime('%b %d')} – "
+                f"{sunday.strftime('%b %d')}")
+        for dstr, disp in self._planner_listboxes.items():
+            try:
+                rows = self._db_query(
+                    "SELECT id, title, minutes, done FROM planner_tasks "
+                    "WHERE day=? ORDER BY done, sort_order, id", (dstr,))
+            except Exception:
+                rows = []
+            self._planner_records[dstr] = rows
+            sel = self._planner_sel.get(dstr)
+            total = 0
+            try:
+                disp.configure(state=tk.NORMAL)
+                disp.delete("1.0", tk.END)
+                for idx, (_id, title, minutes, done) in enumerate(rows):
+                    box = "☑ " if done else "☐ "
+                    est = f"  ·{minutes}m" if minutes else ""
+                    tag = f"n{idx}"
+                    disp.insert(tk.END, f"{box}{title}{est}\n", (tag,))
+                    if done:
+                        disp.tag_config(tag, foreground="#64748b", overstrike=True)
+                    if sel == idx:
+                        disp.tag_config(tag, background=ACCENT_SLATE,
+                                        foreground="white")
+                    total += minutes
+                disp.configure(state=tk.DISABLED)
+            except tk.TclError:
+                pass
+            tvar = self._planner_total_vars.get(dstr)
+            if tvar is not None:
+                if total:
+                    h, m = divmod(total, 60)
+                    tvar.set(f"{h}h{m:02d}" if h else f"{m}m")
+                else:
+                    tvar.set("")
+
+    @staticmethod
+    def _planner_parse(text: str):
+        """Parse 'Task (30m)' or 'Task 30' → (title, minutes). No estimate → 0
+        (plain note, e.g. an appointment), so '·Nm' only shows when given."""
+        import re as _re
+        t = text.strip()
+        mins = 0
+        m = _re.search(r"\((\d+)\s*m?\)\s*$", t)
+        if m:
+            mins = int(m.group(1)); t = t[:m.start()].strip()
+        else:
+            m2 = _re.search(r"\s(\d+)\s*$", t)
+            if m2:
+                mins = int(m2.group(1)); t = t[:m2.start()].strip()
+        return t, max(0, min(mins, 1440))
+
+    def _planner_add_task(self, dstr: str, entry=None) -> None:
+        entry = entry or self._planner_entries.get(dstr)
+        if entry is None:
+            return
+        try:
+            raw = entry.get("1.0", tk.END).strip()
+        except tk.TclError:
+            raw = ""
+        if not raw:
+            self.set_status("Type or 🎤 dictate a note first, then ➕ Add.")
+            return
+        title, mins = self._planner_parse(raw)
+        if not title:
+            return
+        now = datetime.now().isoformat()
+        try:
+            nxt = self._db_query(
+                "SELECT COALESCE(MAX(sort_order),-1)+1 FROM planner_tasks WHERE day=?",
+                (dstr,))[0][0]
+            self._db_exec(
+                "INSERT INTO planner_tasks "
+                "(day,title,minutes,done,sort_order,created_at,updated_at) "
+                "VALUES (?,?,?,0,?,?,?)", (dstr, title, mins, nxt, now, now))
+        except Exception as e:
+            messagebox.showerror("Could not add task", str(e))
+            return
+        try:
+            entry.delete("1.0", tk.END)
+        except tk.TclError:
+            pass
+        self._refresh_tab_planner()
+
+    def _planner_click(self, dstr: str, event, toggle: bool) -> None:
+        """Select (single click) or toggle-done (double click) the note at the
+        clicked position in a day's word-wrapped notes display."""
+        disp = self._planner_listboxes.get(dstr)
+        rows = self._planner_records.get(dstr, [])
+        if disp is None or not rows:
+            return
+        try:
+            line = int(disp.index(f"@{event.x},{event.y}").split(".")[0])
+        except (tk.TclError, ValueError):
+            return
+        idx = line - 1
+        if not (0 <= idx < len(rows)):
+            return
+        if toggle:
+            tid, _t, _m, done = rows[idx]
+            self._db_exec(
+                "UPDATE planner_tasks SET done=?, updated_at=? WHERE id=?",
+                (0 if done else 1, datetime.now().isoformat(), tid))
+        self._planner_sel[dstr] = idx
+        self._refresh_tab_planner()
+
+    def _planner_delete_selected(self, dstr: str) -> None:
+        rows = self._planner_records.get(dstr, [])
+        idx = self._planner_sel.get(dstr)
+        if idx is None or not (0 <= idx < len(rows)):
+            self.set_status("Click a note to select it, then 🗑 to delete it.")
+            return
+        tid = rows[idx][0]
+        self._db_exec("DELETE FROM planner_tasks WHERE id=?", (tid,))
+        self._planner_sel.pop(dstr, None)
+        self._refresh_tab_planner()
+
+    def _planner_toggle_mic(self) -> None:
+        """The header 🎤: dictate into the day you last clicked (else today's,
+        else the first day). On Stop the note is auto-added to that day."""
+        if self.is_listening:
+            self.toggle_mic()
+            return
+        ents = self._planner_entries
+        target = None
+        if self._mic_target in ents.values():
+            target = self._mic_target
+        else:
+            today = date.today().strftime("%Y-%m-%d")
+            target = ents.get(today) or next(iter(ents.values()), None)
+        if target is not None:
+            try:
+                target.focus_set()
+                self._set_mic_target(target)
+            except tk.TclError:
+                pass
+        self.toggle_mic()
+
+    def _planner_rebuild(self) -> None:
+        """Rebuild the planner tab (used by week navigation)."""
+        frame = self._study_tab_frames.get("planner")
+        if frame is None:
+            return
+        if self.is_listening:
+            self._stop_mic()
+        for w in frame.winfo_children():
+            w.destroy()
+        self._planner_listboxes = {}
+        self._planner_records = {}
+        self._planner_total_vars = {}
+        self._planner_entries = {}
+        self._planner_mic_btns = {}
+        self._planner_active_mic = None
+        self._planner_sel = {}
+        self._build_tab_planner(frame)
+
+    def _planner_prev_week(self) -> None:
+        if self._planner_monday:
+            self._planner_monday -= timedelta(days=7)
+            self._planner_rebuild()
+
+    def _planner_next_week(self) -> None:
+        if self._planner_monday:
+            self._planner_monday += timedelta(days=7)
+            self._planner_rebuild()
+
+    def _planner_this_week(self) -> None:
+        today = date.today()
+        self._planner_monday = today - timedelta(days=today.weekday())
+        self._planner_rebuild()
+
+    # ---- Zig Ziglar Performance Planner: Wheel of Life + Goals ----------
+    # Ziglar's system, folded into the calendar above. The Wheel of Life
+    # rates 7 areas of life 1-10 to reveal where you're out of balance;
+    # Goals turns the weak spokes into concrete, tracked goals; and a
+    # goal's next action step can be pushed straight onto a planner day.
+    _WHEEL_AREAS = [
+        ("mental",    "🧠 Mental"),
+        ("spiritual", "🙏 Spiritual"),
+        ("physical",  "💪 Physical"),
+        ("family",    "👨‍👩‍👧 Family"),
+        ("financial", "💰 Financial"),
+        ("career",    "💼 Career"),
+        ("social",    "🤝 Social"),
+    ]
+
+    def _zz_area_label(self, val: str) -> str:
+        """Map a stored area key (or label) to its display label."""
+        for k, lab in self._WHEEL_AREAS:
+            if val in (k, lab):
+                return lab
+        return self._WHEEL_AREAS[0][1]
+
+    def _zz_area_key(self, label: str) -> str:
+        """Map a display label back to its stored key."""
+        for k, lab in self._WHEEL_AREAS:
+            if label in (k, lab):
+                return k
+        return self._WHEEL_AREAS[0][0]
+
+    def _build_wheel_panel(self, parent: tk.Frame, goto_goals=None) -> None:
+        """Ziglar's Wheel of Life: rate 7 areas 1-10, see your lowest spokes,
+        and save a dated snapshot so you can watch the wheel get rounder.
+        Builds into `parent` (a frame), so it can live as its own panel inside
+        the Session Start window. `goto_goals`, if given, is called by the
+        "Set goals" button to switch to the Goals panel."""
+        # Prefill from the most recent snapshot, if any.
+        cols = ",".join(k for k, _ in self._WHEEL_AREAS)
+        try:
+            row = self._db_query(
+                f"SELECT {cols},snapshot_date FROM wheel_of_life "
+                "ORDER BY snapshot_date DESC, id DESC LIMIT 1")
+        except Exception:
+            row = []
+        current = {k: 5 for k, _ in self._WHEEL_AREAS}
+        last_date = None
+        if row:
+            vals = row[0]
+            for i, (k, _) in enumerate(self._WHEEL_AREAS):
+                current[k] = int(vals[i])
+            last_date = vals[-1]
+
+        head = tk.Frame(parent, bg=BG_PANEL, padx=14, pady=10)
+        head.pack(fill=tk.X)
+        tk.Label(head, text="☸ Wheel of Life", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        tk.Label(head, text="Rate each area 1 (poor) – 10 (excellent). Your "
+                 "lowest spokes are the \"bumps\" in the wheel — Ziglar says "
+                 "that's where to set your next goals.", bg=BG_PANEL,
+                 fg=FG_MUTED, wraplength=520, justify=tk.LEFT,
+                 font=("Segoe UI", 10)).pack(anchor="w", pady=(2, 0))
+
+        # Footer first (pack BOTTOM) so the buttons are always on screen.
+        foot = tk.Frame(parent, bg=BG_PANEL, padx=14, pady=10)
+        foot.pack(side=tk.BOTTOM, fill=tk.X)
+        info = tk.StringVar(value=(f"Last snapshot: {last_date}" if last_date
+                                   else "No snapshot saved yet."))
+        tk.Label(foot, textvariable=info, bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9)).pack(side=tk.LEFT)
+
+        body = tk.Frame(parent, bg=BG_DARK, padx=16, pady=10)
+        body.pack(fill=tk.BOTH, expand=True)
+        scales: dict = {}
+        for k, label in self._WHEEL_AREAS:
+            r = tk.Frame(body, bg=BG_DARK)
+            r.pack(fill=tk.X, pady=2)
+            tk.Label(r, text=label, bg=BG_DARK, fg=FG_TEXT, width=12,
+                     anchor="w", font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+            s = tk.Scale(r, from_=1, to=10, orient=tk.HORIZONTAL, bg=BG_DARK,
+                         fg=FG_TEXT, troughcolor=BG_INPUT, highlightthickness=0,
+                         font=("Segoe UI", 9), length=300, sliderrelief=tk.FLAT,
+                         activebackground=ACCENT_CYAN)
+            s.set(current[k])
+            s.pack(side=tk.LEFT, padx=(8, 0), fill=tk.X, expand=True)
+            scales[k] = s
+
+        focus_var = tk.StringVar(value="")
+        tk.Label(body, textvariable=focus_var, bg=BG_DARK, fg=ACCENT_CYAN,
+                 wraplength=520, justify=tk.LEFT,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(8, 0))
+
+        def _recompute(*_):
+            vals = [(label, scales[k].get()) for k, label in self._WHEEL_AREAS]
+            lo = min(v for _, v in vals)
+            weak = [label for label, v in vals if v == lo]
+            focus_var.set(f"Focus areas (lowest = {lo}): " + ", ".join(weak))
+        for s in scales.values():
+            s.configure(command=_recompute)
+        _recompute()
+
+        def _save():
+            now = datetime.now().isoformat()
+            today = date.today().strftime("%Y-%m-%d")
+            colnames = ",".join(k for k, _ in self._WHEEL_AREAS)
+            placeholders = ",".join("?" for _ in self._WHEEL_AREAS)
+            vals = tuple(int(scales[k].get()) for k, _ in self._WHEEL_AREAS)
+            try:
+                self._db_exec(
+                    f"INSERT INTO wheel_of_life (snapshot_date,{colnames},"
+                    f"created_at) VALUES (?,{placeholders},?)",
+                    (today,) + vals + (now,))
+                info.set(f"Saved snapshot for {today}.")
+                self.set_status("Wheel of Life snapshot saved.")
+            except Exception as e:
+                messagebox.showerror("Could not save", str(e))
+
+        tk.Button(foot, text="💾 Save snapshot", command=_save,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=(6, 0))
+        if goto_goals is not None:
+            tk.Button(foot, text="🎯 Set goals on weak areas",
+                      command=goto_goals,
+                      font=("Segoe UI", 10, "bold"), bg=ACCENT_PURPLE,
+                      fg="white", activebackground=ACCENT_PURPLE,
+                      relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
+                      borderwidth=0).pack(side=tk.RIGHT)
+
+    def _build_goals_panel(self, parent: tk.Frame) -> None:
+        """Ziglar's goal-setting worksheet, with a tie-in that drops a goal's
+        next action step straight onto a day in the planner calendar. Builds
+        into `parent` so it can live as its own panel in the Session window."""
+        records: list = []      # goal id per listbox row
+        state = {"id": None}
+
+        head = tk.Frame(parent, bg=BG_PANEL, padx=14, pady=8)
+        head.pack(fill=tk.X)
+        tk.Label(head, text="🎯 Goals", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Label(head, text="Name the goal · know your WHY · list the "
+                 "obstacles · act on it daily.", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
+
+        body = tk.Frame(parent, bg=BG_DARK)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+
+        # Left: the goal list + New/Delete.
+        left = tk.Frame(body, bg=BG_DARK)
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 12))
+        tk.Label(left, text="Your goals", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        lbwrap = tk.Frame(left, bg=BG_DARK)
+        lbwrap.pack(fill=tk.Y, expand=True, pady=(4, 6))
+        lb = tk.Listbox(lbwrap, width=26, bg=BG_INPUT, fg=FG_TEXT,
+                        selectbackground=ACCENT_SLATE, relief=tk.FLAT,
+                        font=("Segoe UI", 10), activestyle="none",
+                        highlightthickness=0)
+        lsb = tk.Scrollbar(lbwrap, orient="vertical", command=lb.yview, width=14)
+        lb.configure(yscrollcommand=lsb.set)
+        lsb.pack(side=tk.RIGHT, fill=tk.Y)
+        lb.pack(side=tk.LEFT, fill=tk.Y, expand=True)
+        lbtn = tk.Frame(left, bg=BG_DARK)
+        lbtn.pack(fill=tk.X)
+
+        # Right: the worksheet. Save + calendar tie-in pinned to the bottom
+        # (pack BOTTOM first) so they're always visible; fields scroll above.
+        right = tk.Frame(body, bg=BG_DARK)
+        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        savebar = tk.Frame(right, bg=BG_DARK)
+        savebar.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0))
+        tie = tk.Frame(right, bg=BG_PANEL, padx=8, pady=6)
+        tie.pack(side=tk.BOTTOM, fill=tk.X)
+
+        outer = tk.Frame(right, bg=BG_DARK)
+        outer.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        fsb = tk.Scrollbar(outer, orient="vertical", command=canvas.yview,
+                           width=14)
+        canvas.configure(yscrollcommand=fsb.set)
+        fsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        form = tk.Frame(canvas, bg=BG_DARK)
+        fid = canvas.create_window((0, 0), window=form, anchor="nw")
+        form.bind("<Configure>",
+                  lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(fid, width=e.width))
+
+        def _wheel(e):
+            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        def _flabel(text):
+            tk.Label(form, text=text, bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(6, 1))
+
+        _flabel("Goal")
+        title_e = tk.Entry(form, bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                           relief=tk.FLAT, font=("Segoe UI", 11))
+        title_e.pack(fill=tk.X, ipady=4)
+
+        meta = tk.Frame(form, bg=BG_DARK)
+        meta.pack(fill=tk.X, pady=(6, 0))
+        tk.Label(meta, text="Life area", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        area_var = tk.StringVar(value=self._WHEEL_AREAS[0][1])
+        area_menu = tk.OptionMenu(meta, area_var,
+                                  *[lab for _, lab in self._WHEEL_AREAS])
+        _style_optionmenu(area_menu)
+        area_menu.configure(width=11, font=("Segoe UI", 10, "bold"))
+        area_menu.pack(side=tk.LEFT, padx=(6, 14))
+        tk.Label(meta, text="Target date", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        target_e = tk.Entry(meta, bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                            relief=tk.FLAT, font=("Segoe UI", 10), width=12)
+        target_e.pack(side=tk.LEFT, padx=(6, 14))
+        tk.Label(meta, text="Status", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        status_var = tk.StringVar(value="active")
+        status_menu = tk.OptionMenu(meta, status_var, "active", "done", "parked")
+        _style_optionmenu(status_menu)
+        status_menu.configure(width=8, font=("Segoe UI", 10, "bold"))
+        status_menu.pack(side=tk.LEFT, padx=(6, 0))
+
+        prow = tk.Frame(form, bg=BG_DARK)
+        prow.pack(fill=tk.X, pady=(6, 0))
+        tk.Label(prow, text="Progress", bg=BG_DARK, fg=FG_TEXT, width=12,
+                 anchor="w", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        progress_s = tk.Scale(prow, from_=0, to=100, orient=tk.HORIZONTAL,
+                              bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
+                              highlightthickness=0, length=240, resolution=5,
+                              font=("Segoe UI", 9), activebackground=ACCENT_GREEN)
+        progress_s.pack(side=tk.LEFT, padx=(8, 0), fill=tk.X, expand=True)
+
+        def _ftext(label, h):
+            _flabel(label)
+            t = tk.Text(form, height=h, wrap=tk.WORD, bg=BG_INPUT, fg=FG_TEXT,
+                        insertbackground=FG_TEXT, relief=tk.FLAT,
+                        font=("Segoe UI", 10), padx=6, pady=4, undo=True)
+            t.pack(fill=tk.X)
+            return t
+
+        why_t = _ftext("Why — what's in it for me (benefits)", 2)
+        obstacles_t = _ftext("Obstacles to overcome", 2)
+        skills_t = _ftext("Skills / knowledge needed", 2)
+        people_t = _ftext("People or groups to work with", 2)
+        action_t = _ftext("Plan of action (one step per line)", 4)
+
+        # Calendar tie-in (pinned bottom).
+        tk.Label(tie, text="📅 Add next step to calendar on:", bg=BG_PANEL,
+                 fg=FG_TEXT, font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        day_e = tk.Entry(tie, bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                         relief=tk.FLAT, font=("Segoe UI", 10), width=12)
+        day_e.insert(0, date.today().strftime("%Y-%m-%d"))
+        day_e.pack(side=tk.LEFT, padx=(6, 6))
+
+        def _add_to_calendar():
+            steps = [ln.strip() for ln in
+                     action_t.get("1.0", tk.END).splitlines() if ln.strip()]
+            if not steps:
+                self.set_status("Add a plan-of-action step first.")
+                return
+            dstr = day_e.get().strip() or date.today().strftime("%Y-%m-%d")
+            try:
+                datetime.strptime(dstr, "%Y-%m-%d")
+            except ValueError:
+                messagebox.showerror("Bad date", "Use the format YYYY-MM-DD.")
+                return
+            gt = title_e.get().strip() or "Goal"
+            task = f"🎯 {gt}: {steps[0]}"
+            now = datetime.now().isoformat()
+            try:
+                nxt = self._db_query(
+                    "SELECT COALESCE(MAX(sort_order),-1)+1 FROM planner_tasks "
+                    "WHERE day=?", (dstr,))[0][0]
+                self._db_exec(
+                    "INSERT INTO planner_tasks "
+                    "(day,title,minutes,done,sort_order,created_at,updated_at) "
+                    "VALUES (?,?,?,0,?,?,?)", (dstr, task, 0, nxt, now, now))
+            except Exception as e:
+                messagebox.showerror("Could not add to calendar", str(e))
+                return
+            try:
+                self._refresh_tab_planner()
+            except Exception:
+                pass
+            self.set_status(f"Added to {dstr}: {task}")
+
+        tk.Button(tie, text="➕ Add to calendar", command=_add_to_calendar,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_CYAN, fg="white",
+                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=10, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        # ---- list / load / save / new / delete ----
+        def _set_text(widget, val):
+            widget.delete("1.0", tk.END)
+            if val:
+                widget.insert("1.0", val)
+
+        def _refresh_list(select_id=None):
+            records.clear()
+            lb.delete(0, tk.END)
+            try:
+                rows = self._db_query(
+                    "SELECT id,title,progress,status FROM goals "
+                    "ORDER BY (status='done'), id DESC")
+            except Exception:
+                rows = []
+            for gid, gtitle, prog, status in rows:
+                records.append(gid)
+                mark = "✅ " if status == "done" else ""
+                lb.insert(tk.END, f"{mark}{gtitle or '(untitled)'}  ·{prog}%")
+            if select_id in records:
+                i = records.index(select_id)
+                lb.selection_clear(0, tk.END)
+                lb.selection_set(i)
+                lb.see(i)
+
+        def _load(gid):
+            try:
+                r = self._db_query(
+                    "SELECT title,life_area,why,obstacles,skills_needed,"
+                    "people_needed,action_plan,target_date,progress,status "
+                    "FROM goals WHERE id=?", (gid,))
+            except Exception:
+                r = []
+            if not r:
+                return
+            (gtitle, area, why, obst, skills, people, action, target,
+             prog, status) = r[0]
+            state["id"] = gid
+            title_e.delete(0, tk.END); title_e.insert(0, gtitle or "")
+            area_var.set(self._zz_area_label(area))
+            target_e.delete(0, tk.END); target_e.insert(0, target or "")
+            status_var.set(status or "active")
+            progress_s.set(int(prog or 0))
+            _set_text(why_t, why); _set_text(obstacles_t, obst)
+            _set_text(skills_t, skills); _set_text(people_t, people)
+            _set_text(action_t, action)
+
+        def _on_select(_e=None):
+            sel = lb.curselection()
+            if sel and 0 <= sel[0] < len(records):
+                _load(records[sel[0]])
+        lb.bind("<<ListboxSelect>>", _on_select)
+
+        def _clear_form():
+            state["id"] = None
+            title_e.delete(0, tk.END)
+            area_var.set(self._WHEEL_AREAS[0][1])
+            target_e.delete(0, tk.END)
+            status_var.set("active")
+            progress_s.set(0)
+            for t in (why_t, obstacles_t, skills_t, people_t, action_t):
+                t.delete("1.0", tk.END)
+            lb.selection_clear(0, tk.END)
+            title_e.focus_set()
+
+        def _save_goal():
+            gtitle = title_e.get().strip()
+            if not gtitle:
+                self.set_status("Give the goal a title first.")
+                return
+            now = datetime.now().isoformat()
+            fields = (
+                gtitle,
+                self._zz_area_key(area_var.get()),
+                why_t.get("1.0", tk.END).strip(),
+                obstacles_t.get("1.0", tk.END).strip(),
+                skills_t.get("1.0", tk.END).strip(),
+                people_t.get("1.0", tk.END).strip(),
+                action_t.get("1.0", tk.END).strip(),
+                target_e.get().strip(),
+                int(progress_s.get()),
+                status_var.get(),
+            )
+            try:
+                if state["id"] is None:
+                    gid = self._db_exec(
+                        "INSERT INTO goals (title,life_area,why,obstacles,"
+                        "skills_needed,people_needed,action_plan,target_date,"
+                        "progress,status,created_at,updated_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", fields + (now, now))
+                    state["id"] = gid
+                else:
+                    self._db_exec(
+                        "UPDATE goals SET title=?,life_area=?,why=?,obstacles=?,"
+                        "skills_needed=?,people_needed=?,action_plan=?,"
+                        "target_date=?,progress=?,status=?,updated_at=? "
+                        "WHERE id=?", fields + (now, state["id"]))
+                _refresh_list(select_id=state["id"])
+                self.set_status(f"Saved goal: {gtitle}")
+            except Exception as e:
+                messagebox.showerror("Could not save goal", str(e))
+
+        def _delete_goal():
+            if state["id"] is None:
+                _clear_form()
+                return
+            if not messagebox.askyesno("Delete goal", "Delete this goal?"):
+                return
+            try:
+                self._db_exec("DELETE FROM goals WHERE id=?", (state["id"],))
+            except Exception as e:
+                messagebox.showerror("Could not delete", str(e))
+                return
+            _clear_form()
+            _refresh_list()
+
+        tk.Button(lbtn, text="＋ New", command=_clear_form,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(lbtn, text="🗑 Delete", command=_delete_goal,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(savebar, text="💾 Save goal", command=_save_goal,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        _refresh_list()
+        _clear_form()
+
+    # ---- Idea Warehouse (Ziglar master list) ---------------------------
+    # ABCDE priorities: A=must-do (serious consequences) … E=eliminate.
+    # Each entry is (letter, chip colour).
+    _ABCDE = [
+        ("A", "#dc2626"),   # must do — serious consequences
+        ("B", "#d97706"),   # should do — mild consequences
+        ("C", "#16a34a"),   # nice to do — no consequences
+        ("D", "#0891b2"),   # delegate
+        ("E", "#475569"),   # eliminate
+    ]
+
+    def open_idea_warehouse(self) -> None:
+        """Ziglar's "idea warehouse" / master list: capture every task the
+        moment it occurs to you (so nothing rides on memory), tag it A-E by
+        consequence, mark your Big Three for today, and schedule items onto
+        the Planner calendar. Lives on the dashboard top bar."""
+        existing = getattr(self, "_idea_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._idea_win = win
+        win.title("🧠 Idea Warehouse — Master List")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(520, sw - 80))
+        h = min(720, max(460, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(520, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._idea_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        # ---- header + ABCDE legend ----
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        head.pack(fill=tk.X)
+        tk.Label(head, text="🧠 Idea Warehouse", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Label(head, text="Capture everything — never trust a task to memory.",
+                 bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
+                 ).pack(side=tk.LEFT, padx=(12, 0))
+
+        # ---- rapid capture row ----
+        cap = tk.Frame(win, bg=BG_DARK, padx=12, pady=8)
+        cap.pack(fill=tk.X)
+        entry = tk.Text(cap, height=2, wrap=tk.WORD, bg=BG_INPUT, fg=FG_TEXT,
+                        insertbackground=FG_TEXT, relief=tk.FLAT,
+                        font=("Segoe UI", 11), padx=6, pady=4, undo=True)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        entry.bind("<FocusIn>", lambda _e: self._set_mic_target(entry), add="+")
+
+        def _add(*_):
+            txt = entry.get("1.0", tk.END).strip()
+            if not txt:
+                self.set_status("Type or 🎤 dictate an idea first.")
+                return
+            now = datetime.now().isoformat()
+            try:
+                self._db_exec(
+                    "INSERT INTO master_tasks (text,priority,big_three,"
+                    "scheduled_day,status,created_at,updated_at) "
+                    "VALUES (?,'',0,'','open',?,?)", (txt, now, now))
+            except Exception as e:
+                messagebox.showerror("Could not add", str(e))
+                return
+            entry.delete("1.0", tk.END)
+            _render()
+        entry.bind("<Return>", lambda _e: (_add(), "break")[1])
+        entry.bind("<Shift-Return>", lambda _e: None)
+
+        capbtn = tk.Frame(cap, bg=BG_DARK)
+        capbtn.pack(side=tk.LEFT, padx=(8, 0))
+        tk.Button(capbtn, text="➕ Add", command=_add,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
+                  cursor="hand2", borderwidth=0).pack(fill=tk.X)
+
+        def _mic():
+            try:
+                entry.focus_set(); self._set_mic_target(entry)
+            except tk.TclError:
+                pass
+            self.toggle_mic()
+        tk.Button(capbtn, text="🎤 Dictate", command=_mic,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=10, pady=4,
+                  cursor="hand2", borderwidth=0).pack(fill=tk.X, pady=(4, 0))
+
+        # ---- controls: schedule-day + legend + 'A first' banner ----
+        ctl = tk.Frame(win, bg=BG_DARK, padx=12)
+        ctl.pack(fill=tk.X)
+        tk.Label(ctl, text="Schedule day:", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        day_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
+        tk.Entry(ctl, textvariable=day_var, width=12, bg=BG_INPUT, fg=FG_TEXT,
+                 insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 9)
+                 ).pack(side=tk.LEFT, padx=(6, 8))
+
+        def _plan_tomorrow():
+            tmr = date.today() + timedelta(days=1)
+            day_var.set(tmr.strftime("%Y-%m-%d"))
+            banner.set("🌙 Planning tomorrow — hit 📅 on the tasks for "
+                       f"{tmr.strftime('%a %b %d')}. A minute planning saves ten.")
+            self.set_status("🌙 Plan-tomorrow mode — 📅 schedules onto tomorrow.")
+        tk.Button(ctl, text="🌙 Plan tomorrow", command=_plan_tomorrow,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_PURPLE, fg="white",
+                  activebackground=ACCENT_PURPLE, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(ctl, text="🎯 Intention", command=lambda: _intention(),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
+                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 14))
+        tk.Label(ctl, text="A·must  B·should  C·nice  D·delegate  E·eliminate",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 8)).pack(side=tk.LEFT)
+        banner = tk.StringVar(value="")
+        tk.Label(ctl, textvariable=banner, bg=BG_DARK, fg="#f87171",
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.RIGHT)
+
+        # ---- scrollable task list ----
+        outer = tk.Frame(win, bg=BG_DARK, padx=12, pady=8)
+        outer.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        sb = tk.Scrollbar(outer, orient="vertical", command=canvas.yview, width=14)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        listf = tk.Frame(canvas, bg=BG_DARK)
+        fid = canvas.create_window((0, 0), window=listf, anchor="nw")
+        listf.bind("<Configure>",
+                   lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(fid, width=e.width))
+
+        def _wheel(e):
+            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        prank = {p: i for i, (p, _) in enumerate(self._ABCDE)}
+        pcolors = dict(self._ABCDE)
+
+        def _set_priority(tid, val):
+            self._db_exec(
+                "UPDATE master_tasks SET priority=?, updated_at=? WHERE id=?",
+                ("" if val == "—" else val, datetime.now().isoformat(), tid))
+            _render()
+
+        def _toggle_big(tid, cur, big_open):
+            if not cur and big_open >= 3:
+                self.set_status("Rule of Three: keep just 3 Big-Three tasks.")
+                banner.set("⭐ You already have 3 Big-Three — finish or unstar one.")
+                return
+            self._db_exec(
+                "UPDATE master_tasks SET big_three=?, updated_at=? WHERE id=?",
+                (0 if cur else 1, datetime.now().isoformat(), tid))
+            _render()
+
+        def _done(tid):
+            self._db_exec(
+                "UPDATE master_tasks SET status='done', updated_at=? WHERE id=?",
+                (datetime.now().isoformat(), tid))
+            _render()
+
+        def _delete(tid):
+            self._db_exec("DELETE FROM master_tasks WHERE id=?", (tid,))
+            _render()
+
+        def _schedule(tid, txt):
+            dstr = day_var.get().strip() or date.today().strftime("%Y-%m-%d")
+            try:
+                datetime.strptime(dstr, "%Y-%m-%d")
+            except ValueError:
+                messagebox.showerror("Bad date", "Use the format YYYY-MM-DD.")
+                return
+            now = datetime.now().isoformat()
+            try:
+                nxt = self._db_query(
+                    "SELECT COALESCE(MAX(sort_order),-1)+1 FROM planner_tasks "
+                    "WHERE day=?", (dstr,))[0][0]
+                self._db_exec(
+                    "INSERT INTO planner_tasks (day,title,minutes,done,"
+                    "sort_order,created_at,updated_at) VALUES (?,?,?,0,?,?,?)",
+                    (dstr, txt, 0, nxt, now, now))
+                self._db_exec(
+                    "UPDATE master_tasks SET status='scheduled', "
+                    "scheduled_day=?, updated_at=? WHERE id=?", (dstr, now, tid))
+            except Exception as e:
+                messagebox.showerror("Could not schedule", str(e))
+                return
+            try:
+                self._refresh_tab_planner()
+            except Exception:
+                pass
+            self.set_status(f"Scheduled to {dstr}: {txt}")
+            _render()
+
+        def _row(tid, txt, pri, bt, sd, st, big_open):
+            pcolor = pcolors.get(pri, BG_INPUT)
+            rf = tk.Frame(listf, bg=BG_PANEL, padx=6, pady=5,
+                          highlightthickness=2 if bt else 0,
+                          highlightbackground=ACCENT_AMBER)
+            rf.pack(fill=tk.X, pady=3)
+            pv = tk.StringVar(value=pri or "—")
+            pm = tk.OptionMenu(rf, pv, "A", "B", "C", "D", "E", "—",
+                               command=lambda val, t=tid: _set_priority(t, val))
+            _style_optionmenu(pm)
+            pm.configure(width=2, font=("Segoe UI", 10, "bold"), bg=pcolor,
+                         fg="white", highlightbackground=pcolor)
+            pm.pack(side=tk.LEFT, padx=(0, 6))
+            tk.Button(rf, text="⭐" if bt else "☆",
+                      command=lambda t=tid, c=bt, bo=big_open: _toggle_big(t, c, bo),
+                      font=("Segoe UI", 11), bg=BG_PANEL,
+                      fg=ACCENT_AMBER if bt else FG_MUTED, activebackground=BG_PANEL,
+                      relief=tk.FLAT, bd=0, cursor="hand2").pack(side=tk.LEFT, padx=(0, 6))
+            tk.Button(rf, text="🗑", command=lambda t=tid: _delete(t),
+                      font=("Segoe UI", 10), bg=BG_PANEL, fg=ACCENT_RED,
+                      activebackground=BG_PANEL, relief=tk.FLAT, bd=0,
+                      cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
+            tk.Button(rf, text="✓", command=lambda t=tid: _done(t),
+                      font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=ACCENT_GREEN,
+                      activebackground=BG_PANEL, relief=tk.FLAT, bd=0,
+                      cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
+            sched_txt = f"📅 {sd}" if st == "scheduled" else "📅 Add"
+            tk.Button(rf, text=sched_txt,
+                      command=lambda t=tid, x=txt: _schedule(t, x),
+                      font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
+                      activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=6, pady=2,
+                      cursor="hand2", bd=0).pack(side=tk.RIGHT, padx=(4, 0))
+            # Rule of Three: when a Big Three exists, dim the rest so the eye
+            # goes to what matters.
+            fg = FG_TEXT if (bt or big_open == 0) else FG_MUTED
+            tk.Label(rf, text=txt, bg=BG_PANEL, fg=fg, justify=tk.LEFT,
+                     anchor="w", wraplength=360, font=("Segoe UI", 10)
+                     ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def _render():
+            for w_ in listf.winfo_children():
+                w_.destroy()
+            try:
+                rows = self._db_query(
+                    "SELECT id,text,priority,big_three,scheduled_day,status "
+                    "FROM master_tasks WHERE status!='done'")
+            except Exception:
+                rows = []
+            rows = sorted(rows, key=lambda r: (
+                0 if r[5] == "open" else 1,      # open before scheduled
+                0 if r[3] else 1,                # big three first
+                prank.get(r[2], 9),              # A..E, untagged last
+                r[0]))
+            open_a = sum(1 for r in rows if r[2] == "A" and r[5] == "open")
+            big_open = sum(1 for r in rows if r[3] and r[5] == "open")
+            banner.set(f"🔴 {open_a} 'A' task(s) open — do those first."
+                       if open_a else "")
+            if not rows:
+                tk.Label(listf, text="Nothing captured yet — add an idea above.",
+                         bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10, "italic")
+                         ).pack(anchor="w", pady=8)
+                return
+            for _id, _t, pri, bt, sd, stt in rows:
+                _row(_id, _t, pri, bt, sd, stt, big_open)
+
+        def _intention():
+            """Implementation-intention builder (James Clear): stating exactly
+            WHEN and WHERE you'll act makes follow-through far more likely.
+            Composes 'I will [behavior] at [time] in [location].' and drops it
+            into the warehouse as a task."""
+            d = tk.Toplevel(win)
+            d.title("🎯 Implementation intention")
+            d.configure(bg=BG_DARK)
+            d.transient(win)
+            try:
+                sw = d.winfo_screenwidth(); sh = d.winfo_screenheight()
+            except tk.TclError:
+                sw, sh = 1280, 800
+            dw, dh = 460, 320
+            d.geometry(f"{dw}x{dh}+{max(0,(sw-dw)//2)}+{max(0,(sh-dh)//2-24)}")
+            try:
+                d.grab_set()
+            except tk.TclError:
+                pass
+            tk.Label(d, text="🎯 Implementation intention", bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=14, pady=(12, 0))
+            tk.Label(d, text="Naming WHEN and WHERE makes you far more likely to "
+                     "follow through.", bg=BG_DARK, fg=FG_MUTED, wraplength=420,
+                     justify=tk.LEFT, font=("Segoe UI", 9)).pack(anchor="w", padx=14)
+            bvar = tk.StringVar(); tvar = tk.StringVar(); lvar = tk.StringVar()
+
+            def _field(label, var):
+                tk.Label(d, text=label, bg=BG_DARK, fg=FG_TEXT,
+                         font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=14, pady=(8, 1))
+                e = tk.Entry(d, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                             insertbackground=FG_TEXT, relief=tk.FLAT,
+                             font=("Segoe UI", 11))
+                e.pack(fill=tk.X, padx=14, ipady=3)
+                return e
+            first = _field("I will (behavior)", bvar)
+            _field("at (time)", tvar)
+            _field("in (location)", lvar)
+
+            preview = tk.StringVar()
+            tk.Label(d, textvariable=preview, bg=BG_DARK, fg=ACCENT_CYAN,
+                     wraplength=420, justify=tk.LEFT, font=("Segoe UI", 10, "italic")
+                     ).pack(anchor="w", padx=14, pady=(10, 0))
+
+            def _upd(*_):
+                preview.set(f"“I will {bvar.get().strip() or '___'} at "
+                            f"{tvar.get().strip() or '___'} in "
+                            f"{lvar.get().strip() or '___'}.”")
+            for v in (bvar, tvar, lvar):
+                v.trace_add("write", _upd)
+            _upd()
+
+            def _save_intention():
+                b = bvar.get().strip()
+                if not b:
+                    self.set_status("Describe the behavior first.")
+                    return
+                sentence = (f"I will {b} at {tvar.get().strip() or '(time)'} "
+                            f"in {lvar.get().strip() or '(place)'}.")
+                now = datetime.now().isoformat()
+                try:
+                    self._db_exec(
+                        "INSERT INTO master_tasks (text,priority,big_three,"
+                        "scheduled_day,status,created_at,updated_at) "
+                        "VALUES (?,'',0,'','open',?,?)", (sentence, now, now))
+                except Exception as e:
+                    messagebox.showerror("Could not add", str(e))
+                    return
+                _render()
+                self.set_status("🎯 Intention added to the warehouse.")
+                try:
+                    d.destroy()
+                except tk.TclError:
+                    pass
+
+            br_ = tk.Frame(d, bg=BG_DARK)
+            br_.pack(fill=tk.X, padx=14, pady=12)
+            tk.Button(br_, text="➕ Add to warehouse", command=_save_intention,
+                      font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                      activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=5,
+                      cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+            tk.Button(br_, text="Cancel", command=d.destroy,
+                      font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
+                      activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=5,
+                      cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+            first.focus_set()
+
+        # Expose for other features (Focus Mode, intentions) to refresh.
+        self._idea_render = _render
+        _render()
+        entry.focus_set()
+
+    def _idea_refresh_if_open(self) -> None:
+        """Re-render the Idea Warehouse list if its window is open."""
+        render = getattr(self, "_idea_render", None)
+        win = getattr(self, "_idea_win", None)
+        if render is None or win is None:
+            return
+        try:
+            if win.winfo_exists():
+                render()
+        except Exception:
+            pass
+
+    # ---- Compelling Scoreboard (daily lead-measure tracker) ------------
+    def _build_scoreboard(self, parent: tk.Frame) -> None:
+        """A glance-in-5-seconds strip of today's 2-3 lead measures. Click a
+        card → it turns green with a little reward; the summary says whether
+        you're winning the day. Lead measures are daily ACTIONS you control
+        (4DX), not lag results."""
+        # Ensure the (possibly brand-new) scoreboard tables exist before we
+        # read them — _build_scoreboard runs before the later _init_study_db.
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+
+        bar = tk.Frame(parent, bg=BG_DARK, padx=12, pady=4)
+        bar.pack(fill=tk.X)
+        left = tk.Frame(bar, bg=BG_DARK)
+        left.pack(side=tk.LEFT)
+        tk.Label(left, text="🏆 Scoreboard", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        self._scoreboard_summary_lbl = tk.Label(
+            left, textvariable=self._scoreboard_summary_var, bg=BG_DARK,
+            fg=FG_MUTED, font=("Segoe UI", 11, "bold"))
+        self._scoreboard_summary_lbl.pack(side=tk.LEFT, padx=(10, 0))
+        tk.Button(bar, text="⚙", command=self._open_scoreboard_editor,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_SLATE, activeforeground="white",
+                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+        self._scoreboard_cards_frame = tk.Frame(bar, bg=BG_DARK)
+        self._scoreboard_cards_frame.pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                          padx=(16, 0))
+        self._seed_default_lead_measures()
+        self._refresh_scoreboard()
+
+    def _seed_default_lead_measures(self) -> None:
+        """First run: seed 3 sensible lead measures so the scoreboard shows
+        the feature working immediately (the user can edit them with ⚙)."""
+        try:
+            n = self._db_query(
+                "SELECT COUNT(*) FROM lead_measures WHERE active=1")[0][0]
+        except Exception:
+            return
+        if n:
+            return
+        now = datetime.now().isoformat()
+        for i, t in enumerate(("Studied / coded 20 min", "Read 15 min",
+                               "Worked my Big Three")):
+            try:
+                self._db_exec(
+                    "INSERT INTO lead_measures (text,sort_order,active,"
+                    "created_at,updated_at) VALUES (?,?,1,?,?)", (t, i, now, now))
+            except Exception:
+                pass
+
+    def _lead_measure_streak(self, mid: int) -> int:
+        """Consecutive days (ending today) this measure was checked off."""
+        try:
+            rows = self._db_query(
+                "SELECT day FROM lead_measure_marks WHERE measure_id=? AND done=1",
+                (mid,))
+        except Exception:
+            return 0
+        days = {r[0] for r in rows}
+        streak = 0
+        d = date.today()
+        while d.strftime("%Y-%m-%d") in days:
+            streak += 1
+            d -= timedelta(days=1)
+        return streak
+
+    def _refresh_scoreboard(self) -> None:
+        frame = getattr(self, "_scoreboard_cards_frame", None)
+        if frame is None:
+            return
+        try:
+            if not frame.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        for w in frame.winfo_children():
+            w.destroy()
+        self._scoreboard_card_by_id = {}
+        today = date.today().strftime("%Y-%m-%d")
+        try:
+            measures = self._db_query(
+                "SELECT id,text FROM lead_measures WHERE active=1 "
+                "ORDER BY sort_order, id")
+        except Exception:
+            measures = []
+        try:
+            done_ids = {r[0] for r in self._db_query(
+                "SELECT measure_id FROM lead_measure_marks WHERE day=? AND done=1",
+                (today,))}
+        except Exception:
+            done_ids = set()
+        done = 0
+        for mid, text in measures:
+            is_done = mid in done_ids
+            if is_done:
+                done += 1
+            card = self._scoreboard_card(frame, mid, text, is_done,
+                                         self._lead_measure_streak(mid))
+            self._scoreboard_card_by_id[mid] = card
+        total = len(measures)
+        lbl = getattr(self, "_scoreboard_summary_lbl", None)
+        if total == 0:
+            self._scoreboard_summary_var.set("Add lead measures →")
+            if lbl is not None:
+                lbl.configure(fg=FG_MUTED)
+        elif done == total:
+            self._scoreboard_summary_var.set(f"🏆 WINNING  {done}/{total}")
+            if lbl is not None:
+                lbl.configure(fg="#22c55e")
+        elif done > 0:
+            self._scoreboard_summary_var.set(f"▲ {done}/{total} — keep going")
+            if lbl is not None:
+                lbl.configure(fg=ACCENT_AMBER)
+        else:
+            self._scoreboard_summary_var.set(f"○ {done}/{total} — win the day")
+            if lbl is not None:
+                lbl.configure(fg=FG_MUTED)
+
+    def _scoreboard_card(self, frame, mid, text, is_done, streak):
+        bg = ACCENT_GREEN if is_done else BG_INPUT
+        fg = "white" if is_done else FG_TEXT
+        card = tk.Frame(frame, bg=bg, padx=10, pady=4, cursor="hand2",
+                        highlightthickness=1,
+                        highlightbackground="#22c55e" if is_done else "#334155")
+        card.pack(side=tk.LEFT, padx=4)
+        mark = "✓" if is_done else "○"
+        top = tk.Label(card, text=f"{mark}  {text}", bg=bg, fg=fg,
+                       font=("Segoe UI", 10, "bold"))
+        top.pack(anchor="w")
+        sub = tk.Label(card,
+                       text=(f"🔥 {streak}-day streak" if streak
+                             else "tap to mark done"),
+                       bg=bg, fg=("#dcfce7" if is_done else FG_MUTED),
+                       font=("Segoe UI", 8))
+        sub.pack(anchor="w")
+        for wdg in (card, top, sub):
+            wdg.bind("<Button-1>", lambda _e, m=mid: self._toggle_lead_measure(m))
+        return card
+
+    def _toggle_lead_measure(self, mid: int) -> None:
+        today = date.today().strftime("%Y-%m-%d")
+        try:
+            existing = self._db_query(
+                "SELECT done FROM lead_measure_marks WHERE measure_id=? AND day=?",
+                (mid, today))
+        except Exception:
+            existing = []
+        newly_done = False
+        try:
+            if existing and existing[0][0]:
+                self._db_exec(
+                    "DELETE FROM lead_measure_marks WHERE measure_id=? AND day=?",
+                    (mid, today))
+            else:
+                self._db_exec(
+                    "INSERT OR REPLACE INTO lead_measure_marks "
+                    "(measure_id,day,done,created_at) VALUES (?,?,1,?)",
+                    (mid, today, datetime.now().isoformat()))
+                newly_done = True
+        except Exception as e:
+            self.set_status(f"Scoreboard error: {e}")
+            return
+        self._refresh_scoreboard()
+        if newly_done:
+            self._celebrate_scoreboard(mid)
+
+    def _celebrate_scoreboard(self, mid: int) -> None:
+        """The reward: pulse the freshly-checked card so a win feels good."""
+        card = getattr(self, "_scoreboard_card_by_id", {}).get(mid)
+        if card is None:
+            return
+        try:
+            if not card.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        self.set_status("✅ Lead measure done — that's a win. Keep the streak alive!")
+
+        def _pulse(n):
+            try:
+                if not card.winfo_exists():
+                    return
+                col = "#4ade80" if n % 2 else ACCENT_GREEN
+                card.configure(bg=col)
+                for ch in card.winfo_children():
+                    ch.configure(bg=col)
+            except tk.TclError:
+                return
+            if n > 0:
+                self.root.after(110, lambda: _pulse(n - 1))
+        _pulse(6)
+
+    def _open_scoreboard_editor(self) -> None:
+        """Edit the 2-3 daily lead measures (the activities you control)."""
+        existing = getattr(self, "_scoreboard_editor_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._scoreboard_editor_win = win
+        win.title("🏆 Scoreboard — lead measures")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        dw, dh = 480, 340
+        win.geometry(f"{dw}x{dh}+{max(0,(sw-dw)//2)}+{max(0,(sh-dh)//2-24)}")
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._scoreboard_editor_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        tk.Label(win, text="🏆 Daily lead measures", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=14, pady=(12, 0))
+        tk.Label(win, text="Track 2–3 daily activities you CONTROL (e.g. "
+                 "“studied 20 min”) — not results like “lost 5 lbs.” Leave a "
+                 "box empty to retire that measure.", bg=BG_DARK, fg=FG_MUTED,
+                 wraplength=440, justify=tk.LEFT, font=("Segoe UI", 9)
+                 ).pack(anchor="w", padx=14, pady=(2, 6))
+
+        try:
+            measures = self._db_query(
+                "SELECT id,text FROM lead_measures WHERE active=1 "
+                "ORDER BY sort_order, id")
+        except Exception:
+            measures = []
+        slots = []
+        for i in range(3):
+            mid = measures[i][0] if i < len(measures) else None
+            txt = measures[i][1] if i < len(measures) else ""
+            row = tk.Frame(win, bg=BG_DARK)
+            row.pack(fill=tk.X, padx=14, pady=3)
+            tk.Label(row, text=f"{i+1}.", bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+            var = tk.StringVar(value=txt)
+            tk.Entry(row, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, relief=tk.FLAT,
+                     font=("Segoe UI", 11)).pack(side=tk.LEFT, fill=tk.X,
+                                                 expand=True, padx=(6, 0), ipady=3)
+            slots.append((mid, var))
+
+        def _save():
+            now = datetime.now().isoformat()
+            try:
+                for i, (mid, var) in enumerate(slots):
+                    t = var.get().strip()
+                    if mid is not None:
+                        if t:
+                            self._db_exec(
+                                "UPDATE lead_measures SET text=?,active=1,"
+                                "sort_order=?,updated_at=? WHERE id=?",
+                                (t, i, now, mid))
+                        else:
+                            self._db_exec(
+                                "UPDATE lead_measures SET active=0,updated_at=? "
+                                "WHERE id=?", (now, mid))
+                    elif t:
+                        self._db_exec(
+                            "INSERT INTO lead_measures (text,sort_order,active,"
+                            "created_at,updated_at) VALUES (?,?,1,?,?)",
+                            (t, i, now, now))
+            except Exception as e:
+                messagebox.showerror("Could not save", str(e))
+                return
+            self._refresh_scoreboard()
+            self.set_status("🏆 Scoreboard updated.")
+            _close()
+
+        br_ = tk.Frame(win, bg=BG_DARK)
+        br_.pack(fill=tk.X, padx=14, pady=14)
+        tk.Button(br_, text="💾 Save", command=_save,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(br_, text="Cancel", command=_close,
+                  font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=14, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+    # ---- "Not-To-Do" list + distraction (site) blocker ----------------
+    _HOSTS_MARK_START = "# >>> Sentinel Forge focus block >>>"
+    _HOSTS_MARK_END = "# <<< Sentinel Forge focus block <<<"
+
+    def _hosts_path(self) -> str:
+        return os.path.join(os.environ.get("SystemRoot", r"C:\Windows"),
+                            "System32", "drivers", "etc", "hosts")
+
+    @staticmethod
+    def _norm_domain(raw: str) -> str:
+        """Reduce a pasted URL to a bare domain: 'https://www.YouTube.com/feed'
+        → 'youtube.com'."""
+        d = (raw or "").strip().lower()
+        for pre in ("https://", "http://"):
+            if d.startswith(pre):
+                d = d[len(pre):]
+        d = d.split("/")[0].strip()
+        if d.startswith("www."):
+            d = d[4:]
+        return d
+
+    @classmethod
+    def _hosts_strip_block(cls, text: str) -> str:
+        """Return `text` with any existing Sentinel Forge block section removed,
+        leaving every other line untouched."""
+        s, e = cls._HOSTS_MARK_START, cls._HOSTS_MARK_END
+        if s in text and e in text:
+            pre = text.split(s)[0]
+            post = text.split(e, 1)[1]
+            return pre.rstrip("\n") + "\n" + post.lstrip("\n")
+        return text
+
+    @classmethod
+    def _hosts_compose(cls, base: str, domains) -> str:
+        """Append a fresh, delimited block section redirecting each domain to
+        localhost. Pure function so it can be unit-tested without touching the
+        real hosts file."""
+        body = [cls._HOSTS_MARK_START]
+        for d in domains:
+            body.append(f"127.0.0.1 {d}")
+            body.append(f"127.0.0.1 www.{d}")
+        body.append(cls._HOSTS_MARK_END)
+        return base.rstrip("\n") + "\n\n" + "\n".join(body) + "\n"
+
+    def _hosts_apply(self, domains) -> None:
+        path = self._hosts_path()
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        new = self._hosts_compose(self._hosts_strip_block(text), domains)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+
+    def _hosts_remove(self) -> None:
+        path = self._hosts_path()
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        except OSError:
+            return
+        base = self._hosts_strip_block(text)
+        if base != text:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(base)
+
+    def _flush_dns(self) -> None:
+        """Best-effort: clear the resolver cache so the block takes effect now.
+        Silent and non-fatal (and windowless)."""
+        try:
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            subprocess.run(["ipconfig", "/flushdns"], capture_output=True,
+                           creationflags=flags, timeout=8)
+        except Exception:
+            pass
+
+    def _seed_not_to_do_defaults(self) -> None:
+        try:
+            n = self._db_query("SELECT COUNT(*) FROM not_to_do")[0][0]
+        except Exception:
+            return
+        if n:
+            return
+        now = datetime.now().isoformat()
+        rules = ["Don't check social media before my Big Three",
+                 "Don't open email first thing in the morning",
+                 "Don't multitask — single-handle one task to 100%"]
+        sites = ["facebook.com", "instagram.com", "twitter.com", "x.com",
+                 "tiktok.com", "youtube.com", "reddit.com"]
+        for i, t in enumerate(rules):
+            try:
+                self._db_exec("INSERT INTO not_to_do (text,kind,sort_order,"
+                              "active,created_at,updated_at) VALUES (?,?,?,1,?,?)",
+                              (t, "rule", i, now, now))
+            except Exception:
+                pass
+        for i, t in enumerate(sites):
+            try:
+                self._db_exec("INSERT INTO not_to_do (text,kind,sort_order,"
+                              "active,created_at,updated_at) VALUES (?,?,?,1,?,?)",
+                              (t, "site", i, now, now))
+            except Exception:
+                pass
+
+    def open_not_to_do(self) -> None:
+        """Brian Tracy's not-to-do list + James Clear's "make it invisible":
+        list the low-value behaviors to stop, list distraction sites, and
+        flip a timed block that redirects those sites in the hosts file so
+        willpower isn't required."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        self._seed_not_to_do_defaults()
+
+        existing = getattr(self, "_not_to_do_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._not_to_do_win = win
+        win.title("🚫 Not-To-Do — distraction blocker")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(560, sw - 80))
+        h = min(620, max(440, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 420)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._not_to_do_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        head.pack(fill=tk.X)
+        tk.Label(head, text="🚫 Not-To-Do", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Label(head, text="Stop doing the low-value things — and make "
+                 "distractions invisible.", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
+
+        # ---- block control bar ----
+        ctrl = tk.Frame(win, bg=BG_DARK, padx=12, pady=8)
+        ctrl.pack(fill=tk.X)
+        tk.Label(ctrl, text="Block for:", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        dur_var = tk.StringVar(value="60 min")
+        dur_menu = tk.OptionMenu(ctrl, dur_var, "30 min", "60 min", "90 min",
+                                 "Until I stop")
+        _style_optionmenu(dur_menu)
+        dur_menu.configure(width=11, font=("Segoe UI", 10, "bold"))
+        dur_menu.pack(side=tk.LEFT, padx=(6, 12))
+        self._block_status_var = tk.StringVar(value="")
+        tk.Label(ctrl, textvariable=self._block_status_var, bg=BG_DARK,
+                 fg=ACCENT_AMBER, font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+
+        def _dur_minutes():
+            return {"30 min": 30, "60 min": 60, "90 min": 90,
+                    "Until I stop": 0}.get(dur_var.get(), 60)
+        self._block_btn = tk.Button(
+            ctrl, text="🔒 Block now",
+            command=lambda: self._toggle_site_block(_dur_minutes()),
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_RED, fg="white",
+            activebackground=ACCENT_RED, relief=tk.FLAT, padx=12, pady=4,
+            cursor="hand2", borderwidth=0)
+        self._block_btn.pack(side=tk.RIGHT)
+        self._sync_block_controls()
+
+        tk.Label(win, text="Sites are blocked system-wide via the Windows hosts "
+                 "file (needs administrator). Closing this app lifts any block.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 8), padx=12,
+                 anchor="w", justify=tk.LEFT).pack(fill=tk.X)
+
+        # ---- two sections side by side ----
+        body = tk.Frame(win, bg=BG_DARK, padx=10, pady=8)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        def _build_section(kind, title, hint, placeholder):
+            col = tk.Frame(body, bg=BG_DARK)
+            col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=6)
+            tk.Label(col, text=title, bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 11, "bold")).pack(anchor="w")
+            tk.Label(col, text=hint, bg=BG_DARK, fg=FG_MUTED, wraplength=320,
+                     justify=tk.LEFT, font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 4))
+            lbwrap = tk.Frame(col, bg=BG_DARK)
+            lbwrap.pack(fill=tk.BOTH, expand=True)
+            lb = tk.Listbox(lbwrap, bg=BG_INPUT, fg=FG_TEXT,
+                            selectbackground=ACCENT_SLATE, relief=tk.FLAT,
+                            font=("Segoe UI", 10), activestyle="none",
+                            highlightthickness=0)
+            lsb = tk.Scrollbar(lbwrap, orient="vertical", command=lb.yview,
+                               width=13)
+            lb.configure(yscrollcommand=lsb.set)
+            lsb.pack(side=tk.RIGHT, fill=tk.Y)
+            lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            recs: list = []
+
+            def _refresh():
+                recs.clear(); lb.delete(0, tk.END)
+                try:
+                    rows = self._db_query(
+                        "SELECT id,text FROM not_to_do WHERE kind=? AND active=1 "
+                        "ORDER BY sort_order, id", (kind,))
+                except Exception:
+                    rows = []
+                for rid, t in rows:
+                    recs.append(rid)
+                    lb.insert(tk.END, ("🌐 " if kind == "site" else "• ") + t)
+
+            addrow = tk.Frame(col, bg=BG_DARK)
+            addrow.pack(fill=tk.X, pady=(6, 0))
+            var = tk.StringVar()
+            ent = tk.Entry(addrow, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                           insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 10))
+            ent.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+
+            def _add(*_):
+                t = var.get().strip()
+                if not t:
+                    return
+                if kind == "site":
+                    t = self._norm_domain(t)
+                    if not t:
+                        return
+                now = datetime.now().isoformat()
+                try:
+                    nxt = self._db_query(
+                        "SELECT COALESCE(MAX(sort_order),-1)+1 FROM not_to_do "
+                        "WHERE kind=?", (kind,))[0][0]
+                    self._db_exec(
+                        "INSERT INTO not_to_do (text,kind,sort_order,active,"
+                        "created_at,updated_at) VALUES (?,?,?,1,?,?)",
+                        (t, kind, nxt, now, now))
+                except Exception as e:
+                    messagebox.showerror("Could not add", str(e))
+                    return
+                var.set(""); _refresh()
+            ent.bind("<Return>", lambda _e: (_add(), "break")[1])
+            tk.Button(addrow, text="➕", command=_add, font=("Segoe UI", 10, "bold"),
+                      bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
+                      relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                      borderwidth=0).pack(side=tk.LEFT, padx=(4, 0))
+
+            def _delete():
+                sel = lb.curselection()
+                if not sel or not (0 <= sel[0] < len(recs)):
+                    return
+                try:
+                    self._db_exec("DELETE FROM not_to_do WHERE id=?",
+                                  (recs[sel[0]],))
+                except Exception:
+                    return
+                _refresh()
+            tk.Button(addrow, text="🗑", command=_delete, font=("Segoe UI", 10),
+                      bg=BG_PANEL, fg=ACCENT_RED, activebackground=BG_PANEL,
+                      relief=tk.FLAT, bd=0, cursor="hand2",
+                      padx=4).pack(side=tk.LEFT, padx=(4, 0))
+            ent.insert(0, "")
+            tk.Label(col, text=placeholder, bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 8, "italic")).pack(anchor="w")
+            _refresh()
+
+        _build_section("rule", "🚫 Not-To-Do (commitments)",
+                       "Low-value habits to STOP. Seeing them is the device — "
+                       "no enforcement.", "e.g. Don't doom-scroll at lunch")
+        _build_section("site", "🌐 Sites to block",
+                       "Distraction domains. These get blocked when you press "
+                       "🔒 Block now.", "e.g. youtube.com")
+
+    def _sync_block_controls(self) -> None:
+        """Reflect the current block state on the button + status label."""
+        active = getattr(self, "_block_active", False)
+        btn = getattr(self, "_block_btn", None)
+        sv = getattr(self, "_block_status_var", None)
+        try:
+            if btn is not None and btn.winfo_exists():
+                btn.configure(text="🔓 Unblock" if active else "🔒 Block now",
+                              bg=ACCENT_SLATE if active else ACCENT_RED,
+                              activebackground=ACCENT_SLATE if active else ACCENT_RED)
+        except tk.TclError:
+            pass
+        if sv is not None:
+            if active:
+                until = getattr(self, "_block_until_label", "")
+                sv.set(f"🔒 Blocking active{until}")
+            else:
+                sv.set("")
+
+    def _toggle_site_block(self, minutes: int) -> None:
+        if getattr(self, "_block_active", False):
+            self._stop_site_block()
+            return
+        try:
+            domains = [self._norm_domain(r[0]) for r in self._db_query(
+                "SELECT text FROM not_to_do WHERE kind='site' AND active=1 "
+                "ORDER BY sort_order, id")]
+        except Exception:
+            domains = []
+        domains = [d for d in domains if d]
+        if not domains:
+            self.set_status("Add at least one site to block first.")
+            return
+        span = f"{minutes} min" if minutes else "until you stop"
+        if not messagebox.askyesno(
+                "Block distractions",
+                f"Block {len(domains)} site(s) system-wide for {span}?\n\n"
+                "This edits the Windows hosts file and needs administrator "
+                "rights. Closing the app also lifts the block."):
+            return
+        try:
+            self._hosts_apply(domains)
+        except PermissionError:
+            messagebox.showwarning(
+                "Needs administrator",
+                "Couldn't edit the hosts file — relaunch Sentinel Forge as "
+                "administrator to block sites.\n\nYour Not-To-Do list still "
+                "stands as your commitment device.")
+            return
+        except Exception as e:
+            messagebox.showerror("Could not block", str(e))
+            return
+        self._block_active = True
+        self._flush_dns()
+        if getattr(self, "_block_after_id", None) is not None:
+            try:
+                self.root.after_cancel(self._block_after_id)
+            except Exception:
+                pass
+            self._block_after_id = None
+        if minutes:
+            end = (datetime.now() + timedelta(minutes=minutes)).strftime("%H:%M")
+            self._block_until_label = f" — until {end}"
+            self._block_after_id = self.root.after(
+                minutes * 60 * 1000, lambda: self._stop_site_block(auto=True))
+        else:
+            self._block_until_label = ""
+        self.set_status(f"🔒 Distractions blocked ({len(domains)} sites).")
+        self._sync_block_controls()
+
+    def _stop_site_block(self, auto: bool = False) -> None:
+        if getattr(self, "_block_after_id", None) is not None:
+            try:
+                self.root.after_cancel(self._block_after_id)
+            except Exception:
+                pass
+            self._block_after_id = None
+        try:
+            self._hosts_remove()
+        except Exception:
+            pass
+        if getattr(self, "_block_active", False):
+            self._flush_dns()
+        self._block_active = False
+        self._block_until_label = ""
+        if auto:
+            self.set_status("🔓 Focus block ended — sites unblocked.")
+        else:
+            self.set_status("🔓 Sites unblocked.")
+        self._sync_block_controls()
+
+    # ---- Single-Handling Focus Mode + 60/90-min time blocks + DND ------
+    def _focus_pick_task(self, exclude=None):
+        """The single most important OPEN task: Big-Three first, then ABCDE
+        priority, then oldest. `exclude` is a set of ids to skip this round."""
+        try:
+            rows = self._db_query(
+                "SELECT id,text,priority,big_three FROM master_tasks "
+                "WHERE status='open'")
+        except Exception:
+            rows = []
+        ex = exclude or set()
+        rows = [r for r in rows if r[0] not in ex]
+        if not rows:
+            return None
+        prank = {p: i for i, (p, _) in enumerate(self._ABCDE)}
+        rows.sort(key=lambda r: (0 if r[3] else 1, prank.get(r[2], 9), r[0]))
+        return rows[0]
+
+    def open_focus_mode(self) -> None:
+        """Ziglar/Tracy single-handling: show ONLY your #1 task, full screen,
+        with the "Do it now!" mantra — calendar and every other task hidden.
+        A 60- or 90-minute time block flips on a Do-Not-Disturb state so you
+        work the one task to 100% without picking it up and putting it down."""
+        existing = getattr(self, "_focus_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        FBG = "#0b1220"
+        win = tk.Toplevel(self.root)
+        self._focus_win = win
+        win.title("🎯 Focus — Single-Handling")
+        win.configure(bg=FBG)
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(960, max(560, sw - 60))
+        h = min(660, max(420, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.transient(self.root)
+
+        self._focus_block_after_id = None
+        self._focus_block_remaining = 0
+        self._dnd_active = False
+        skip_set: set = set()
+        state = {"id": None}
+
+        # DND banner across the top.
+        dnd_var = tk.StringVar(value="")
+        tk.Label(win, textvariable=dnd_var, bg=FBG, fg="#f59e0b",
+                 font=("Segoe UI", 12, "bold")).pack(fill=tk.X, pady=(10, 0))
+
+        center_f = tk.Frame(win, bg=FBG)
+        center_f.pack(fill=tk.BOTH, expand=True, padx=40)
+        meta_var = tk.StringVar(value="")
+        tk.Label(center_f, textvariable=meta_var, bg=FBG, fg=FG_MUTED,
+                 font=("Segoe UI", 12)).pack(pady=(14, 4))
+        task_var = tk.StringVar(value="")
+        tk.Label(center_f, textvariable=task_var, bg=FBG, fg=FG_TEXT,
+                 font=("Segoe UI", 26, "bold"), wraplength=w - 140,
+                 justify=tk.CENTER).pack(pady=(8, 8), expand=True)
+        mantra = tk.Label(center_f, text="Do it now!", bg=FBG, fg=ACCENT_AMBER,
+                          font=("Segoe UI", 18, "italic"))
+        mantra.pack(pady=(0, 6))
+        timer_var = tk.StringVar(value="")
+        tk.Label(center_f, textvariable=timer_var, bg=FBG, fg=ACCENT_CYAN,
+                 font=("Consolas", 34, "bold")).pack(pady=(0, 6))
+
+        def _end_block(silent=True):
+            if self._focus_block_after_id is not None:
+                try:
+                    self.root.after_cancel(self._focus_block_after_id)
+                except Exception:
+                    pass
+                self._focus_block_after_id = None
+            self._focus_block_remaining = 0
+            was = self._dnd_active
+            self._dnd_active = False
+            try:
+                win.attributes("-topmost", False)
+            except tk.TclError:
+                pass
+            if was and not silent:
+                dnd_var.set("✅ Block complete — take a breath, then the next.")
+                try:
+                    win.bell()
+                except tk.TclError:
+                    pass
+                self.set_status("✅ Focus block complete.")
+            elif was:
+                dnd_var.set("")
+
+        def _tick_block():
+            if self._focus_block_remaining <= 0:
+                timer_var.set("00:00")
+                _end_block(silent=False)
+                return
+            m, s = divmod(self._focus_block_remaining, 60)
+            timer_var.set(f"{m:02d}:{s:02d}")
+            self._focus_block_remaining -= 1
+            self._focus_block_after_id = self.root.after(1000, _tick_block)
+
+        def _start_block(mins):
+            _end_block(silent=True)
+            if state["id"] is None:
+                self.set_status("Nothing to focus on — capture an idea first.")
+                return
+            self._focus_block_remaining = mins * 60
+            self._dnd_active = True
+            dnd_var.set("🔕 Do Not Disturb — single-handle this ONE task to 100%.")
+            try:
+                win.attributes("-topmost", True)
+            except tk.TclError:
+                pass
+            self.set_status(f"⏲ {mins}-minute focus block started — DND on.")
+            _tick_block()
+
+        def _load():
+            t = self._focus_pick_task(exclude=skip_set)
+            if not t:
+                meta_var.set("")
+                task_var.set("🎉 Nothing urgent right now.\n"
+                             "Capture or prioritize ideas in 🧠 Ideas first.")
+                mantra.pack_forget()
+                state["id"] = None
+                return
+            if not mantra.winfo_ismapped():
+                mantra.pack(pady=(0, 6))
+            tid, txt, pri, bt = t
+            state["id"] = tid
+            try:
+                open_n = self._db_query(
+                    "SELECT COUNT(*) FROM master_tasks WHERE status='open'")[0][0]
+            except Exception:
+                open_n = 1
+            tag = f"Priority {pri}" if pri else "Unprioritized"
+            star = "  ·  ⭐ Big Three" if bt else ""
+            meta_var.set(f"Your #1 of {open_n} open  ·  {tag}{star}")
+            task_var.set(txt)
+
+        def _done():
+            if state["id"] is not None:
+                self._db_exec(
+                    "UPDATE master_tasks SET status='done', updated_at=? "
+                    "WHERE id=?", (datetime.now().isoformat(), state["id"]))
+                skip_set.discard(state["id"])
+                self._idea_refresh_if_open()
+            _end_block(silent=True)
+            timer_var.set("")
+            _load()
+
+        def _skip():
+            if state["id"] is not None:
+                skip_set.add(state["id"])
+            _end_block(silent=True)
+            timer_var.set("")
+            _load()
+
+        def _close():
+            _end_block(silent=True)
+            self._focus_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        # ---- bottom button bar ----
+        bar = tk.Frame(win, bg=FBG, pady=12)
+        bar.pack(fill=tk.X)
+        inner = tk.Frame(bar, bg=FBG)
+        inner.pack()
+
+        def _fbtn(text, cmd, color):
+            return tk.Button(inner, text=text, command=cmd,
+                             font=("Segoe UI", 11, "bold"), bg=color, fg="white",
+                             activebackground=color, relief=tk.FLAT, padx=14,
+                             pady=7, cursor="hand2", borderwidth=0)
+        _fbtn("✓ Done", _done, ACCENT_GREEN).pack(side=tk.LEFT, padx=4)
+        _fbtn("▶ 60-min block", lambda: _start_block(60),
+              ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
+        _fbtn("▶ 90-min block", lambda: _start_block(90),
+              ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
+        _fbtn("⏹ End block", lambda: _end_block(silent=False),
+              ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
+        _fbtn("⏭ Skip", _skip, ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
+        _fbtn("✕ Exit", _close, ACCENT_RED).pack(side=tk.LEFT, padx=4)
+
+        _load()
+
+    # ---- Quadrant-II weekly roles view (Covey) -------------------------
+    def open_weekly_roles(self) -> None:
+        """Organize the week by ROLES (Student, Parent, CNA…) and give each
+        one or two Quadrant-II goals (important, not urgent). Sits above the
+        daily calendar so planning rises over day-to-day urgency."""
+        existing = getattr(self, "_roles_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        if getattr(self, "_roles_monday", None) is None:
+            base = getattr(self, "_planner_monday", None) or (
+                date.today() - timedelta(days=date.today().weekday()))
+            self._roles_monday = base
+
+        win = tk.Toplevel(self.root)
+        self._roles_win = win
+        win.title("🧭 Weekly Roles — Quadrant II")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(620, max(480, sw - 80))
+        h = min(680, max(440, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(460, 420)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        rows_state: list = []
+        week_var = tk.StringVar(value="")
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        head.pack(fill=tk.X)
+        tk.Label(head, text="🧭 Weekly Roles", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Label(head, textvariable=week_var, bg=BG_PANEL, fg=ACCENT_CYAN,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.RIGHT)
+        tk.Label(win, text="Plan by who you are this week — give each role 1–2 "
+                 "important-but-not-urgent goals (Quadrant II).", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9), padx=14, anchor="w",
+                 justify=tk.LEFT).pack(fill=tk.X)
+
+        # Scrollable list of role cards.
+        outer = tk.Frame(win, bg=BG_DARK, padx=12, pady=6)
+        outer.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        sb = tk.Scrollbar(outer, orient="vertical", command=canvas.yview, width=14)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        listf = tk.Frame(canvas, bg=BG_DARK)
+        fid = canvas.create_window((0, 0), window=listf, anchor="nw")
+        listf.bind("<Configure>",
+                   lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(fid, width=e.width))
+
+        def _wheel(e):
+            canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        def _add_row(role="", g1="", g2=""):
+            rf = tk.Frame(listf, bg=BG_PANEL, padx=10, pady=8)
+            rf.pack(fill=tk.X, pady=4)
+            rv = tk.StringVar(value=role)
+            g1v = tk.StringVar(value=g1)
+            g2v = tk.StringVar(value=g2)
+            top = tk.Frame(rf, bg=BG_PANEL)
+            top.pack(fill=tk.X)
+            tk.Label(top, text="🧭 Role", bg=BG_PANEL, fg=FG_TEXT,
+                     font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+            st = {"role": rv, "g1": g1v, "g2": g2v, "frame": rf}
+
+            def _del():
+                try:
+                    rows_state.remove(st)
+                except ValueError:
+                    pass
+                rf.destroy()
+            tk.Button(top, text="🗑", command=_del, font=("Segoe UI", 10),
+                      bg=BG_PANEL, fg=ACCENT_RED, activebackground=BG_PANEL,
+                      relief=tk.FLAT, bd=0, cursor="hand2").pack(side=tk.RIGHT)
+            tk.Entry(top, textvariable=rv, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, relief=tk.FLAT,
+                     font=("Segoe UI", 11)).pack(side=tk.LEFT, fill=tk.X,
+                                                 expand=True, padx=(6, 8), ipady=3)
+            tk.Label(rf, text="This week's 1–2 goals for this role:", bg=BG_PANEL,
+                     fg=FG_MUTED, font=("Segoe UI", 8)).pack(anchor="w", pady=(6, 1))
+            tk.Entry(rf, textvariable=g1v, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, relief=tk.FLAT,
+                     font=("Segoe UI", 10)).pack(fill=tk.X, ipady=2, pady=(0, 3))
+            tk.Entry(rf, textvariable=g2v, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, relief=tk.FLAT,
+                     font=("Segoe UI", 10)).pack(fill=tk.X, ipady=2)
+            rows_state.append(st)
+
+        def _save():
+            mon = self._roles_monday.strftime("%Y-%m-%d")
+            now = datetime.now().isoformat()
+            try:
+                self._db_exec("DELETE FROM weekly_roles WHERE week_monday=?", (mon,))
+                for i, st in enumerate(rows_state):
+                    role = st["role"].get().strip()
+                    if not role:
+                        continue
+                    self._db_exec(
+                        "INSERT INTO weekly_roles (week_monday,role,goal1,goal2,"
+                        "sort_order,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
+                        (mon, role, st["g1"].get().strip(),
+                         st["g2"].get().strip(), i, now, now))
+            except Exception as e:
+                messagebox.showerror("Could not save roles", str(e))
+                return False
+            self.set_status(f"🧭 Weekly roles saved for week of {mon}.")
+            return True
+
+        def _load():
+            for st in list(rows_state):
+                try:
+                    st["frame"].destroy()
+                except tk.TclError:
+                    pass
+            rows_state.clear()
+            mon = self._roles_monday.strftime("%Y-%m-%d")
+            sunday = self._roles_monday + timedelta(days=6)
+            week_var.set(f"Week of {self._roles_monday.strftime('%b %d')} – "
+                         f"{sunday.strftime('%b %d')}")
+            try:
+                rows = self._db_query(
+                    "SELECT role,goal1,goal2 FROM weekly_roles "
+                    "WHERE week_monday=? ORDER BY sort_order, id", (mon,))
+            except Exception:
+                rows = []
+            if rows:
+                for r in rows:
+                    _add_row(r[0], r[1], r[2])
+            else:
+                _add_row()  # one empty starter card
+
+        def _go(delta=None):
+            _save()
+            if delta is None:
+                self._roles_monday = date.today() - timedelta(
+                    days=date.today().weekday())
+            else:
+                self._roles_monday = self._roles_monday + timedelta(days=7 * delta)
+            _load()
+
+        def _close():
+            _save()
+            self._roles_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        foot = tk.Frame(win, bg=BG_PANEL, padx=12, pady=10)
+        foot.pack(fill=tk.X)
+        tk.Button(foot, text="➕ Add role", command=lambda: _add_row(),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=10, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(foot, text="💾 Save", command=_save,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(foot, text="Next ▶", command=lambda: _go(1),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=(6, 8))
+        tk.Button(foot, text="Today", command=lambda: _go(None),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(foot, text="◀ Prev", command=lambda: _go(-1),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=(0, 6))
+
+        _load()
+
     _EISENHOWER_QUADRANTS = [
         # (key, label, subtitle, accent_color, grid_row, grid_col)
-        ("do",        "🔥 Do",         "Urgent  &  Important",   "ACCENT_RED",   0, 0),
-        ("schedule",  "🗓 Schedule",   "Important, Not Urgent",  "ACCENT_GREEN", 0, 1),
-        ("delegate",  "👥 Delegate",   "Urgent, Not Important",  "ACCENT_AMBER", 1, 0),
-        ("eliminate", "🗑 Eliminate",  "Neither",                "ACCENT_SLATE", 1, 1),
+        ("do",        "🔥 Do Now",    "Urgent  &  Important",      "ACCENT_GREEN", 0, 0),
+        ("eliminate", "⏳ Do Later",  "Lower priority / can wait", "YELLOW",       0, 1),
+        ("delegate",  "👥 Delegate",  "Urgent, Not Important",     "ACCENT_RED",   1, 0),
+        ("schedule",  "🗓 Scheduled", "Important, Not Urgent",     "WHITE",        1, 1),
     ]
 
     def _build_tab_eisenhower(self, parent: tk.Frame) -> None:
-        """Calendar redesign of the Matrix tab.
-
-        Top half is a day-planner:
-          • Day picker (this week's Mon–Sun, with prev/next week arrows)
-          • 🔥 Do Now — the single active block + Start / Done buttons
-          • 🗓 Schedule — ordered list of blocks for the selected day
-            with Add/Edit/Delete/reorder/duration controls
-
-        Bottom half stays free-form (👥 Delegate, 🗑 Eliminate) — for
-        anything that doesn't fit a time slot."""
-        import traceback
-        _vlog("matrix: _build_tab_eisenhower ENTER")
+        """The Eisenhower Matrix — four free-form, autosaving quadrants
+        (Do Now / Scheduled / Delegate / Do Later). No calendar."""
         # Reset state so a workspace reopen rebuilds cleanly.
         self._eisenhower_widgets = {}
         self._eisenhower_save_after_ids = {}
-        self._block_listbox = None
-        self._block_records = []
-        self._do_now_block_id = None
 
-        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
-        head.pack(fill=tk.X)
-        tk.Label(head, text="🎯 Matrix Calendar",
+        # Title row (just the heading — keeps the controls off the title so
+        # nothing gets squashed).
+        head = tk.Frame(parent, bg=BG_PANEL, padx=12)
+        head.pack(fill=tk.X, pady=(8, 2))
+        tk.Label(head, text="🎯 Eisenhower Matrix",
                  bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
-        tk.Label(head,
-                 text="Plan your day in 15/20/25-minute Pomodoro blocks.",
+        tk.Label(head, text="Sort what matters into four boxes.",
                  bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
-        tk.Button(
-            head, text="💾 Save now", command=self._save_all_eisenhower,
-            font=("Segoe UI", 10), bg=ACCENT_GREEN, fg="white",
-            activebackground=ACCENT_GREEN, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT)
 
-        # Day picker bar
-        self._build_matrix_day_picker(parent)
+        # Controls toolbar — its own full-width row, evenly spaced so it
+        # reads as one clean, flush strip.
+        tools = tk.Frame(parent, bg=BG_PANEL, padx=12)
+        tools.pack(fill=tk.X, pady=(0, 8))
+        GAP = 6          # uniform gap between every control
+        GROUP = 18       # wider gap between logical groups
 
-        # 2×2 cell grid — top row is the calendar planner, bottom row
-        # is the free-form delegate/eliminate notepads.
-        grid = tk.Frame(parent, bg=BG_DARK, padx=8, pady=4)
-        grid.pack(fill=tk.BOTH, expand=True)
-        # minsize=240 on both rows: the bottom-row ScrolledText widgets
-        # request a huge natural size (~80x24 char default ≈ 600x400 px),
-        # which Tk's grid layout interprets as "row 1 needs all the
-        # available height," squeezing row 0 (Do Now + Schedule) to 1 px.
-        # Forcing a 240 px floor on each row guarantees the top row
-        # actually has room to render. (Diagnosed via matrix:GEOM log.)
-        grid.grid_rowconfigure(0, weight=1, minsize=240)
-        grid.grid_rowconfigure(1, weight=1, minsize=240)
-        grid.grid_columnconfigure(0, weight=1)
-        grid.grid_columnconfigure(1, weight=1)
+        def _tbtn(parent_w, text, cmd, color):
+            return tk.Button(
+                parent_w, text=text, command=cmd,
+                font=("Segoe UI", 10, "bold"), bg=color, fg="white",
+                activebackground=color, relief=tk.FLAT,
+                padx=12, pady=5, cursor="hand2", borderwidth=0)
 
-        # Build the four cells with per-cell try/except so a failure in
-        # one (e.g. the Do Now panel) doesn't take out the whole tab —
-        # and every entry/exit/exception lands in voice_debug.log.
-        def _safe_build(name, fn, *args):
-            _vlog(f"matrix:   {name} ENTER")
+        def _tmenu(parent_w, var, *opts):
+            m = tk.OptionMenu(parent_w, var, *opts)
+            _style_optionmenu(m)
+            m.configure(width=8, font=("Segoe UI", 10, "bold"))
+            return m
+
+        # --- Timer group: ⏱ preset · ▶ Start · ■ Stop · 00:00 (all together) ---
+        self._mtimer_running = False
+        self._mtimer_remaining = 0
+        self._mtimer_after_id = None
+        self._mtimer_preset_var = tk.StringVar(value="25 min")
+        self._mtimer_display_var = tk.StringVar(value="00:00")
+        tk.Label(tools, text="⏱", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 12)).pack(side=tk.LEFT, padx=(0, 4))
+        _tmenu(tools, self._mtimer_preset_var,
+               *self._timer_presets.keys()).pack(side=tk.LEFT, padx=(0, GAP))
+        tk.Label(tools, textvariable=self._mtimer_display_var, bg=BG_PANEL,
+                 fg=FG_TEXT, font=("Consolas", 13, "bold")
+                 ).pack(side=tk.LEFT, padx=(0, GAP))
+        _tbtn(tools, "▶ Start", self._matrix_timer_start_preset,
+              ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, GAP))
+        _tbtn(tools, "■ Stop", self._matrix_timer_stop,
+              ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, GAP))
+
+        # --- Right cluster: [colour] 🔊 Read · 🎤 Voice · 💾 Save ---
+        # Read sits directly to the LEFT of Voice (Read then Voice).
+        _tbtn(tools, "💾 Save", self._save_all_eisenhower,
+              ACCENT_GREEN).pack(side=tk.RIGHT)
+        self._matrix_mic_btn = _tbtn(tools, "🎤 Voice", self._matrix_toggle_mic,
+                                     ACCENT_MIC)
+        self._matrix_mic_btn.pack(side=tk.RIGHT, padx=(0, GAP))
+        self._matrix_read_btn = _tbtn(tools, "🔊 Read",
+                                      self._matrix_read_toggle, ACCENT_GREEN)
+        self._matrix_read_btn.pack(side=tk.RIGHT, padx=(0, GAP))
+        self._matrix_read_color_var = tk.StringVar(value="Yellow")
+        _tmenu(tools, self._matrix_read_color_var,
+               "Yellow", "Teal", "Indigo").pack(side=tk.RIGHT, padx=(0, GAP))
+
+        # The whole 2×2 grid lives inside a scrollable canvas with one BIG
+        # vertical scrollbar on the right — its ▲ / ▼ arrows and draggable
+        # thumb move the entire matrix up and down. Each quadrant still has
+        # its own slider + mouse wheel for its own text.
+        color_map = {"ACCENT_RED": ACCENT_RED, "ACCENT_GREEN": ACCENT_GREEN,
+                     "ACCENT_AMBER": ACCENT_AMBER, "ACCENT_SLATE": ACCENT_SLATE,
+                     "YELLOW": "#fde047", "WHITE": "#ffffff"}
+        outer = tk.Frame(parent, bg=BG_DARK)
+        outer.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0, bd=0)
+        big_sb = tk.Scrollbar(
+            outer, orient=tk.VERTICAL, command=canvas.yview, width=22,
+            troughcolor=BG_PANEL, bg=ACCENT_SLATE, activebackground=ACCENT_CYAN,
+            relief=tk.FLAT, borderwidth=0)
+        canvas.configure(yscrollcommand=big_sb.set)
+        big_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        inner = tk.Frame(canvas, bg=BG_DARK)
+        inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.grid_columnconfigure(0, weight=1, uniform="q")
+        inner.grid_columnconfigure(1, weight=1, uniform="q")
+
+        def _on_inner_config(_e=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        inner.bind("<Configure>", _on_inner_config)
+        def _on_canvas_config(e):
+            canvas.itemconfigure(inner_id, width=e.width)  # inner tracks width
+        canvas.bind("<Configure>", _on_canvas_config)
+        # Mouse wheel over empty canvas area scrolls the whole matrix.
+        canvas.bind(
+            "<MouseWheel>",
+            lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+
+        for key, label, subtitle, color_name, r, c in self._EISENHOWER_QUADRANTS:
+            cell = tk.Frame(inner, bg=BG_DARK)
+            cell.grid(row=r, column=c, sticky="nsew", padx=4, pady=4)
             try:
-                fn(*args)
-                _vlog(f"matrix:   {name} EXIT ok")
+                self._build_matrix_freeform_quadrant(
+                    cell, key, label, subtitle,
+                    color_map.get(color_name, ACCENT_SLATE))
             except Exception as e:
-                tb = traceback.format_exc()
-                _vlog(f"matrix:   {name} RAISED {type(e).__name__}: {e}\n{tb}")
+                print(f"[matrix] build {key}: {e}", file=sys.stderr)
 
-        do_cell = tk.Frame(grid, bg=BG_DARK)
-        do_cell.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        _safe_build("_build_matrix_do_now_panel", self._build_matrix_do_now_panel, do_cell)
+        # Load saved bodies into the four editors.
+        self._refresh_tab_matrix()
 
-        sched_cell = tk.Frame(grid, bg=BG_DARK)
-        sched_cell.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
-        _safe_build("_build_matrix_schedule_panel", self._build_matrix_schedule_panel, sched_cell)
+    def _matrix_toggle_mic(self) -> None:
+        """Voice-dictate into a Matrix quadrant. Dictates into the focused
+        quadrant if there is one, otherwise defaults to 🔥 Do Now."""
+        if self.is_listening:
+            self.toggle_mic()       # stop
+            return
+        quad_widgets = set(self._eisenhower_widgets.values())
+        if self._mic_target not in quad_widgets:
+            do_w = self._eisenhower_widgets.get("do")
+            if do_w is not None:
+                do_w.focus_set()
+                self._set_mic_target(do_w)
+        self.toggle_mic()           # start
 
-        deleg_cell = tk.Frame(grid, bg=BG_DARK)
-        deleg_cell.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
-        _safe_build("_build_matrix_freeform_quadrant(delegate)",
-                    self._build_matrix_freeform_quadrant,
-                    deleg_cell, "delegate", "👥 Delegate",
-                    "Urgent, Not Important", ACCENT_AMBER)
+    def _matrix_read_aloud(self) -> None:
+        """Read a Matrix quadrant aloud with a Yellow / Teal / Indigo
+        follow-along highlight. Reads the quadrant you last worked in
+        (defaults to Do Now); reads the selection if there is one."""
+        quad = self._eisenhower_widgets
+        if not quad:
+            return
+        target = None
+        if self._mic_target in quad.values():
+            target = self._mic_target
+        else:
+            try:
+                focused = self._study_win.focus_get() if self._study_win else None
+            except Exception:
+                focused = None
+            target = focused if focused in quad.values() else quad.get("do")
+        if target is None:
+            return
+        if not target.get("1.0", tk.END).strip():
+            messagebox.showinfo(
+                "Read aloud",
+                "That box is empty — type or dictate something first, then "
+                "click 🔊 Read aloud.")
+            return
+        if self.is_reading:
+            self.stop_reading()
+        # Apply the chosen highlight colour to this widget's reading tag.
+        color = self._matrix_read_color_var.get()
+        chex = self.HIGHLIGHT_COLORS.get(color, "#fde047")
+        try:
+            target.tag_configure("reading", background=chex, foreground="#0f172a")
+            target.tag_raise("reading", "sel")
+        except tk.TclError:
+            pass
+        self._read_widget = target
+        try:
+            has_sel = bool(target.tag_ranges(tk.SEL))
+        except tk.TclError:
+            has_sel = False
+        if not has_sel:
+            target.mark_set(tk.INSERT, "1.0")
+        target.focus_set()
+        self.read_aloud()
+        self._matrix_set_read_btn(reading=True)
 
-        elim_cell = tk.Frame(grid, bg=BG_DARK)
-        elim_cell.grid(row=1, column=1, sticky="nsew", padx=4, pady=4)
-        _safe_build("_build_matrix_freeform_quadrant(eliminate)",
-                    self._build_matrix_freeform_quadrant,
-                    elim_cell, "eliminate", "🗑 Eliminate",
-                    "Neither", ACCENT_SLATE)
+    def _matrix_read_toggle(self) -> None:
+        """🔊 Read button: start reading, or stop if already reading."""
+        if self.is_reading:
+            self.stop_reading()
+        else:
+            self._matrix_read_aloud()
 
-        # Save references for the post-show geometry dump (proof #3).
-        self._matrix_dbg_cells = {
-            "do_cell": do_cell, "sched_cell": sched_cell,
-            "deleg_cell": deleg_cell, "elim_cell": elim_cell,
-            "grid": grid, "parent": parent,
-        }
-        _vlog("matrix: _build_tab_eisenhower EXIT")
+    def _matrix_set_read_btn(self, reading: bool) -> None:
+        """Sync every Read toggle button (Matrix + Study Notes) to the
+        current reading state."""
+        for attr in ("_matrix_read_btn", "_study_notes_read_btn",
+                     "_journal_read_btn"):
+            b = getattr(self, attr, None)
+            if b is None:
+                continue
+            try:
+                if reading:
+                    b.configure(text="■ Stop", bg=ACCENT_RED,
+                                activebackground=ACCENT_RED)
+                else:
+                    b.configure(text="🔊 Read", bg=ACCENT_GREEN,
+                                activebackground=ACCENT_GREEN)
+            except tk.TclError:
+                pass
+
+    # ---- Matrix countdown timer (simple, no Pomodoro auto-cycle) --------
+    def _matrix_timer_start_preset(self) -> None:
+        mins = self._timer_presets.get(self._mtimer_preset_var.get(), 25)
+        self._matrix_timer_start(mins)
+
+    def _matrix_timer_start(self, minutes: int) -> None:
+        # Cancel any existing countdown so Start never double-runs.
+        if self._mtimer_after_id is not None:
+            try:
+                self.root.after_cancel(self._mtimer_after_id)
+            except Exception:
+                pass
+            self._mtimer_after_id = None
+        self._mtimer_remaining = int(minutes) * 60
+        self._mtimer_running = True
+        self._matrix_timer_update_display()
+        self._matrix_timer_tick()
+
+    def _matrix_timer_tick(self) -> None:
+        if not self._mtimer_running:
+            return
+        if self._mtimer_remaining <= 0:
+            self._matrix_timer_finished()
+            return
+        self._mtimer_remaining -= 1
+        self._matrix_timer_update_display()
+        self._mtimer_after_id = self.root.after(1000, self._matrix_timer_tick)
+
+    def _matrix_timer_update_display(self) -> None:
+        m, s = divmod(max(0, self._mtimer_remaining), 60)
+        try:
+            self._mtimer_display_var.set(f"{m:02d}:{s:02d}")
+        except (tk.TclError, AttributeError):
+            pass
+
+    def _matrix_timer_reset_button(self) -> None:
+        try:
+            self._mtimer_display_var.set("00:00")
+        except (tk.TclError, AttributeError):
+            pass
+
+    def _matrix_timer_stop(self, announce: bool = True) -> None:
+        self._mtimer_running = False
+        if self._mtimer_after_id is not None:
+            try:
+                self.root.after_cancel(self._mtimer_after_id)
+            except Exception:
+                pass
+            self._mtimer_after_id = None
+        self._matrix_timer_reset_button()
+        if announce:
+            self.set_status("⏱ Timer stopped.")
+
+    def _matrix_timer_finished(self) -> None:
+        self._mtimer_running = False
+        self._mtimer_after_id = None
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except Exception:
+            pass
+        self._matrix_timer_reset_button()
+        self.set_status("⏱ Time's up!")
+        try:
+            messagebox.showinfo("Timer", "⏱ Time's up!",
+                                parent=getattr(self, "_study_win", None))
+        except Exception:
+            pass
 
     # ---- Day picker ----------------------------------------------------
     def _build_matrix_day_picker(self, parent: tk.Frame) -> None:
@@ -8290,24 +11762,56 @@ try {
     def _build_matrix_freeform_quadrant(self, cell: tk.Frame, key: str,
                                           label: str, subtitle: str,
                                           color: str) -> None:
-        header_bar = tk.Frame(cell, bg=color, padx=10, pady=6)
+        # Dark text on light headers (yellow/white), white text on dark ones.
+        def _hdr_fg(bg):
+            try:
+                h = bg.lstrip("#")
+                r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+                return "#0f172a" if (0.299 * r + 0.587 * g + 0.114 * b) > 150 else "white"
+            except Exception:
+                return "white"
+        hfg = _hdr_fg(color)
+        header_bar = tk.Frame(cell, bg=color, padx=8, pady=4)
         header_bar.pack(fill=tk.X)
-        tk.Label(header_bar, text=label, bg=color, fg="white",
-                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
-        tk.Label(header_bar, text=subtitle, bg=color, fg="white",
-                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(10, 0))
+        tk.Label(header_bar, text=label, bg=color, fg=hfg,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        tk.Label(header_bar, text=subtitle, bg=color, fg=hfg,
+                 font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(8, 0))
 
-        editor = scrolledtext.ScrolledText(
-            cell, wrap=tk.WORD,
+        # Editor + its own chunky slider (compact box).
+        holder = tk.Frame(cell, bg=BG_DARK)
+        holder.pack(fill=tk.BOTH, expand=True)
+        editor = tk.Text(
+            holder, wrap=tk.WORD, height=9, width=22,
             font=(self.font_family, 11),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=10, pady=10, relief=tk.FLAT,
+            padx=8, pady=6, relief=tk.FLAT,
             selectbackground="#1d4ed8", selectforeground="white",
             undo=True, autoseparators=True, maxundo=-1,
         )
-        editor.pack(fill=tk.BOTH, expand=True)
+        qsb = tk.Scrollbar(holder, command=editor.yview, width=18,
+                           troughcolor=BG_PANEL, bg=ACCENT_SLATE,
+                           activebackground=ACCENT_CYAN, relief=tk.FLAT,
+                           borderwidth=0)
+        editor.configure(yscrollcommand=qsb.set)
+        qsb.pack(side=tk.RIGHT, fill=tk.Y)
+        editor.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         editor.bind("<<Modified>>",
                      lambda _e, k=key: self._on_eisenhower_modified(k))
+        # Focusing a quadrant makes it the voice-dictation + read-aloud target.
+        editor.bind("<FocusIn>",
+                     lambda _e, w=editor: self._set_mic_target(w), add="+")
+        # Mouse-wheel scrolls this box.
+        editor.bind(
+            "<MouseWheel>",
+            lambda e, w=editor: (w.yview_scroll(
+                int(-1 * (e.delta / 120)), "units"), "break")[1], add="+")
+        # Read-aloud follow-along highlight (colour set when reading starts).
+        editor.tag_configure(
+            "reading",
+            background=self.HIGHLIGHT_COLORS.get("Yellow", "#fde047"),
+            foreground="#0f172a")
+        editor.tag_raise("reading", "sel")
         self._attach_clipboard_menu(
             editor,
             clear_cmd=(lambda k=key: self._clear_eisenhower_quadrant(k)),
@@ -8642,67 +12146,7 @@ try {
         self._refresh_blocks_for_selected_day()
 
     def _refresh_tab_matrix(self) -> None:
-        """Refresh both halves: day picker + blocks for the selected
-        date AND the free-form delegate/eliminate text editors.
-
-        Named to match the tab key 'matrix' so that
-        `_show_study_tab('matrix')` finds it via the
-        `_refresh_tab_<key>` convention used by every other tab.
-        (Without this naming match the day-picker buttons stay as
-        their '—' placeholders because the refresh never runs.)"""
-        import traceback
-        _vlog(f"matrix: _refresh_tab_matrix ENTER  block_listbox={'present' if self._block_listbox is not None else 'NONE'}  ew_count={len(self._eisenhower_widgets)}")
-        # Top half — calendar
-        try:
-            self._refresh_day_picker()
-            _vlog("matrix:   _refresh_day_picker ok")
-        except Exception as e:
-            _vlog(f"matrix:   _refresh_day_picker RAISED {type(e).__name__}: {e}\n{traceback.format_exc()}")
-        try:
-            self._refresh_blocks_for_selected_day()
-            _vlog("matrix:   _refresh_blocks_for_selected_day ok")
-        except Exception as e:
-            _vlog(f"matrix:   _refresh_blocks_for_selected_day RAISED {type(e).__name__}: {e}\n{traceback.format_exc()}")
-
-        # Geometry dump — fires 250 ms after the tab is shown so Tk has
-        # had time to map and lay out the widgets. Logs each cell's
-        # actual size, child count, and first-child background, which
-        # tells us whether the top row is zero-sized, color-blended, or
-        # actually fine and the bug is elsewhere (proof #3 action).
-        def _dump_matrix_geometry():
-            try:
-                cells = getattr(self, "_matrix_dbg_cells", None) or {}
-                for name, w in cells.items():
-                    try:
-                        geom = w.winfo_geometry()
-                        wpx  = w.winfo_width()
-                        hpx  = w.winfo_height()
-                        children = w.winfo_children()
-                        first = children[0] if children else None
-                        first_info = "(no children)"
-                        if first is not None:
-                            try:
-                                fbg = first.cget("bg")
-                            except Exception:
-                                fbg = "?"
-                            first_info = (
-                                f"first_child={type(first).__name__} "
-                                f"geom={first.winfo_geometry()} "
-                                f"bg={fbg!r}"
-                            )
-                        _vlog(
-                            f"matrix:GEOM  {name:<11} geom={geom}  "
-                            f"size={wpx}x{hpx}  children={len(children)}  {first_info}"
-                        )
-                    except Exception as ge:
-                        _vlog(f"matrix:GEOM  {name} ERROR {type(ge).__name__}: {ge}")
-            except Exception as e:
-                _vlog(f"matrix:GEOM dump RAISED {type(e).__name__}: {e}")
-        try:
-            self.root.after(250, _dump_matrix_geometry)
-        except Exception:
-            pass
-        # Bottom half — free-form quadrants
+        """Load each quadrant's saved body into its editor."""
         if not self._eisenhower_widgets:
             return
         try:
@@ -8935,17 +12379,11 @@ try {
             # Non-fatal: the Library save already succeeded.
             pass
 
-        # If the Library window is open, flip its filter to the saved
-        # file's zone so the new entry is immediately visible. Otherwise
-        # the user sees their save "vanish" into a zone the current
-        # filter is hiding.
+        # If the Library window is open, refresh it so the new entry shows.
         try:
             if (self._library_win is not None
                     and self._library_win.winfo_exists()):
-                if self._library_zone_filter != zone:
-                    self._library_set_zone_filter(zone)
-                else:
-                    self._refresh_library_list()
+                self._refresh_library_list()
         except Exception:
             pass
 
@@ -8987,10 +12425,21 @@ def main() -> None:
     # day. Delayed so the dashboard paints first — otherwise the modal
     # pops up against an empty window.
     root.after(400, app._maybe_auto_start_wizard)
+    # Evening "plan tomorrow" nudge (Ziglar's night-before rule).
+    root.after(1200, app._maybe_evening_planning_nudge)
+    # Warm the Whisper speech model in the background so the first 🎤 click
+    # doesn't pause to load it.
+    root.after(1500, app._preload_whisper)
     def on_close():
         try: app._stop_mic()
         except Exception: pass
         try: app._stop_timer(announce=False)
+        except Exception: pass
+        # Lift any distraction block so the user is never left blocked after
+        # the app exits (closing the app is the safety release).
+        try:
+            if getattr(app, "_block_active", False):
+                app._stop_site_block()
         except Exception: pass
         try: app._save_notes()
         except Exception: pass
