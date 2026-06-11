@@ -1,11 +1,23 @@
-# Python deps for the Sentinel screen reader (book_reader.py).
-# Tk is part of the standard Python distribution; nothing to install.
-# Every parser is imported try/except — the app still runs if any of
-# these are missing, with the matching file types disabled.
+# Sentinel Forge — Book Reader dependencies
+#
+# Core app runs on the Python standard library (tkinter). The packages below
+# unlock optional features; install with:  pip install -r requirements.txt
+# Every parser/feature is imported try/except — the app still runs if any of
+# these are missing, with the matching capability disabled.
 
-python-docx>=1.0.0      # .docx parsing
-pypdf>=4.0.0            # .pdf parsing
-beautifulsoup4>=4.12.0  # .html parsing
-pyttsx3>=2.90           # Windows SAPI5 read-aloud fallback (Piper preferred)
-send2trash>=1.8.0       # recoverable Library deletes
-tkinterdnd2>=0.4.0      # drag-and-drop files onto the Library window
+# --- Speech-to-text (modern voice input) ---------------------------------
+# Whisper-class dictation. faster-whisper downloads its model on first use.
+faster-whisper>=1.2.0      # Whisper STT engine (CTranslate2-backed)
+sounddevice>=0.5.0         # microphone audio capture
+numpy>=1.24                # audio buffers
+noisereduce>=3.0.0         # mic noise suppression before transcription
+
+# --- Document loading -----------------------------------------------------
+python-docx>=1.1.0         # .docx books
+pypdf>=4.0.0               # .pdf books
+beautifulsoup4>=4.12.0     # .html / .htm books
+
+# --- Optional niceties ----------------------------------------------------
+tkinterdnd2>=0.4.0         # drag-and-drop files into the Library/Study windows
+pyttsx3>=2.90              # fallback text-to-speech (SAPI) if Piper isn't present
+send2trash>=1.8.0          # recoverable deletes from the Library
