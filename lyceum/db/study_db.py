@@ -378,6 +378,20 @@ CREATE TABLE IF NOT EXISTS raises (
     raised_at TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+-- Zero-Based Budgeting auditor: every recurring charge must re-earn its place.
+-- Every ~90 days the audit walks each one and asks "knowing what you know now,
+-- would you sign up for this again today?" — a No cancels the drain.
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0,
+    cycle TEXT NOT NULL DEFAULT 'monthly',   -- monthly | yearly
+    active INTEGER NOT NULL DEFAULT 1,
+    last_reviewed TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 

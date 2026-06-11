@@ -523,19 +523,23 @@ class BookReader:
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
 
-        # --- Row 1b: money / wealth-defense tools (their own row) ---
+        # --- Money tools, split across two rows so nothing overflows ---
         rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
-        money = section(rowm, "MONEY")
-        btn(money, "💵 Money Hub", self.open_money_hub, ACCENT_GOLD)
-        btn(money, "💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD)
-        btn(money, "🛡 Core Four", self.open_core_four, ACCENT_GREEN)
-        btn(money, "☕ Latte", self.open_latte_factor, ACCENT_AMBER)
-        btn(money, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
-        btn(money, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
-        btn(money, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
-        btn(money, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
-        btn(money, "📈 Save More", self.open_save_more_tomorrow, ACCENT_TEAL)
-        btn(money, "🌱 Compound", self.open_compound_simulator, ACCENT_LIME)
+        build = section(rowm, "MONEY · BUILD")
+        btn(build, "💵 Money Hub", self.open_money_hub, ACCENT_GOLD)
+        btn(build, "💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD)
+        btn(build, "📈 Save More", self.open_save_more_tomorrow, ACCENT_TEAL)
+        btn(build, "🌱 Compound", self.open_compound_simulator, ACCENT_LIME)
+        btn(build, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
+        btn(build, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
+
+        rowm2 = tk.Frame(topbar, bg=BG_PANEL); rowm2.pack(fill=tk.X, pady=(4, 0))
+        spend = section(rowm2, "MONEY · SPEND")
+        btn(spend, "🛡 Core Four", self.open_core_four, ACCENT_GREEN)
+        btn(spend, "☕ Latte", self.open_latte_factor, ACCENT_AMBER)
+        btn(spend, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
+        btn(spend, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
+        btn(spend, "🔍 Audit", self.open_subscription_audit, ACCENT_RED)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -5362,6 +5366,386 @@ class BookReader:
 
         _recompute()
         e1.focus_set()
+
+    # ---- Zero-Based Financial Auditor (recurring-expense cull) ---------
+    @staticmethod
+    def _subs_monthly(amount, cycle):
+        a = float(amount or 0)
+        return a / 12.0 if cycle == "yearly" else a
+
+    def _subs_all(self, active_only=False):
+        q = ("SELECT id,name,amount,cycle,active,last_reviewed "
+             "FROM subscriptions")
+        if active_only:
+            q += " WHERE active=1"
+        q += " ORDER BY name COLLATE NOCASE"
+        try:
+            return self._db_query(q)
+        except Exception:
+            return []
+
+    def _subs_add(self, name, amount, cycle):
+        now = datetime.now().isoformat()
+        try:
+            self._db_exec(
+                "INSERT INTO subscriptions (name,amount,cycle,active,"
+                "created_at,updated_at) VALUES (?,?,?,1,?,?)",
+                (name, float(amount or 0), cycle, now, now))
+        except Exception:
+            pass
+
+    def _subs_set_active(self, sid, active):
+        try:
+            self._db_exec(
+                "UPDATE subscriptions SET active=?,updated_at=? WHERE id=?",
+                (int(active), datetime.now().isoformat(), sid))
+        except Exception:
+            pass
+
+    def _subs_set_reviewed(self, sid):
+        try:
+            self._db_exec(
+                "UPDATE subscriptions SET last_reviewed=?,updated_at=? WHERE id=?",
+                (date.today().isoformat(), datetime.now().isoformat(), sid))
+        except Exception:
+            pass
+
+    def _subs_delete(self, sid):
+        try:
+            self._db_exec("DELETE FROM subscriptions WHERE id=?", (sid,))
+        except Exception:
+            pass
+
+    def _subs_monthly_total(self, active_only=True):
+        return sum(self._subs_monthly(a, c)
+                   for _i, _n, a, c, _act, _lr in self._subs_all(active_only))
+
+    def _maybe_quarterly_audit(self):
+        """Fire the Zero-Based audit if 90+ days have passed and there are
+        active subscriptions to review."""
+        try:
+            st = self._load_handoff_state() or {}
+            last = st.get("zba_last_audit", "")
+            due = True
+            if last:
+                try:
+                    due = (date.today()
+                           - datetime.fromisoformat(last).date()).days >= 90
+                except Exception:
+                    due = True
+            if not due or not self._subs_all(active_only=True):
+                return
+            self.set_status("🔍 Your quarterly Zero-Based audit is due — does "
+                            "every subscription still earn its place?")
+            self._run_zero_based_audit(force=True)
+        except Exception:
+            pass
+
+    def open_subscription_audit(self):
+        """Manage recurring expenses and launch the Zero-Based audit, which
+        asks of each one: 'Knowing what you know now, would you sign up for
+        this again today?' — and cancels the ones that no longer earn it."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_subs_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._subs_win = win
+        win.title("🔍 Zero-Based Audit — Recurring Expenses")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(560, sw - 80)); h = min(660, max(460, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 460)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._subs_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🔍 Zero-Based Audit", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Every recurring charge must re-earn its place. List "
+                 "them, then run the audit — would you sign up again today?",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 4))
+
+        # ---- add row ----
+        arow = tk.Frame(win, bg=BG_DARK, padx=12); arow.pack(fill=tk.X, pady=(2, 2))
+        name_var = tk.StringVar()
+        name_ent = tk.Entry(arow, textvariable=name_var, width=18, bg=BG_INPUT,
+                            fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                            font=("Segoe UI", 12))
+        name_ent.pack(side=tk.LEFT, ipady=2)
+        tk.Label(arow, text="  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        amt_var = tk.StringVar()
+        amt_ent = tk.Entry(arow, textvariable=amt_var, width=7, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 12))
+        amt_ent.pack(side=tk.LEFT, padx=(2, 4), ipady=2)
+        cycle_var = tk.StringVar(value="monthly")
+        cy = tk.OptionMenu(arow, cycle_var, "monthly", "yearly")
+        _style_optionmenu(cy); cy.configure(width=8, font=("Segoe UI", 10, "bold"))
+        cy.pack(side=tk.LEFT, padx=(0, 6))
+
+        def _add():
+            nm = name_var.get().strip()
+            a = self._money_parse(amt_var.get())
+            if not nm or a is None or a <= 0:
+                messagebox.showinfo("Add", "Name and amount, e.g. Netflix 15.99")
+                return
+            self._subs_add(nm, a, cycle_var.get())
+            name_var.set(""); amt_var.set(""); _render()
+        tk.Button(arow, text="+ Add", command=_add,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        name_ent.bind("<Return>", lambda _e: _add())
+        amt_ent.bind("<Return>", lambda _e: _add())
+
+        total_var = tk.StringVar()
+        tk.Label(win, textvariable=total_var, bg=BG_DARK, fg=ACCENT_AMBER,
+                 font=("Segoe UI", 13, "bold"), anchor=tk.W, padx=14).pack(
+                     fill=tk.X, pady=(4, 2))
+
+        runbar = tk.Frame(win, bg=BG_DARK, padx=12); runbar.pack(fill=tk.X)
+        tk.Button(runbar, text="▶  Run the Zero-Based Audit",
+                  command=lambda: (self._run_zero_based_audit(), _render()),
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=14, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, pady=(2, 6))
+
+        # ---- scrollable list ----
+        outer = tk.Frame(win, bg=BG_DARK); outer.pack(fill=tk.BOTH, expand=True,
+                                                      padx=12, pady=(2, 10))
+        lc = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=lc.yview, width=16)
+        rows_f = tk.Frame(lc, bg=BG_DARK)
+        rows_f.bind("<Configure>",
+                    lambda _e: lc.configure(scrollregion=lc.bbox("all")))
+        lc.create_window((0, 0), window=rows_f, anchor="nw", width=w - 56)
+        lc.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        lc.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _render():
+            for ch in rows_f.winfo_children():
+                ch.destroy()
+            subs = self._subs_all(active_only=False)
+            active = [s for s in subs if s[4]]
+            mtot = self._subs_monthly_total(active_only=True)
+            total_var.set(f"Active: {len(active)}   ·   {self._money_fmt(mtot)}/mo "
+                          f"·   {self._money_fmt(mtot * 12)}/yr")
+            if not subs:
+                tk.Label(rows_f, text="No subscriptions yet. Add Netflix, your "
+                         "phone bill, internet, gym, apps…", bg=BG_DARK,
+                         fg=FG_MUTED, font=("Segoe UI", 11), wraplength=w - 90,
+                         justify=tk.LEFT).pack(anchor="w", pady=10)
+            for sid, name, amount, cycle, act, lastr in subs:
+                mo = self._subs_monthly(amount, cycle)
+                bg = BG_PANEL if act else "#1a1f2e"
+                row = tk.Frame(rows_f, bg=bg, padx=10, pady=6); row.pack(fill=tk.X, pady=2)
+                fg = FG_TEXT if act else FG_MUTED
+                strike = "" if act else "  (cancelled)"
+                tk.Label(row, text=f"{name}{strike}", bg=bg, fg=fg,
+                         font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+                tk.Label(row, text=f"{self._money_fmt(mo)}/mo", bg=bg,
+                         fg=(ACCENT_AMBER if act else FG_MUTED),
+                         font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(10, 0))
+                if lastr:
+                    tk.Label(row, text=f"reviewed {lastr}", bg=bg, fg=FG_MUTED,
+                             font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(10, 0))
+                tk.Button(row, text="🗑", command=lambda s=sid: (
+                              self._subs_delete(s), _render()),
+                          font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                          activebackground=ACCENT_RED, relief=tk.FLAT, padx=8,
+                          pady=2, cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+                if act:
+                    tk.Button(row, text="Cancel", command=lambda s=sid: (
+                                  self._subs_set_active(s, 0), _render()),
+                              font=("Segoe UI", 9, "bold"), bg=BG_INPUT,
+                              fg=FG_MUTED, activebackground=ACCENT_RED,
+                              activeforeground="white", relief=tk.FLAT, padx=8,
+                              pady=2, cursor="hand2", borderwidth=0).pack(
+                                  side=tk.RIGHT, padx=(0, 4))
+                else:
+                    tk.Button(row, text="Reactivate", command=lambda s=sid: (
+                                  self._subs_set_active(s, 1), _render()),
+                              font=("Segoe UI", 9, "bold"), bg=BG_INPUT,
+                              fg=FG_MUTED, activebackground=ACCENT_GREEN,
+                              activeforeground="white", relief=tk.FLAT, padx=8,
+                              pady=2, cursor="hand2", borderwidth=0).pack(
+                                  side=tk.RIGHT, padx=(0, 4))
+
+        self._subs_render = _render   # let the audit refresh this list
+        _render()
+        name_ent.focus_set()
+
+    def _run_zero_based_audit(self, force=False):
+        """Walk each active subscription and ask the zero-based question. A 'No'
+        cancels it on the spot. Records the audit date so it recurs ~quarterly."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        subs = self._subs_all(active_only=True)
+        if not subs:
+            if not force:
+                messagebox.showinfo(
+                    "Zero-Based Audit",
+                    "Add your recurring expenses first, then run the audit.")
+            return
+
+        existing = getattr(self, "_zba_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._zba_win = win
+        win.title("🔍 Zero-Based Audit")
+        win.configure(bg="#1a0a0a")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(560, max(420, sw - 120)); h = 360
+        win.geometry(f"{w}x{h}+{(sw - w) // 2}+{max(0, (sh - h) // 2 - 30)}")
+        win.transient(self.root)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+
+        state = {"i": 0, "kept": 0, "cut": 0, "saved": 0.0}
+
+        tk.Label(win, text="🔍 Zero-Based Audit", bg="#1a0a0a", fg="#fca5a5",
+                 font=("Segoe UI", 13, "bold")).pack(pady=(16, 2))
+        prog_var = tk.StringVar()
+        tk.Label(win, textvariable=prog_var, bg="#1a0a0a", fg=FG_MUTED,
+                 font=("Segoe UI", 9)).pack()
+        q_lbl = tk.Label(win, text="Knowing what you know now, would you sign "
+                         "up for…", bg="#1a0a0a", fg=FG_TEXT,
+                         font=("Segoe UI", 12), wraplength=w - 60,
+                         justify=tk.CENTER)
+        q_lbl.pack(pady=(18, 4))
+        sub_var = tk.StringVar()
+        tk.Label(win, textvariable=sub_var, bg="#1a0a0a", fg="#fde68a",
+                 font=("Segoe UI", 18, "bold"), wraplength=w - 60,
+                 justify=tk.CENTER).pack(pady=(0, 4))
+        tk.Label(win, text="…again today?", bg="#1a0a0a", fg=FG_TEXT,
+                 font=("Segoe UI", 12)).pack()
+
+        btnrow = tk.Frame(win, bg="#1a0a0a"); btnrow.pack(pady=20)
+
+        def _finish():
+            st = self._load_handoff_state() or {}
+            st["zba_last_audit"] = date.today().isoformat()
+            try:
+                self._save_handoff_state(st)
+            except Exception:
+                pass
+            self._zba_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+            if getattr(self, "_subs_render", None):
+                try:
+                    self._subs_render()
+                except Exception:
+                    pass
+            saved = state["saved"]
+            messagebox.showinfo(
+                "Audit complete",
+                f"Kept {state['kept']}, cancelled {state['cut']}.\n\n"
+                + (f"You just cut {self._money_fmt(saved)}/month — "
+                   f"{self._money_fmt(saved * 12)}/year of drains. 💪"
+                   if saved > 0 else
+                   "Everything still earns its place. Nicely lean. 👍"))
+
+        def _show():
+            i = state["i"]
+            if i >= len(subs):
+                _finish(); return
+            sid, name, amount, cycle, act, lastr = subs[i]
+            mo = self._subs_monthly(amount, cycle)
+            prog_var.set(f"{i + 1} of {len(subs)}")
+            sub_var.set(f"{name} — {self._money_fmt(mo)}/mo")
+
+        def _keep():
+            i = state["i"]
+            self._subs_set_reviewed(subs[i][0])
+            state["kept"] += 1; state["i"] += 1; _show()
+
+        def _cancel():
+            i = state["i"]
+            sid, name, amount, cycle, act, lastr = subs[i]
+            mo = self._subs_monthly(amount, cycle)
+            self._subs_set_active(sid, 0)
+            state["cut"] += 1; state["saved"] += mo; state["i"] += 1
+            try:
+                win.attributes("-topmost", False)
+            except tk.TclError:
+                pass
+            messagebox.showinfo(
+                "Cancel it now",
+                f"Go cancel {name} right now, while you're thinking about it.\n\n"
+                f"That's {self._money_fmt(mo * 12)}/year back in your pocket.")
+            try:
+                win.attributes("-topmost", True)
+            except tk.TclError:
+                pass
+            _show()
+        tk.Button(btnrow, text="✅ Yes — keep it", command=_keep,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16, pady=7,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
+        tk.Button(btnrow, text="❌ No — cancel it", command=_cancel,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=16, pady=7,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
+        tk.Button(win, text="Finish later", command=_finish,
+                  font=("Segoe UI", 9), bg="#1a0a0a", fg=FG_MUTED,
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(pady=(0, 8))
+
+        def _wclose():
+            self._zba_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _wclose)
+        _show()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
@@ -15861,6 +16245,8 @@ def main() -> None:
     root.after(1800, app._start_time_auditor)
     # After-Action Review: late-evening nudge if today's reflection is blank.
     root.after(2200, app._maybe_evening_review_nudge)
+    # Zero-Based Audit: force a recurring-expense review every ~90 days.
+    root.after(2600, app._maybe_quarterly_audit)
     # Warm the Whisper speech model in the background so the first 🎤 click
     # doesn't pause to load it.
     root.after(1500, app._preload_whisper)

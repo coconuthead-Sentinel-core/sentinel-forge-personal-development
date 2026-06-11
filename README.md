@@ -123,6 +123,12 @@ Beyond reading, the app is a study and focus workstation:
   *$20/week at 8% → ~$179,000 by 65, only $36k of it your own money*). Shows how
   often your money doubles (Rule of 72). Open it whenever you feel poor or stuck
   and *see* your future wealth — instant hope.
+- **🔍 Zero-Based Audit** — every recurring charge must re-earn its place. List
+  your subscriptions (Netflix, internet, phone, apps) and **every ~90 days the
+  app forces an audit** that walks each one and asks, *"Knowing what you know
+  now, would you sign up for this again today?"* A **No** cancels it on the spot
+  and tells you the yearly drain you just cut. Shows your total monthly/yearly
+  subscription burn at a glance.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 
