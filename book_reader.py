@@ -480,47 +480,72 @@ class BookReader:
         self._scoreboard_summary_var = tk.StringVar(value="")
         self._build_scoreboard(dash)
 
-        # ---- Top action bar --------------------------------------------
-        topbar = tk.Frame(dash, bg=BG_PANEL, padx=8, pady=8)
+        # ---- Top action bar: grouped into labeled panels so the row stays
+        # scannable and the Study button is never pushed off a small screen.
+        topbar = tk.Frame(dash, bg=BG_PANEL, padx=8, pady=6)
         topbar.pack(fill=tk.X)
 
         def btn(parent, text, cmd, color, w=None):
             b = tk.Button(
                 parent, text=text, command=cmd,
-                font=("Segoe UI", 10, "bold"),
+                font=("Segoe UI", 9, "bold"),
                 bg=color, fg="white", activebackground=color,
-                relief=tk.FLAT, padx=8, pady=5, cursor="hand2",
+                relief=tk.FLAT, padx=6, pady=3, cursor="hand2",
                 borderwidth=0,
             )
             if w: b.configure(width=w)
             b.pack(side=tk.LEFT, padx=2)
             return b
 
-        # (📂 Open and 📚 Library moved into the Study workspace.)
-        self._ideas_btn = btn(topbar, "🧠  Ideas", self.open_idea_warehouse, ACCENT_AMBER)
-        btn(topbar, "🚀  5-4-3-2-1",         self.launch_momentum,      ACCENT_ORANGE)
-        btn(topbar, "🎯  Focus",             self.open_focus_mode,      ACCENT_PURPLE)
-        btn(topbar, "🚫  Not-To-Do",         self.open_not_to_do,       ACCENT_RED)
-        btn(topbar, "⏱  Time Log",           self.open_time_log,        ACCENT_CYAN)
-        self._review_btn = btn(topbar, "🪞  Review", self.open_after_action_review, ACCENT_INDIGO)
-        btn(topbar, "🗒  Prompt Library",    self.open_prompt_library,  ACCENT_GREEN)
-        btn(topbar, "🔊  Read aloud",        self.read_aloud,           ACCENT_GREEN)
-        btn(topbar, "■  Stop",               self.stop_reading,         ACCENT_SLATE)
-        self.mic_btn = btn(topbar, "🎤  Voice note", self.toggle_mic,   ACCENT_MIC)
+        def section(parent, title, side=tk.LEFT):
+            """A small labeled, recessed panel that visually groups buttons."""
+            wrap = tk.Frame(parent, bg=BG_PANEL)
+            wrap.pack(side=side, padx=(0, 10))
+            tk.Label(wrap, text=title, bg=BG_PANEL, fg=FG_MUTED,
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=4)
+            inner = tk.Frame(wrap, bg=BG_DARK, padx=4, pady=3)
+            inner.pack()
+            return inner
+
+        # (📂 Open and 📚 Library live in the Study workspace.)
+        # --- Row 1: plan & focus tools ---
+        row1 = tk.Frame(topbar, bg=BG_PANEL); row1.pack(fill=tk.X)
+        plan = section(row1, "PLAN")
+        self._ideas_btn = btn(plan, "🧠 Ideas",  self.open_idea_warehouse, ACCENT_AMBER)
+        btn(plan, "🚀 Launch", self.launch_momentum, ACCENT_ORANGE)
+        btn(plan, "🎯 Focus",  self.open_focus_mode,  ACCENT_PURPLE)
+        track = section(row1, "TRACK")
+        btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
+        self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
+        btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
+
+        # --- Row 2: read, capture/save, and display controls ---
+        row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
+
+        # Display (font + text size) sits on the right of row 2.
+        disp_wrap = tk.Frame(row2, bg=BG_PANEL); disp_wrap.pack(side=tk.RIGHT)
+        tk.Label(disp_wrap, text="DISPLAY", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="e", padx=4)
+        right_frame = tk.Frame(disp_wrap, bg=BG_DARK, padx=4, pady=3)
+        right_frame.pack()
+
+        read = section(row2, "READ ALOUD")
+        btn(read, "🔊 Read", self.read_aloud, ACCENT_GREEN)
+        btn(read, "■ Stop",  self.stop_reading, ACCENT_SLATE)
+        self.mic_btn = btn(read, "🎤 Voice", self.toggle_mic, ACCENT_MIC)
         # Mic accuracy: Fast (base) / Accurate (small) / Best (medium).
         self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _mq = tk.OptionMenu(topbar, self._whisper_quality_var,
+        _mq = tk.OptionMenu(read, self._whisper_quality_var,
                             "Fast", "Accurate", "Best",
                             command=self._set_mic_quality)
         _style_optionmenu(_mq)
-        _mq.configure(width=8, font=("Segoe UI", 10, "bold"))
-        _mq.pack(side=tk.LEFT, padx=(0, 2))
-        btn(topbar, "💾  Save",              self.save_excerpt,         ACCENT_PINK)
-        btn(topbar, "📓  Study",             self.open_study_workspace, ACCENT_RED)
+        _mq.configure(width=7, font=("Segoe UI", 9, "bold"))
+        _mq.pack(side=tk.LEFT, padx=(2, 0))
 
-        # Right side: font picker + text-size buttons
-        right_frame = tk.Frame(topbar, bg=BG_PANEL)
-        right_frame.pack(side=tk.RIGHT)
+        work = section(row2, "CAPTURE")
+        btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
+        btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
+        btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED)
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
@@ -555,19 +580,19 @@ class BookReader:
         self.available_voices.append("Microsoft System")
         self.voice_var = tk.StringVar(value=self.available_voices[0])
 
-        tk.Label(right_frame, text="Font:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=(0, 4))
+        tk.Label(right_frame, text="Font:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(0, 4))
         self.font_var = tk.StringVar(value=self.font_family)
         font_menu = tk.OptionMenu(
             right_frame, self.font_var, *self.available_fonts,
             command=self._on_font_change,
         )
         _style_optionmenu(font_menu)
-        font_menu.configure(width=18)
-        font_menu.pack(side=tk.LEFT, padx=(0, 12))
+        font_menu.configure(width=16)
+        font_menu.pack(side=tk.LEFT, padx=(0, 10))
 
-        tk.Label(right_frame, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=(0, 4))
+        tk.Label(right_frame, text="Text:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(0, 4))
         btn(right_frame, "A−", self.smaller_text, ACCENT_SLATE)
         btn(right_frame, "A+", self.bigger_text, ACCENT_SLATE)
 
