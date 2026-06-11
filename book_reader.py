@@ -246,6 +246,7 @@ ACCENT_PINK   = "#db2777"   # save-for-Claude button
 ACCENT_INDIGO = "#4f46e5"   # After-Action Review (daily reflection)
 ACCENT_ORANGE = "#ea580c"   # 5-4-3-2-1 Momentum / Launch button
 ACCENT_EMERALD = "#059669"  # Pay Yourself First (money / savings)
+ACCENT_GOLD    = "#ca8a04"  # Money hub (at-a-glance summary)
 
 # "Winner's Time Log" categories — one quick tap files where the last hour
 # went. (label, pie color). High-value first so the eye lands on A-1 work;
@@ -523,6 +524,7 @@ class BookReader:
         # --- Row 1b: money / wealth-defense tools (their own row) ---
         rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
         money = section(rowm, "MONEY")
+        btn(money, "💵 Money Hub", self.open_money_hub, ACCENT_GOLD)
         btn(money, "💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD)
         btn(money, "🛡 Core Four", self.open_core_four, ACCENT_GREEN)
         btn(money, "☕ Latte", self.open_latte_factor, ACCENT_AMBER)
@@ -4673,6 +4675,167 @@ class BookReader:
 
         _recompute()
         (price_ent if wage0 else wage_ent).focus_set()
+
+    # ---- Money Hub (at-a-glance summary of all the money tools) --------
+    def _money_snapshot(self) -> dict:
+        """Roll up the key numbers from every money tool, for the hub card."""
+        st = self._load_handoff_state() or {}
+        cf = self._core_four_load()
+        cf_total = (cf["core_rent"] + cf["core_utilities"] + cf["core_food"]
+                    + cf["core_gas"])
+        avail = cf["available"]
+        # run rate
+        try:
+            exp = float(st.get("run_rate_expenses", 0)) or cf_total
+        except (TypeError, ValueError):
+            exp = cf_total
+        try:
+            cash = float(st.get("emergency_cash", 0))
+        except (TypeError, ValueError):
+            cash = 0.0
+        months = self._run_rate_months(cash, exp)
+        # latte this week
+        latte = sum(r[2] for r in self._latte_week_rows())
+        # nearest dream bucket (closest to done, target>0)
+        best = None
+        for bid, name, target, saved, emoji, image_path in self._dream_buckets():
+            if target and target > 0:
+                pct = min(1.0, saved / target)
+                if best is None or pct > best[2]:
+                    best = (name, saved, pct, target, emoji)
+        # wishlist
+        waiting = len(self._wishlist_waiting())
+        dn, dsum, bn = self._wishlist_counts()
+        return {"fi": self._fi_balance(), "cf_total": cf_total, "avail": avail,
+                "months": months, "latte": latte, "best_bucket": best,
+                "waiting": waiting, "kept": dsum}
+
+    def open_money_hub(self) -> None:
+        """One glance at all the money numbers — savings, run rate, survival
+        budget, this week's leaks, nearest dream, cooling-off wishlist — each
+        with a one-tap jump to the full tool."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_money_hub_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        s = self._money_snapshot()
+        win = tk.Toplevel(self.root)
+        self._money_hub_win = win
+        win.title("💵 Money Hub")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(640, max(480, sw - 100)); h = min(660, max(440, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(480, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._money_hub_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        def _jump(opener):
+            opener()
+            # refresh the hub afterward so changes show next time it's focused
+            try:
+                _close()
+            except Exception:
+                pass
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="💵 Money Hub", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="🔄", command=lambda: (_close(), self.open_money_hub()),
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_SLATE, activeforeground="white",
+                  relief=tk.FLAT, padx=8, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT, padx=(0, 6))
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Your whole financial picture in one glance.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        body = tk.Frame(win, bg=BG_DARK, padx=10, pady=4)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        def card(icon, color, label, value, opener):
+            c = tk.Frame(body, bg=BG_PANEL, padx=12, pady=9,
+                         highlightthickness=1, highlightbackground="#334155")
+            c.pack(fill=tk.X, pady=4)
+            tk.Label(c, text=icon, bg=BG_PANEL, fg=color,
+                     font=("Segoe UI", 20)).pack(side=tk.LEFT, padx=(0, 12))
+            tk.Button(c, text="Open →", command=lambda: _jump(opener),
+                      font=("Segoe UI", 9, "bold"), bg=color, fg="white",
+                      activebackground=color, relief=tk.FLAT, padx=10, pady=3,
+                      cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+            mid = tk.Frame(c, bg=BG_PANEL); mid.pack(side=tk.LEFT, fill=tk.X,
+                                                     expand=True)
+            tk.Label(mid, text=label, bg=BG_PANEL, fg=FG_MUTED,
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w")
+            tk.Label(mid, text=value, bg=BG_PANEL, fg=FG_TEXT,
+                     font=("Segoe UI", 15, "bold"), wraplength=w - 180,
+                     justify=tk.LEFT, anchor="w").pack(anchor="w", fill=tk.X)
+
+        # 💰 savings
+        card("💰", ACCENT_EMERALD, "FINANCIAL INDEPENDENCE (locked savings)",
+             f"{self._money_fmt(s['fi'])}", self.open_pay_yourself_first)
+        # 🔋 run rate
+        if s["months"] is None:
+            rr = "Set your wage & expenses"
+        else:
+            rr = f"{s['months']:.1f} months of survival fuel"
+        card("🔋", ACCENT_CYAN, "RUN RATE (emergency runway)", rr,
+             self.open_run_rate)
+        # 🛡 core four
+        if s["avail"] <= 0 and s["cf_total"] <= 0:
+            cfv = "Set your survival numbers"
+        elif s["avail"] + 0.001 >= s["cf_total"] and s["cf_total"] > 0:
+            cfv = f"✅ Secured — {self._money_fmt(s['avail'] - s['cf_total'])} left"
+        elif s["cf_total"] > 0:
+            cfv = f"🛑 Short {self._money_fmt(s['cf_total'] - s['avail'])}"
+        else:
+            cfv = "Set your survival numbers"
+        card("🛡", ACCENT_GREEN, "CORE FOUR (Rent·Utilities·Food·Gas)", cfv,
+             self.open_core_four)
+        # ☕ latte
+        card("☕", ACCENT_AMBER, "LATTE FACTOR (small leaks this week)",
+             f"{self._money_fmt(s['latte'])}  →  {self._money_fmt(s['latte']*52)}/yr",
+             self.open_latte_factor)
+        # 🪣 dream bucket
+        if s["best_bucket"]:
+            name, saved, pct, target, emoji = s["best_bucket"]
+            dv = f"{emoji} {name}: {self._money_fmt(saved)}/{self._money_fmt(target)} ({round(pct*100)}%)"
+        else:
+            dv = "Set a target on a bucket"
+        card("🪣", ACCENT_PINK, "DREAM BUCKET (closest to funded)", dv,
+             self.open_dream_buckets)
+        # ⏳ wishlist
+        card("⏳", ACCENT_INDIGO, "WISHLIST (cooling off · money kept)",
+             f"{s['waiting']} waiting  ·  {self._money_fmt(s['kept'])} kept",
+             self.open_wishlist)
+        # ⌛ time cost
+        card("⌛", ACCENT_PURPLE, "TIME COST (price → hours of life)",
+             "Check before you buy", self.open_time_money)
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

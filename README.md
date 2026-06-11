@@ -107,6 +107,10 @@ Beyond reading, the app is a study and focus workstation:
   Brixton. Is it worth 6.5 hours of your life?"* — an instant cure for impulse
   buys. **Sleep on it** parks the item in your 7-day Wishlist; **Skip it** tells
   you the hours of life you just kept.
+- **💵 Money Hub** — your whole financial picture in one glance: locked savings,
+  run-rate months, Core Four status, this week's leaks, your nearest Dream
+  Bucket, and the cooling-off Wishlist — each on a card with a one-tap jump to
+  the full tool, so you don't have to open every window to check in.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 
