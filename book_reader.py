@@ -11056,19 +11056,21 @@ try {
     def _scoreboard_card(self, frame, mid, text, is_done, streak):
         bg = ACCENT_GREEN if is_done else BG_INPUT
         fg = "white" if is_done else FG_TEXT
-        card = tk.Frame(frame, bg=bg, padx=10, pady=4, cursor="hand2",
+        # Keep each card compact so all 2-3 fit the strip without clipping:
+        # tighter padding, smaller font, and truncate long measure text.
+        disp = text if len(text) <= 20 else text[:19] + "…"
+        card = tk.Frame(frame, bg=bg, padx=6, pady=2, cursor="hand2",
                         highlightthickness=1,
                         highlightbackground="#22c55e" if is_done else "#334155")
-        card.pack(side=tk.LEFT, padx=4)
+        card.pack(side=tk.LEFT, padx=3)
         mark = "✓" if is_done else "○"
-        top = tk.Label(card, text=f"{mark}  {text}", bg=bg, fg=fg,
-                       font=("Segoe UI", 10, "bold"))
+        top = tk.Label(card, text=f"{mark} {disp}", bg=bg, fg=fg,
+                       font=("Segoe UI", 9, "bold"))
         top.pack(anchor="w")
         sub = tk.Label(card,
-                       text=(f"🔥 {streak}-day streak" if streak
-                             else "tap to mark done"),
+                       text=(f"🔥 {streak}d" if streak else "tap ✓"),
                        bg=bg, fg=("#dcfce7" if is_done else FG_MUTED),
-                       font=("Segoe UI", 8))
+                       font=("Segoe UI", 7))
         sub.pack(anchor="w")
         for wdg in (card, top, sub):
             wdg.bind("<Button-1>", lambda _e, m=mid: self._toggle_lead_measure(m))
