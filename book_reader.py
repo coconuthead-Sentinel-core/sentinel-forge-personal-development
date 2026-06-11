@@ -529,6 +529,7 @@ class BookReader:
         btn(money, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
         btn(money, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
         btn(money, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
+        btn(money, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -4458,6 +4459,220 @@ class BookReader:
 
         _recompute()
         (cash_ent if cash0 == 0 else exp_ent).focus_set()
+
+    # ---- Time vs. Money translator (price -> hours of your life) -------
+    @staticmethod
+    def _time_cost_hours(price, wage, tax_pct):
+        """Hours of work a purchase costs. None if no usable (net) wage."""
+        net = float(wage) * (1 - (float(tax_pct or 0) / 100.0))
+        if net <= 0:
+            return None
+        return float(price) / net
+
+    def open_time_money(self) -> None:
+        """The Time vs. Money translator: a price isn't dollars, it's the hours
+        of life you traded to earn it. Type a price and it flashes the real
+        cost — 'Is it worth 6.5 hours of your life?' — which cures impulse buys."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_tvm_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        st = self._load_handoff_state() or {}
+
+        def _f(k, d=0.0):
+            try:
+                return float(st.get(k, d))
+            except (TypeError, ValueError):
+                return d
+        wage0 = _f("tvm_wage"); tax0 = _f("tvm_tax")
+        job0 = str(st.get("tvm_job", ""))
+
+        win = tk.Toplevel(self.root)
+        self._tvm_win = win
+        win.title("⌛ Time vs. Money")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(700, max(540, sw - 90)); h = min(560, max(420, sh - 120))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(540, 420)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._tvm_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="⌛ Time vs. Money", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="A price isn't dollars — it's the hours of life you "
+                 "traded to earn it. So… is it worth it?", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        # ---- your wage settings ----
+        wrow = tk.Frame(win, bg=BG_DARK, padx=12); wrow.pack(fill=tk.X, pady=(2, 2))
+        tk.Label(wrow, text="My pay  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        wage_var = tk.StringVar(value=(f"{wage0:g}" if wage0 else ""))
+        wage_ent = tk.Entry(wrow, textvariable=wage_var, width=7, bg=BG_INPUT,
+                            fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                            font=("Segoe UI", 11, "bold"))
+        wage_ent.pack(side=tk.LEFT, padx=(2, 2), ipady=2)
+        tk.Label(wrow, text="/hr   taxes", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tax_var = tk.StringVar(value=(f"{tax0:g}" if tax0 else ""))
+        tax_ent = tk.Entry(wrow, textvariable=tax_var, width=4, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 11, "bold"))
+        tax_ent.pack(side=tk.LEFT, padx=(2, 1), ipady=2)
+        tk.Label(wrow, text="%   at", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        job_var = tk.StringVar(value=job0)
+        job_ent = tk.Entry(wrow, textvariable=job_var, width=16, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 11))
+        job_ent.pack(side=tk.LEFT, padx=(4, 0), ipady=2)
+        tk.Label(wrow, text="(where you work)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(4, 0))
+
+        # ---- the purchase ----
+        prow = tk.Frame(win, bg=BG_DARK, padx=12); prow.pack(fill=tk.X, pady=(8, 2))
+        tk.Label(prow, text="What is it?", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        item_var = tk.StringVar()
+        item_ent = tk.Entry(prow, textvariable=item_var, width=16, bg=BG_INPUT,
+                            fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                            font=("Segoe UI", 12))
+        item_ent.pack(side=tk.LEFT, padx=(6, 8), ipady=2)
+        tk.Label(prow, text="Price  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        price_var = tk.StringVar()
+        price_ent = tk.Entry(prow, textvariable=price_var, width=9, bg=BG_INPUT,
+                            fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                            font=("Segoe UI", 13, "bold"))
+        price_ent.pack(side=tk.LEFT, padx=(4, 0), ipady=3)
+
+        # ---- the verdict ----
+        verdict = tk.Frame(win, bg="#1e1b4b", padx=14, pady=14)
+        verdict.pack(fill=tk.BOTH, expand=True, padx=12, pady=10)
+        big_var = tk.StringVar()
+        tk.Label(verdict, textvariable=big_var, bg="#1e1b4b", fg="#c7d2fe",
+                 font=("Segoe UI", 18, "bold"), wraplength=w - 70,
+                 justify=tk.CENTER).pack(expand=True)
+        ask_var = tk.StringVar()
+        tk.Label(verdict, textvariable=ask_var, bg="#1e1b4b", fg="#a5b4fc",
+                 font=("Segoe UI", 12, "italic"), wraplength=w - 70,
+                 justify=tk.CENTER).pack()
+
+        def _save():
+            stt = self._load_handoff_state() or {}
+            stt["tvm_wage"] = self._money_parse(wage_var.get()) or 0.0
+            try:
+                stt["tvm_tax"] = float(tax_var.get() or 0)
+            except ValueError:
+                stt["tvm_tax"] = 0.0
+            stt["tvm_job"] = job_var.get().strip()
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+
+        def _cur_hours():
+            price = self._money_parse(price_var.get()) or 0.0
+            wage = self._money_parse(wage_var.get()) or 0.0
+            try:
+                tax = float(tax_var.get() or 0)
+            except ValueError:
+                tax = 0.0
+            if price <= 0:
+                return None, price
+            return self._time_cost_hours(price, wage, tax), price
+
+        def _recompute(*_a):
+            hours, price = _cur_hours()
+            item = item_var.get().strip()
+            subj = item if item else "This"
+            if price <= 0:
+                big_var.set("Type a price to see its real cost.")
+                ask_var.set("")
+                return
+            if hours is None:
+                big_var.set("Set your hourly pay above first.")
+                ask_var.set("")
+                return
+            job = job_var.get().strip()
+            where = f" working at {job}" if job else " of work"
+            extra = (f"   (≈ {hours / 8:.1f} work-days)" if hours >= 8 else "")
+            big_var.set(f"{subj} costs {hours:.1f} hours of your life{where}.{extra}")
+            ask_var.set(f"Is it worth {hours:.1f} hours of your life?")
+
+        for e in (wage_ent, tax_ent, price_ent, item_ent):
+            e.bind("<KeyRelease>", _recompute)
+        for e in (wage_ent, tax_ent, job_ent):
+            e.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
+        job_ent.bind("<KeyRelease>", _recompute)
+
+        # ---- decision buttons ----
+        brow = tk.Frame(win, bg=BG_DARK, padx=12); brow.pack(fill=tk.X, pady=(0, 10))
+
+        def _worth_it():
+            self.set_status("✅ Then enjoy it — guilt-free. You earned it.")
+
+        def _sleep_on_it():
+            hours, price = _cur_hours()
+            if price <= 0:
+                messagebox.showinfo("Time vs. Money", "Enter a price first.")
+                return
+            self._wishlist_add(item_var.get().strip() or "Wishlist item",
+                               price, 7)
+            self.set_status("⏳ Parked in your Wishlist for 7 days. If you still "
+                            "want it then, it's real.")
+            item_var.set(""); price_var.set(""); _recompute()
+
+        def _skip_it():
+            hours, price = _cur_hours()
+            msg = ("💪 Skipped — you just kept "
+                   + (f"{hours:.1f} hours of your life."
+                      if hours else "your hard-earned money."))
+            self.set_status(msg)
+            item_var.set(""); price_var.set(""); _recompute()
+        tk.Button(brow, text="✅ It's worth it", command=_worth_it,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=3)
+        tk.Button(brow, text="⏳ Sleep on it (Wishlist)", command=_sleep_on_it,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_INDIGO, fg="white",
+                  activebackground=ACCENT_INDIGO, relief=tk.FLAT, padx=12, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=3)
+        tk.Button(brow, text="💪 Skip it", command=_skip_it,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_EMERALD, fg="white",
+                  activebackground=ACCENT_EMERALD, relief=tk.FLAT, padx=12, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=3)
+
+        _recompute()
+        (price_ent if wage0 else wage_ent).focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

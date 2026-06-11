@@ -101,6 +101,12 @@ Beyond reading, the app is a study and focus workstation:
   fuel"*) with a marked 3-month safe line, and one tap sets an automatic
   **3-month Emergency Fund goal** as a Dream Bucket. Pulls expenses from Core
   Four and cash from your Pay-First balance.
+- **⌛ Time Cost (time vs. money translator)** — a price isn't dollars, it's the
+  hours of life you traded to earn it. Type a price and your after-tax wage and
+  it flashes the real cost: *"This costs 6.5 hours of your life working at The
+  Brixton. Is it worth 6.5 hours of your life?"* — an instant cure for impulse
+  buys. **Sleep on it** parks the item in your 7-day Wishlist; **Skip it** tells
+  you the hours of life you just kept.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 
