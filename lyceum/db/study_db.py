@@ -286,6 +286,28 @@ CREATE TABLE IF NOT EXISTS daily_review (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- "Pay Yourself First" (George S. Clason / Bach): a part of all you earn is
+-- yours to keep. Each paycheck's savings cut (gross * save_pct) is recorded
+-- here and locked into the Financial Independence balance BEFORE the rest is
+-- budgeted. `budget_items` then allocates only the spendable remainder.
+CREATE TABLE IF NOT EXISTS paychecks (
+    id INTEGER PRIMARY KEY,
+    pay_date TEXT NOT NULL,            -- YYYY-MM-DD
+    gross REAL NOT NULL DEFAULT 0,
+    save_pct REAL NOT NULL DEFAULT 10, -- percent paid to yourself first
+    saved REAL NOT NULL DEFAULT 0,     -- gross * save_pct/100 (the locked cut)
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS budget_items (
+    id INTEGER PRIMARY KEY,
+    paycheck_id INTEGER NOT NULL,      -- draws from this paycheck's spendable
+    category TEXT NOT NULL DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_budget_paycheck ON budget_items(paycheck_id);
 """
 
 

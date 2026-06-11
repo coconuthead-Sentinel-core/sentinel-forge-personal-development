@@ -67,6 +67,12 @@ Beyond reading, the app is a study and focus workstation:
   counts down **5 – 4 – 3 – 2 – 1 – GO!** with a beat per second, then drops
   you straight into **Focus Mode** on your #1 task — the activation energy to
   *move* before your brain talks you out of it.
+- **💰 Pay Yourself First** — Clason's first law of wealth: *a part of all you
+  earn is yours to keep.* Enter a paycheck and the app deducts your savings
+  **first** (10%, or start at 1% if money's tight), **locks** it into a
+  Financial Independence balance you can't budget away, and only lets you
+  allocate the **spendable remainder** across rent, gas, food, etc. — it
+  refuses any budget line that would dip into your savings.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

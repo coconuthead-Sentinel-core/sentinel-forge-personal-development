@@ -245,6 +245,7 @@ ACCENT_AMBER  = "#d97706"   # paste-from-clipboard button
 ACCENT_PINK   = "#db2777"   # save-for-Claude button
 ACCENT_INDIGO = "#4f46e5"   # After-Action Review (daily reflection)
 ACCENT_ORANGE = "#ea580c"   # 5-4-3-2-1 Momentum / Launch button
+ACCENT_EMERALD = "#059669"  # Pay Yourself First (money / savings)
 
 # "Winner's Time Log" categories — one quick tap files where the last hour
 # went. (label, pie color). High-value first so the eye lands on A-1 work;
@@ -518,6 +519,8 @@ class BookReader:
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
+        money = section(row1, "MONEY")
+        btn(money, "💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -2760,6 +2763,404 @@ class BookReader:
             if n > 0:
                 self.root.after(350, lambda: _pulse(n - 1))
         _pulse(times)
+
+    # ---- Pay Yourself First (Clason/Bach wealth automator) -------------
+    @staticmethod
+    def _money_parse(s):
+        try:
+            s = str(s).replace("$", "").replace(",", "").strip()
+            if not s:
+                return None
+            v = float(s)
+            return v if v >= 0 else None
+        except (ValueError, TypeError):
+            return None
+
+    @staticmethod
+    def _money_fmt(x):
+        try:
+            return "${:,.2f}".format(float(x))
+        except (ValueError, TypeError):
+            return "$0.00"
+
+    def _fi_settings(self) -> tuple[float, float]:
+        """(save_pct, opening_balance) — persisted in HANDOFF_STATE."""
+        st = self._load_handoff_state() or {}
+        try:
+            pct = float(st.get("fi_save_pct", 10))
+        except (TypeError, ValueError):
+            pct = 10.0
+        pct = max(0.0, min(100.0, pct))
+        try:
+            opening = float(st.get("fi_opening_balance", 0))
+        except (TypeError, ValueError):
+            opening = 0.0
+        return pct, opening
+
+    def _fi_save_settings(self, pct=None, opening=None) -> None:
+        st = self._load_handoff_state() or {}
+        if pct is not None:
+            st["fi_save_pct"] = float(pct)
+        if opening is not None:
+            st["fi_opening_balance"] = float(opening)
+        try:
+            self._save_handoff_state(st)
+        except Exception:
+            pass
+
+    def _fi_balance(self) -> float:
+        _, opening = self._fi_settings()
+        try:
+            total = self._db_query(
+                "SELECT COALESCE(SUM(saved),0) FROM paychecks")[0][0] or 0
+        except Exception:
+            total = 0
+        return float(opening) + float(total)
+
+    def _fi_add_paycheck(self, gross: float, pct: float) -> tuple[int, float]:
+        saved = round(float(gross) * float(pct) / 100.0, 2)
+        now = datetime.now()
+        try:
+            pid = self._db_exec(
+                "INSERT INTO paychecks (pay_date,gross,save_pct,saved,created_at) "
+                "VALUES (?,?,?,?,?)",
+                (now.strftime("%Y-%m-%d"), float(gross), float(pct), saved,
+                 now.isoformat()))
+            return pid, saved
+        except Exception:
+            return 0, 0.0
+
+    def _fi_paychecks(self):
+        try:
+            return self._db_query(
+                "SELECT id,pay_date,gross,save_pct,saved FROM paychecks "
+                "ORDER BY date(pay_date) DESC, id DESC")
+        except Exception:
+            return []
+
+    def _fi_budget_items(self, pid):
+        try:
+            return self._db_query(
+                "SELECT id,category,amount FROM budget_items "
+                "WHERE paycheck_id=? ORDER BY id", (pid,))
+        except Exception:
+            return []
+
+    def _fi_budgeted(self, pid) -> float:
+        try:
+            return float(self._db_query(
+                "SELECT COALESCE(SUM(amount),0) FROM budget_items "
+                "WHERE paycheck_id=?", (pid,))[0][0] or 0)
+        except Exception:
+            return 0.0
+
+    def open_pay_yourself_first(self) -> None:
+        """George Clason's first law of wealth: a part of all you earn is yours
+        to keep. Enter a paycheck and the app deducts your savings % FIRST,
+        locks it into the Financial Independence balance, and only lets you
+        budget the spendable remainder for rent, gas, and food."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_fi_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        pct0, _opening = self._fi_settings()
+        self._fi_current_pid = None
+
+        win = tk.Toplevel(self.root)
+        self._fi_win = win
+        win.title("💰 Pay Yourself First")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(900, max(660, sw - 80)); h = min(680, max(470, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(660, 470)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._fi_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="💰 Pay Yourself First", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="A part of all you earn is yours to keep. Pay "
+                 "yourself first — before rent, gas, or food.", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 2))
+
+        # ---- Financial Independence account (locked) ----
+        fi = tk.Frame(win, bg="#052e2b", padx=14, pady=10)
+        fi.pack(fill=tk.X, padx=12, pady=(4, 6))
+        tk.Label(fi, text="🔒 Financial Independence — yours to keep",
+                 bg="#052e2b", fg="#6ee7b7", font=("Segoe UI", 10, "bold")
+                 ).pack(anchor="w")
+        bal_var = tk.StringVar()
+        tk.Label(fi, textvariable=bal_var, bg="#052e2b", fg="#34d399",
+                 font=("Segoe UI", 28, "bold")).pack(anchor="w")
+        rate_row = tk.Frame(fi, bg="#052e2b"); rate_row.pack(anchor="w", pady=(2, 0))
+        tk.Label(rate_row, text="Pay yourself first:", bg="#052e2b",
+                 fg="#a7f3d0", font=("Segoe UI", 10)).pack(side=tk.LEFT)
+        pct_var = tk.StringVar(value=f"{pct0:g}%")
+        pct_menu = tk.OptionMenu(rate_row, pct_var,
+                                 "1%", "2%", "3%", "5%", "10%", "15%", "20%",
+                                 command=lambda _v: self._fi_save_settings(
+                                     pct=float(pct_var.get().rstrip("%"))))
+        _style_optionmenu(pct_menu); pct_menu.configure(width=5, font=("Segoe UI", 10, "bold"))
+        pct_menu.pack(side=tk.LEFT, padx=(6, 0))
+        tk.Label(rate_row, text="start at 1% if money's tight — what matters is "
+                 "the habit.", bg="#052e2b", fg="#a7f3d0",
+                 font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(10, 0))
+
+        # ---- add a paycheck ----
+        addrow = tk.Frame(win, bg=BG_DARK, padx=12); addrow.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(addrow, text="New paycheck  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        pay_var = tk.StringVar()
+        pay_ent = tk.Entry(addrow, textvariable=pay_var, width=12, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 12))
+        pay_ent.pack(side=tk.LEFT, padx=(4, 6), ipady=3)
+
+        def _refresh_balance():
+            bal_var.set(self._money_fmt(self._fi_balance()))
+
+        def _refresh_list(select_pid=None):
+            listbox.delete(0, tk.END)
+            rows = self._fi_paychecks()
+            self._fi_list_pids = [r[0] for r in rows]
+            for _id, pdate, gross, spct, saved in rows:
+                listbox.insert(tk.END, f"{pdate}   {self._money_fmt(gross)}"
+                               f"   🔒{self._money_fmt(saved)}")
+            if select_pid is not None and select_pid in self._fi_list_pids:
+                i = self._fi_list_pids.index(select_pid)
+                listbox.selection_clear(0, tk.END); listbox.selection_set(i)
+                _load_paycheck(select_pid)
+            elif self._fi_list_pids:
+                listbox.selection_clear(0, tk.END); listbox.selection_set(0)
+                _load_paycheck(self._fi_list_pids[0])
+            else:
+                _load_paycheck(None)
+
+        def _add_paycheck():
+            g = self._money_parse(pay_var.get())
+            if g is None or g <= 0:
+                messagebox.showinfo("Paycheck",
+                                    "Enter your paycheck amount, e.g. 1200")
+                return
+            pct = float(pct_var.get().rstrip("%"))
+            pid, saved = self._fi_add_paycheck(g, pct)
+            pay_var.set("")
+            _refresh_balance()
+            _refresh_list(select_pid=pid)
+            self.set_status(f"💰 Paid yourself first: {self._money_fmt(saved)} "
+                            f"locked away. {self._money_fmt(g - saved)} to budget.")
+        tk.Button(addrow, text="💵 Pay yourself first", command=_add_paycheck,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_EMERALD, fg="white",
+                  activebackground=ACCENT_EMERALD, relief=tk.FLAT, padx=12,
+                  pady=4, cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        pay_ent.bind("<Return>", lambda _e: _add_paycheck())
+
+        # ---- paned: paycheck history | budget the remainder ----
+        paned = tk.PanedWindow(win, orient=tk.HORIZONTAL, sashwidth=6,
+                               bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
+        paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
+
+        left = tk.Frame(paned, bg=BG_DARK)
+        tk.Label(left, text="Paychecks (newest first)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(
+                     fill=tk.X, pady=(0, 4))
+        ldel = tk.Frame(left, bg=BG_DARK); ldel.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 0))
+
+        def _delete_paycheck():
+            pid = self._fi_current_pid
+            if pid is None:
+                return
+            if not messagebox.askyesno(
+                    "Delete paycheck",
+                    "Delete this paycheck? Its locked savings will come back "
+                    "out of your Financial Independence balance."):
+                return
+            try:
+                self._db_exec("DELETE FROM budget_items WHERE paycheck_id=?", (pid,))
+                self._db_exec("DELETE FROM paychecks WHERE id=?", (pid,))
+            except Exception:
+                pass
+            _refresh_balance(); _refresh_list()
+        tk.Button(ldel, text="🗑 Delete paycheck", command=_delete_paycheck,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        lwrap = tk.Frame(left, bg=BG_DARK); lwrap.pack(fill=tk.BOTH, expand=True)
+        listbox = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT,
+                             selectbackground=ACCENT_EMERALD, selectforeground="white",
+                             font=("Consolas", 10), relief=tk.FLAT, bd=0,
+                             highlightthickness=0, activestyle="none", width=30)
+        lsb = tk.Scrollbar(lwrap, command=listbox.yview, width=16)
+        listbox.configure(yscrollcommand=lsb.set)
+        lsb.pack(side=tk.RIGHT, fill=tk.Y)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        paned.add(left, minsize=240)
+
+        right = tk.Frame(paned, bg=BG_DARK)
+        pc_title = tk.StringVar(value="")
+        tk.Label(right, textvariable=pc_title, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold"), anchor=tk.W).pack(fill=tk.X, padx=2)
+        locked_var = tk.StringVar(value="")
+        tk.Label(right, textvariable=locked_var, bg=BG_DARK, fg="#34d399",
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(fill=tk.X, padx=2)
+        spend_var = tk.StringVar(value="")
+        tk.Label(right, textvariable=spend_var, bg=BG_DARK, fg=ACCENT_CYAN,
+                 font=("Segoe UI", 12, "bold"), anchor=tk.W).pack(fill=tk.X, padx=2)
+        remain_var = tk.StringVar(value="")
+        remain_lbl = tk.Label(right, textvariable=remain_var, bg=BG_DARK,
+                              fg=FG_MUTED, font=("Segoe UI", 11, "bold"),
+                              anchor=tk.W)
+        remain_lbl.pack(fill=tk.X, padx=2, pady=(2, 4))
+
+        # add-budget row
+        brow = tk.Frame(right, bg=BG_DARK); brow.pack(fill=tk.X, pady=(2, 4))
+        cat_var = tk.StringVar(value="Rent")
+        cat_menu = tk.OptionMenu(brow, cat_var, "Rent", "Food", "Gas",
+                                 "Utilities", "Phone", "Insurance", "Debt",
+                                 "Savings+", "Other")
+        _style_optionmenu(cat_menu); cat_menu.configure(width=9, font=("Segoe UI", 10, "bold"))
+        cat_menu.pack(side=tk.LEFT)
+        tk.Label(brow, text="$", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(6, 0))
+        amt_var = tk.StringVar()
+        amt_ent = tk.Entry(brow, textvariable=amt_var, width=10, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 11))
+        amt_ent.pack(side=tk.LEFT, padx=(2, 6), ipady=2)
+
+        bwrap = tk.Frame(right, bg=BG_DARK); bwrap.pack(fill=tk.BOTH, expand=True)
+        b_list = tk.Listbox(bwrap, bg=BG_INPUT, fg=FG_TEXT,
+                            selectbackground=ACCENT_SLATE, selectforeground="white",
+                            font=("Consolas", 11), relief=tk.FLAT, bd=0,
+                            highlightthickness=0, activestyle="none")
+        bsb = tk.Scrollbar(bwrap, command=b_list.yview, width=16)
+        b_list.configure(yscrollcommand=bsb.set)
+        bsb.pack(side=tk.RIGHT, fill=tk.Y)
+        b_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _spendable(pid):
+            rows = self._fi_paychecks()
+            for _id, _d, gross, _p, saved in rows:
+                if _id == pid:
+                    return float(gross) - float(saved), float(gross), float(saved)
+            return 0.0, 0.0, 0.0
+
+        def _refresh_budget():
+            b_list.delete(0, tk.END)
+            self._fi_budget_ids = []
+            pid = self._fi_current_pid
+            if pid is None:
+                pc_title.set("Add a paycheck to begin →")
+                locked_var.set(""); spend_var.set(""); remain_var.set("")
+                return
+            spend, gross, saved = _spendable(pid)
+            items = self._fi_budget_items(pid)
+            self._fi_budget_ids = [it[0] for it in items]
+            for _iid, cat, amt in items:
+                b_list.insert(tk.END, f"{cat:<12} {self._money_fmt(amt):>12}")
+            budgeted = self._fi_budgeted(pid)
+            left_to = spend - budgeted
+            locked_var.set(f"🔒 Saved first (locked): {self._money_fmt(saved)}")
+            spend_var.set(f"💵 Spendable to budget: {self._money_fmt(spend)}")
+            remain_var.set(f"Budgeted {self._money_fmt(budgeted)}   ·   "
+                           f"Left to budget {self._money_fmt(left_to)}")
+            remain_lbl.configure(
+                fg=("#f87171" if left_to < -0.001 else
+                    "#34d399" if abs(left_to) < 0.001 else FG_MUTED))
+
+        def _load_paycheck(pid):
+            self._fi_current_pid = pid
+            if pid is None:
+                _refresh_budget(); return
+            spend, gross, saved = _spendable(pid)
+            pdate = next((r[1] for r in self._fi_paychecks() if r[0] == pid), "")
+            pc_title.set(f"Paycheck {pdate} — {self._money_fmt(gross)}")
+            _refresh_budget()
+
+        def _add_budget():
+            pid = self._fi_current_pid
+            if pid is None:
+                messagebox.showinfo("Budget", "Add a paycheck first.")
+                return
+            a = self._money_parse(amt_var.get())
+            if a is None or a <= 0:
+                messagebox.showinfo("Budget", "Enter an amount, e.g. 600")
+                return
+            spend, _g, _s = _spendable(pid)
+            left_to = spend - self._fi_budgeted(pid)
+            if a > left_to + 0.001:
+                messagebox.showwarning(
+                    "Over budget",
+                    f"That's more than you have left to budget "
+                    f"({self._money_fmt(left_to)}).\n\nYour savings are locked "
+                    f"and can't be spent — trim this category.")
+                return
+            try:
+                self._db_exec(
+                    "INSERT INTO budget_items (paycheck_id,category,amount,"
+                    "created_at) VALUES (?,?,?,?)",
+                    (pid, cat_var.get(), float(a), datetime.now().isoformat()))
+            except Exception:
+                pass
+            amt_var.set("")
+            _refresh_budget()
+        tk.Button(brow, text="+ Add", command=_add_budget,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        amt_ent.bind("<Return>", lambda _e: _add_budget())
+
+        def _remove_budget():
+            sel = b_list.curselection()
+            if not sel or sel[0] >= len(self._fi_budget_ids):
+                return
+            try:
+                self._db_exec("DELETE FROM budget_items WHERE id=?",
+                              (self._fi_budget_ids[sel[0]],))
+            except Exception:
+                pass
+            _refresh_budget()
+        tk.Button(right, text="🗑 Remove selected", command=_remove_budget,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(anchor="e", padx=2, pady=(4, 0))
+        paned.add(right)
+
+        listbox.bind("<<ListboxSelect>>", lambda _e: (
+            self._fi_list_pids and listbox.curselection()
+            and _load_paycheck(self._fi_list_pids[listbox.curselection()[0]])))
+
+        _refresh_balance()
+        _refresh_list()
+        pay_ent.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
