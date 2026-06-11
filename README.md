@@ -105,6 +105,8 @@ powershell -ExecutionPolicy Bypass -File scripts\install_book_reader_shortcut.ps
 
 | Package | Why |
 |---|---|
+| `faster-whisper` | on-device Whisper voice dictation (downloads its model on first use) |
+| `sounddevice` · `numpy` · `noisereduce` | mic capture, audio buffers, and noise suppression for dictation |
 | `python-docx` | parse `.docx` |
 | `pypdf` | parse `.pdf` |
 | `beautifulsoup4` | parse `.html` |
