@@ -50,6 +50,12 @@ Beyond reading, the app is a study and focus workstation:
   implementation intentions), **🎯 Focus Mode** with timed focus blocks,
   a **🚫 Not-To-Do list + website blocker**, **☸ Wheel of Life** and
   **🎯 Goals**, and **🧭 Weekly Roles**.
+- **⏱ Winner's Time Log (time auditor)** — a low-friction chime every
+  60 or 90 minutes asks "what did you work on for the last hour?"; one tap
+  files it, and the dashboard draws a **weekly pie chart** of where your
+  time actually went (A-1 task, studying, distracted, …). Toggle it on/off
+  and pick the interval from the ⏱ Time Log window. In Ziglar's words,
+  knowing where your minutes go is a *freeing* factor, not a limiting one.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

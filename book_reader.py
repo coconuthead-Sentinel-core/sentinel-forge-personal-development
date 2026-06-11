@@ -244,6 +244,20 @@ ACCENT_MIC    = "#0ea5e9"   # mic button idle (sky-blue); turns red while record
 ACCENT_AMBER  = "#d97706"   # paste-from-clipboard button
 ACCENT_PINK   = "#db2777"   # save-for-Claude button
 
+# "Winner's Time Log" categories — one quick tap files where the last hour
+# went. (label, pie color). High-value first so the eye lands on A-1 work;
+# "Distracted" is deliberately red so a week of it shows up loud in the chart.
+TIME_AUDIT_CATEGORIES = [
+    ("🅰 A-1 Task",    "#16a34a"),
+    ("📚 Studying",    "#0891b2"),
+    ("📖 Reading",     "#7c3aed"),
+    ("🛠 Deep Work",   "#2563eb"),
+    ("🤝 Meeting",     "#0d9488"),
+    ("✉ Admin/Email",  "#d97706"),
+    ("😵 Distracted",  "#dc2626"),
+    ("☕ Break",       "#475569"),
+]
+
 
 def _style_optionmenu(om: tk.OptionMenu) -> None:
     """Force an OptionMenu to honor the dark palette. The default ttk
@@ -484,6 +498,7 @@ class BookReader:
         self._ideas_btn = btn(topbar, "🧠  Ideas", self.open_idea_warehouse, ACCENT_AMBER)
         btn(topbar, "🎯  Focus",             self.open_focus_mode,      ACCENT_PURPLE)
         btn(topbar, "🚫  Not-To-Do",         self.open_not_to_do,       ACCENT_RED)
+        btn(topbar, "⏱  Time Log",           self.open_time_log,        ACCENT_CYAN)
         btn(topbar, "🗒  Prompt Library",    self.open_prompt_library,  ACCENT_GREEN)
         btn(topbar, "🔊  Read aloud",        self.read_aloud,           ACCENT_GREEN)
         btn(topbar, "■  Stop",               self.stop_reading,         ACCENT_SLATE)
@@ -2058,6 +2073,377 @@ class BookReader:
             if n > 0:
                 self.root.after(350, lambda: _pulse(n - 1))
         _pulse(times)
+
+    # ---- Winner's Time Log (Ziglar / Tracy time audit) -----------------
+    def _time_audit_prefs(self) -> tuple[bool, int]:
+        """(enabled, interval_minutes). Persisted in HANDOFF_STATE so a user
+        who turns the chime off (or picks 90 min) keeps that across launches.
+        Defaults: on, every 60 min."""
+        st = self._load_handoff_state() or {}
+        enabled = bool(st.get("time_audit_enabled", True))
+        try:
+            interval = int(st.get("time_audit_interval", 60))
+        except (TypeError, ValueError):
+            interval = 60
+        if interval not in (60, 90):
+            interval = 60
+        return enabled, interval
+
+    def _save_time_audit_prefs(self, enabled: bool, interval: int) -> None:
+        st = self._load_handoff_state() or {}
+        st["time_audit_enabled"] = bool(enabled)
+        st["time_audit_interval"] = int(interval)
+        try:
+            self._save_handoff_state(st)
+        except Exception:
+            pass
+
+    def _start_time_auditor(self) -> None:
+        """Kick off (or restart) the recurring check-in from saved prefs.
+        Called once at startup and whenever the interval/toggle changes."""
+        self._cancel_time_auditor()
+        enabled, interval = self._time_audit_prefs()
+        if enabled:
+            self._schedule_next_time_audit(interval)
+
+    def _schedule_next_time_audit(self, interval_min: int | None = None) -> None:
+        if interval_min is None:
+            _, interval_min = self._time_audit_prefs()
+        self._cancel_time_auditor()
+        try:
+            self._time_audit_after_id = self.root.after(
+                max(1, int(interval_min)) * 60_000, self._time_audit_prompt)
+        except Exception:
+            self._time_audit_after_id = None
+
+    def _cancel_time_auditor(self) -> None:
+        aid = getattr(self, "_time_audit_after_id", None)
+        if aid is not None:
+            try:
+                self.root.after_cancel(aid)
+            except Exception:
+                pass
+        self._time_audit_after_id = None
+
+    def _time_audit_prompt(self) -> None:
+        """Gentle chime + a one-tap popup asking where the last hour went.
+        Deliberately NOT modal (no grab_set) so it never traps text you're
+        mid-typing — that's what keeps it low-friction enough to actually use."""
+        self._time_audit_after_id = None
+        enabled, interval = self._time_audit_prefs()
+        if not enabled:
+            return
+        existing = getattr(self, "_time_audit_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    self._schedule_next_time_audit(interval)
+                    return
+            except tk.TclError:
+                pass
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except Exception:
+            pass
+        try:
+            self._show_time_audit_popup(interval)
+        except Exception:
+            pass
+        self._schedule_next_time_audit(interval)
+
+    def _show_time_audit_popup(self, interval: int) -> None:
+        win = tk.Toplevel(self.root)
+        self._time_audit_win = win
+        win.title("⏱ Time Check")
+        win.configure(bg=BG_DARK)
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w, h = 340, 380
+        x = max(0, sw - w - 30); y = 60   # top-right, out of the way
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        win.transient(self.root)
+
+        def _close():
+            self._time_audit_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=12, pady=8); head.pack(fill=tk.X)
+        tk.Label(head, text="⏱ Time Check", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        tk.Label(head, text=f"What did you work on for the last ~{interval} min?",
+                 bg=BG_PANEL, fg=FG_MUTED, wraplength=300, justify=tk.LEFT,
+                 font=("Segoe UI", 10)).pack(anchor="w")
+
+        note_var = tk.StringVar()
+        nrow = tk.Frame(win, bg=BG_DARK, padx=12); nrow.pack(fill=tk.X, pady=(8, 2))
+        tk.Label(nrow, text="✏ note (optional)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8)).pack(anchor="w")
+        ent = tk.Entry(nrow, textvariable=note_var, bg=BG_INPUT, fg=FG_TEXT,
+                       insertbackground=FG_TEXT, relief=tk.FLAT,
+                       font=("Segoe UI", 10))
+        ent.pack(fill=tk.X, ipady=3)
+
+        grid = tk.Frame(win, bg=BG_DARK, padx=8, pady=6)
+        grid.pack(fill=tk.BOTH, expand=True)
+
+        def _choose(label):
+            self._log_time(label, interval, note_var.get().strip())
+            _close()
+        for i, (label, color) in enumerate(TIME_AUDIT_CATEGORIES):
+            tk.Button(grid, text=label, command=lambda l=label: _choose(l),
+                      font=("Segoe UI", 10, "bold"), bg=color, fg="white",
+                      activebackground=color, relief=tk.FLAT, padx=6, pady=8,
+                      cursor="hand2", borderwidth=0).grid(
+                          row=i // 2, column=i % 2, sticky="nsew", padx=3, pady=3)
+        grid.columnconfigure(0, weight=1); grid.columnconfigure(1, weight=1)
+
+        foot = tk.Frame(win, bg=BG_DARK, padx=12); foot.pack(fill=tk.X, pady=(2, 10))
+        tk.Button(foot, text="Snooze 10 min",
+                  command=lambda: (_close(), self._schedule_next_time_audit(10)),
+                  font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_TEXT,
+                  activebackground=ACCENT_SLATE, activeforeground="white",
+                  relief=tk.FLAT, padx=8, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(foot, text="Turn off",
+                  command=lambda: (_close(), self._set_time_audit_enabled(False)),
+                  font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=8, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+        try:
+            win.lift(); ent.focus_set()
+        except tk.TclError:
+            pass
+
+    def _set_time_audit_enabled(self, enabled: bool) -> None:
+        _, interval = self._time_audit_prefs()
+        self._save_time_audit_prefs(enabled, interval)
+        if enabled:
+            self._start_time_auditor()
+            self.set_status(f"⏱ Time Log on — gentle check-in every {interval} min.")
+        else:
+            self._cancel_time_auditor()
+            self.set_status("⏱ Time Log paused. Turn it back on from ⏱ Time Log.")
+
+    def _set_time_audit_interval(self, interval: int) -> None:
+        enabled, _ = self._time_audit_prefs()
+        self._save_time_audit_prefs(enabled, interval)
+        if enabled:
+            self._start_time_auditor()
+
+    def _log_time(self, category: str, minutes: int, note: str = "") -> None:
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        now = datetime.now()
+        try:
+            self._db_exec(
+                "INSERT INTO time_log (log_date,logged_at,category,note,minutes,"
+                "created_at) VALUES (?,?,?,?,?,?)",
+                (now.strftime("%Y-%m-%d"), now.strftime("%H:%M"), category,
+                 note or "", int(minutes), now.isoformat()))
+            self.set_status(f"⏱ Logged: {category} ({minutes} min). "
+                            "Knowing where the time goes is a freeing thing.")
+        except Exception:
+            pass
+        self._refresh_time_log_report()
+
+    @staticmethod
+    def _fmt_hm(minutes: int) -> str:
+        minutes = max(0, int(minutes)); h, m = divmod(minutes, 60)
+        return f"{h}h {m}m" if h else f"{m}m"
+
+    def _time_log_week_totals(self) -> list[tuple[str, int]]:
+        """Minutes by category for the current week (Monday → today)."""
+        today = date.today()
+        monday = (today - timedelta(days=today.weekday())).strftime("%Y-%m-%d")
+        try:
+            rows = self._db_query(
+                "SELECT category, SUM(minutes) FROM time_log "
+                "WHERE log_date>=? GROUP BY category", (monday,))
+        except Exception:
+            rows = []
+        return [(c or "Other", int(m or 0)) for c, m in rows if (m or 0) > 0]
+
+    def open_time_log(self) -> None:
+        """The Winner's Time Log: toggle the recurring check-in, log the
+        current hour by hand, and see a weekly pie of where minutes went."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_time_log_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._time_log_win = win
+        win.title("⏱ Winner's Time Log")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(720, max(520, sw - 80)); h = min(640, max(440, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(520, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._time_log_win = None
+            self._time_log_canvas = None
+            self._time_log_legend = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="⏱ Winner's Time Log", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="“Is what I’m doing right now making the very best "
+                 "use of my time?” — a quick audit is a freeing factor, not a "
+                 "limit.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 2))
+
+        enabled, interval = self._time_audit_prefs()
+        ctrl = tk.Frame(win, bg=BG_DARK, padx=12, pady=6); ctrl.pack(fill=tk.X)
+        en_var = tk.BooleanVar(value=enabled)
+        tk.Checkbutton(ctrl, text="Check in automatically", variable=en_var,
+                       command=lambda: self._set_time_audit_enabled(en_var.get()),
+                       bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_INPUT,
+                       activebackground=BG_DARK, activeforeground=FG_TEXT,
+                       font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(ctrl, text="every", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(8, 4))
+        iv_var = tk.StringVar(value=f"{interval} min")
+        iv_menu = tk.OptionMenu(ctrl, iv_var, "60 min", "90 min",
+                                command=lambda _v: self._set_time_audit_interval(
+                                    60 if iv_var.get().startswith("60") else 90))
+        _style_optionmenu(iv_menu)
+        iv_menu.configure(width=8, font=("Segoe UI", 10, "bold"))
+        iv_menu.pack(side=tk.LEFT)
+        tk.Button(ctrl, text="⏱ Log now",
+                  command=lambda: self._show_time_audit_popup(
+                      self._time_audit_prefs()[1]),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_CYAN, fg="white",
+                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        self._time_log_summary_var = tk.StringVar(value="")
+        tk.Label(win, textvariable=self._time_log_summary_var, bg=BG_DARK,
+                 fg=FG_TEXT, font=("Segoe UI", 11, "bold"), padx=14,
+                 anchor="w").pack(fill=tk.X, pady=(8, 0))
+
+        body = tk.Frame(win, bg=BG_DARK, padx=12, pady=8)
+        body.pack(fill=tk.BOTH, expand=True)
+        self._time_log_canvas = tk.Canvas(body, width=260, height=260,
+                                          bg=BG_DARK, highlightthickness=0)
+        self._time_log_canvas.pack(side=tk.LEFT, padx=(0, 12))
+        self._time_log_legend = tk.Frame(body, bg=BG_DARK)
+        self._time_log_legend.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._refresh_time_log_report()
+        # Redraw once geometry is realized (winfo_width is 1 before idle).
+        try:
+            win.after(80, self._refresh_time_log_report)
+        except tk.TclError:
+            pass
+
+    def _refresh_time_log_report(self) -> None:
+        canvas = getattr(self, "_time_log_canvas", None)
+        legend = getattr(self, "_time_log_legend", None)
+        if canvas is None or legend is None:
+            return
+        try:
+            if not canvas.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        totals = self._time_log_week_totals()
+        total_min = sum(m for _, m in totals)
+        self._draw_time_pie(canvas, totals)
+        for ch in legend.winfo_children():
+            ch.destroy()
+        color_of = dict(TIME_AUDIT_CATEGORIES)
+        if not totals:
+            tk.Label(legend, text="No entries yet this week.\n\nClick ⏱ Log now, "
+                     "or let the check-in chime catch you each hour.",
+                     bg=BG_DARK, fg=FG_MUTED, justify=tk.LEFT,
+                     font=("Segoe UI", 10)).pack(anchor="w")
+            if hasattr(self, "_time_log_summary_var"):
+                self._time_log_summary_var.set("This week: nothing logged yet")
+            return
+        for label, mins in sorted(totals, key=lambda t: -t[1]):
+            pct = round(100 * mins / total_min) if total_min else 0
+            row = tk.Frame(legend, bg=BG_DARK); row.pack(fill=tk.X, anchor="w", pady=1)
+            tk.Label(row, text="    ", bg=color_of.get(label, "#888888")).pack(
+                side=tk.LEFT)
+            tk.Label(row, text=f"  {label} — {self._fmt_hm(mins)} ({pct}%)",
+                     bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 10)).pack(side=tk.LEFT)
+        distract = sum(m for l, m in totals if "Distract" in l)
+        summary = f"This week: {self._fmt_hm(total_min)} logged"
+        if distract and total_min:
+            summary += f"   ·   😵 {round(100 * distract / total_min)}% distracted"
+        if hasattr(self, "_time_log_summary_var"):
+            self._time_log_summary_var.set(summary)
+
+    def _draw_time_pie(self, canvas: tk.Canvas, totals: list[tuple[str, int]]) -> None:
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W = H = 260
+        if W < 10: W = 260
+        if H < 10: H = 260
+        pad = 14
+        d = max(40, min(W, H) - 2 * pad)
+        x0 = (W - d) // 2; y0 = (H - d) // 2
+        x1 = x0 + d; y1 = y0 + d
+        total = sum(m for _, m in totals)
+        color_of = dict(TIME_AUDIT_CATEGORIES)
+        if total <= 0:
+            canvas.create_oval(x0, y0, x1, y1, outline=ACCENT_SLATE, width=2)
+            canvas.create_text(W // 2, H // 2, text="no data",
+                               fill=FG_MUTED, font=("Segoe UI", 11))
+            return
+        nonzero = [(l, m) for l, m in totals if m > 0]
+        if len(nonzero) == 1:   # a full-circle arc draws nothing in Tk
+            only = nonzero[0][0]
+            canvas.create_oval(x0, y0, x1, y1, fill=color_of.get(only, "#888888"),
+                               outline=BG_DARK, width=2)
+            return
+        start = 90.0
+        for label, mins in sorted(nonzero, key=lambda t: -t[1]):
+            extent = -360.0 * mins / total   # negative = clockwise
+            canvas.create_arc(x0, y0, x1, y1, start=start, extent=extent,
+                              fill=color_of.get(label, "#888888"),
+                              outline=BG_DARK, width=2)
+            start += extent
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
@@ -12427,6 +12813,8 @@ def main() -> None:
     root.after(400, app._maybe_auto_start_wizard)
     # Evening "plan tomorrow" nudge (Ziglar's night-before rule).
     root.after(1200, app._maybe_evening_planning_nudge)
+    # Winner's Time Log: start the recurring "where did the hour go?" check-in.
+    root.after(1800, app._start_time_auditor)
     # Warm the Whisper speech model in the background so the first 🎤 click
     # doesn't pause to load it.
     root.after(1500, app._preload_whisper)
@@ -12434,6 +12822,8 @@ def main() -> None:
         try: app._stop_mic()
         except Exception: pass
         try: app._stop_timer(announce=False)
+        except Exception: pass
+        try: app._cancel_time_auditor()
         except Exception: pass
         # Lift any distraction block so the user is never left blocked after
         # the app exits (closing the app is the safety release).

@@ -256,6 +256,22 @@ CREATE TABLE IF NOT EXISTS not_to_do (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_nottodo_kind ON not_to_do(kind);
+
+-- "Winner's Time Log" (Zig Ziglar) / time audit (Brian Tracy, James Clear):
+-- a low-friction chime every 60-90 min asks "what did you just work on?" and
+-- one tap files the answer here. One row per logged interval; the weekly pie
+-- chart sums `minutes` by `category`. Tracking where the minutes actually go
+-- is, in Ziglar's words, a "freeing factor," not a limiting one.
+CREATE TABLE IF NOT EXISTS time_log (
+    id INTEGER PRIMARY KEY,
+    log_date TEXT NOT NULL,             -- YYYY-MM-DD (used by the weekly chart)
+    logged_at TEXT NOT NULL,            -- HH:MM the interval was filed
+    category TEXT NOT NULL DEFAULT '',  -- "A-1 Task" | "Studying" | "Distracted" …
+    note TEXT NOT NULL DEFAULT '',
+    minutes INTEGER NOT NULL DEFAULT 60,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_timelog_date ON time_log(log_date);
 """
 
 
