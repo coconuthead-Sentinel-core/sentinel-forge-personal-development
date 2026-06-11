@@ -111,6 +111,12 @@ Beyond reading, the app is a study and focus workstation:
   run-rate months, Core Four status, this week's leaks, your nearest Dream
   Bucket, and the cooling-off Wishlist — each on a card with a one-tap jump to
   the full tool, so you don't have to open every window to check in.
+- **📈 Save More Tomorrow (raise auto-escalator)** — we hate giving up money we
+  have but happily commit *future* money. Sign a one-time contract and, by the
+  **Wedge Theory**, **half of every future raise is swept into savings** before
+  you ever feel it. Log a raise (e.g. $21→$22/hr) and it splits the increase
+  50/50 — lifestyle vs. wealth — tracks your committed monthly/yearly savings,
+  and can sweep it into your Financial Independence balance.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

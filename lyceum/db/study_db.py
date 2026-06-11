@@ -351,6 +351,33 @@ CREATE TABLE IF NOT EXISTS wishlist (
     decided_at TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_wishlist_status ON wishlist(status);
+
+-- "Save More Tomorrow" (Thaler/Benartzi) + the Wedge Theory: commit FUTURE
+-- money. A signed contract says that when you get a raise, half the increase
+-- is swept to savings before you ever see it. One contract row (id=1) plus a
+-- log of raises and the monthly/annual savings each one wedged off.
+CREATE TABLE IF NOT EXISTS smart_contract (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    signed INTEGER NOT NULL DEFAULT 0,
+    signer TEXT NOT NULL DEFAULT '',
+    base_wage REAL NOT NULL DEFAULT 0,
+    current_wage REAL NOT NULL DEFAULT 0,
+    hours_per_week REAL NOT NULL DEFAULT 40,
+    wedge_pct REAL NOT NULL DEFAULT 50,
+    signed_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS raises (
+    id INTEGER PRIMARY KEY,
+    old_wage REAL NOT NULL,
+    new_wage REAL NOT NULL,
+    wedge_pct REAL NOT NULL DEFAULT 50,
+    hours_per_week REAL NOT NULL DEFAULT 40,
+    monthly_wedge REAL NOT NULL DEFAULT 0,
+    annual_wedge REAL NOT NULL DEFAULT 0,
+    raised_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 """
 
 

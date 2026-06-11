@@ -247,6 +247,7 @@ ACCENT_INDIGO = "#4f46e5"   # After-Action Review (daily reflection)
 ACCENT_ORANGE = "#ea580c"   # 5-4-3-2-1 Momentum / Launch button
 ACCENT_EMERALD = "#059669"  # Pay Yourself First (money / savings)
 ACCENT_GOLD    = "#ca8a04"  # Money hub (at-a-glance summary)
+ACCENT_TEAL    = "#0d9488"  # Save More Tomorrow (raise wedge)
 
 # "Winner's Time Log" categories — one quick tap files where the last hour
 # went. (label, pie color). High-value first so the eye lands on A-1 work;
@@ -532,6 +533,7 @@ class BookReader:
         btn(money, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
         btn(money, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
         btn(money, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
+        btn(money, "📈 Save More", self.open_save_more_tomorrow, ACCENT_TEAL)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -4836,6 +4838,317 @@ class BookReader:
         # ⌛ time cost
         card("⌛", ACCENT_PURPLE, "TIME COST (price → hours of life)",
              "Check before you buy", self.open_time_money)
+
+    # ---- Save More Tomorrow (SMarT) raise auto-escalator ---------------
+    @staticmethod
+    def _wedge_split(old_wage, new_wage, hours_per_week, pct):
+        """Split a raise: half (pct) to savings, half to lifestyle. Returns the
+        per-hour increase and the savings/lifestyle amounts per month & year."""
+        inc = max(0.0, float(new_wage) - float(old_wage))      # $/hr
+        annual = inc * float(hours_per_week) * 52.0
+        monthly = annual / 12.0
+        f = float(pct) / 100.0
+        return {"inc_hr": inc,
+                "save_monthly": monthly * f, "save_annual": annual * f,
+                "life_monthly": monthly * (1 - f), "life_annual": annual * (1 - f)}
+
+    def _smart_get(self) -> dict:
+        try:
+            self._db_exec(
+                "INSERT OR IGNORE INTO smart_contract (id,updated_at) "
+                "VALUES (1,?)", (datetime.now().isoformat(),))
+            r = self._db_query(
+                "SELECT signed,signer,base_wage,current_wage,hours_per_week,"
+                "wedge_pct,signed_at FROM smart_contract WHERE id=1")
+        except Exception:
+            r = []
+        if r:
+            s = r[0]
+            return {"signed": int(s[0] or 0), "signer": s[1] or "",
+                    "base_wage": float(s[2] or 0), "current_wage": float(s[3] or 0),
+                    "hours": float(s[4] or 40), "pct": float(s[5] or 50),
+                    "signed_at": s[6] or ""}
+        return {"signed": 0, "signer": "", "base_wage": 0.0, "current_wage": 0.0,
+                "hours": 40.0, "pct": 50.0, "signed_at": ""}
+
+    def _smart_sign(self, signer, base_wage, hours, pct):
+        self._smart_get()
+        now = datetime.now().isoformat()
+        try:
+            self._db_exec(
+                "UPDATE smart_contract SET signed=1,signer=?,base_wage=?,"
+                "current_wage=?,hours_per_week=?,wedge_pct=?,signed_at=?,"
+                "updated_at=? WHERE id=1",
+                (signer, float(base_wage), float(base_wage), float(hours),
+                 float(pct), now, now))
+        except Exception:
+            pass
+
+    def _smart_log_raise(self, new_wage):
+        c = self._smart_get()
+        old = c["current_wage"] or c["base_wage"]
+        if new_wage <= old:
+            return None
+        sp = self._wedge_split(old, new_wage, c["hours"], c["pct"])
+        now = datetime.now()
+        try:
+            self._db_exec(
+                "INSERT INTO raises (old_wage,new_wage,wedge_pct,hours_per_week,"
+                "monthly_wedge,annual_wedge,raised_at,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (old, float(new_wage), c["pct"], c["hours"], sp["save_monthly"],
+                 sp["save_annual"], now.strftime("%Y-%m-%d"), now.isoformat()))
+            self._db_exec(
+                "UPDATE smart_contract SET current_wage=?,updated_at=? WHERE id=1",
+                (float(new_wage), now.isoformat()))
+        except Exception:
+            pass
+        return sp
+
+    def _smart_raises(self):
+        try:
+            return self._db_query(
+                "SELECT old_wage,new_wage,monthly_wedge,annual_wedge,raised_at "
+                "FROM raises ORDER BY id DESC")
+        except Exception:
+            return []
+
+    def _smart_committed(self):
+        try:
+            r = self._db_query(
+                "SELECT COALESCE(SUM(monthly_wedge),0),"
+                "COALESCE(SUM(annual_wedge),0) FROM raises")[0]
+            return float(r[0] or 0), float(r[1] or 0)
+        except Exception:
+            return 0.0, 0.0
+
+    def open_save_more_tomorrow(self) -> None:
+        """Thaler & Benartzi's 'Save More Tomorrow' + the Wedge Theory: we hate
+        giving up money we have, but happily commit FUTURE money. Sign a
+        contract that sweeps half of every future raise into savings — you
+        upgrade your life with one half and build wealth with the other."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_smart_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._smart_win = win
+        win.title("📈 Save More Tomorrow")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(720, max(560, sw - 90)); h = min(660, max(460, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 460)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._smart_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="📈 Save More Tomorrow", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="You hate giving up money you have — but you'll "
+                 "happily promise future money. So promise it now: half of "
+                 "every raise goes to wealth before you ever feel it.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 4))
+
+        body = tk.Frame(win, bg=BG_DARK); body.pack(fill=tk.BOTH, expand=True,
+                                                    padx=12, pady=4)
+
+        def _render():
+            for ch in body.winfo_children():
+                ch.destroy()
+            c = self._smart_get()
+            if not c["signed"]:
+                _render_sign(c)
+            else:
+                _render_signed(c)
+
+        def _render_sign(c):
+            form = tk.Frame(body, bg="#042f2e", padx=16, pady=14)
+            form.pack(fill=tk.X)
+            tk.Label(form, text="✍ The Contract", bg="#042f2e", fg="#5eead4",
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w")
+            tk.Label(form, text="“I commit that whenever my pay rises, half of "
+                     "the increase is swept into my savings before I budget a "
+                     "cent of it.”", bg="#042f2e", fg="#99f6e4",
+                     font=("Segoe UI", 11, "italic"), wraplength=w - 80,
+                     justify=tk.LEFT).pack(anchor="w", pady=(4, 10))
+            grid = tk.Frame(form, bg="#042f2e"); grid.pack(anchor="w")
+            wage_var = tk.StringVar(value=(f"{c['base_wage']:g}" if c['base_wage'] else ""))
+            hours_var = tk.StringVar(value=f"{c['hours']:g}")
+            pct_var = tk.StringVar(value=f"{c['pct']:g}")
+            name_var = tk.StringVar(value=c["signer"])
+
+            def _row(r, label, var, width, suffix=""):
+                tk.Label(grid, text=label, bg="#042f2e", fg="#ccfbf1",
+                         font=("Segoe UI", 10, "bold")).grid(row=r, column=0,
+                                                             sticky="w", pady=3)
+                e = tk.Entry(grid, textvariable=var, width=width, bg=BG_INPUT,
+                             fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                             font=("Segoe UI", 11, "bold"))
+                e.grid(row=r, column=1, sticky="w", padx=(8, 4), ipady=2)
+                if suffix:
+                    tk.Label(grid, text=suffix, bg="#042f2e", fg="#ccfbf1",
+                             font=("Segoe UI", 10)).grid(row=r, column=2, sticky="w")
+                return e
+            _row(0, "My pay now  $", wage_var, 8, "/hour")
+            _row(1, "Hours / week", hours_var, 6, "")
+            _row(2, "Save this share of each raise", pct_var, 5, "%  (Wedge Theory = 50)")
+            _row(3, "Sign (your name)", name_var, 22, "")
+
+            def _sign():
+                wage = self._money_parse(wage_var.get())
+                if wage is None or wage <= 0:
+                    messagebox.showinfo("Sign", "Enter your current hourly pay.")
+                    return
+                if not name_var.get().strip():
+                    messagebox.showinfo("Sign", "Type your name to sign.")
+                    return
+                try:
+                    hours = float(hours_var.get() or 40)
+                    pct = float(pct_var.get() or 50)
+                except ValueError:
+                    hours, pct = 40.0, 50.0
+                self._smart_sign(name_var.get().strip(), wage, hours, pct)
+                self.set_status("📈 Contract signed. Future raises now build "
+                                "your wealth automatically.")
+                _render()
+            tk.Button(form, text="✍ Sign the contract", command=_sign,
+                      font=("Segoe UI", 11, "bold"), bg=ACCENT_TEAL, fg="white",
+                      activebackground=ACCENT_TEAL, relief=tk.FLAT, padx=16,
+                      pady=6, cursor="hand2", borderwidth=0).pack(anchor="w",
+                                                                  pady=(12, 2))
+
+        def _render_signed(c):
+            mo, yr = self._smart_committed()
+            top = tk.Frame(body, bg="#042f2e", padx=16, pady=12); top.pack(fill=tk.X)
+            tk.Label(top, text=f"✅ Signed by {c['signer']}  ·  "
+                     f"now ${c['current_wage']:g}/hr  ·  saving "
+                     f"{c['pct']:g}% of every raise", bg="#042f2e", fg="#5eead4",
+                     font=("Segoe UI", 11, "bold"), wraplength=w - 80,
+                     justify=tk.LEFT).pack(anchor="w")
+            tk.Label(top, text=f"💰 Committed from raises: "
+                     f"{self._money_fmt(mo)}/month  ·  {self._money_fmt(yr)}/year "
+                     "to savings — money you never had to give up.",
+                     bg="#042f2e", fg="#99f6e4", font=("Segoe UI", 11, "bold"),
+                     wraplength=w - 80, justify=tk.LEFT).pack(anchor="w", pady=(4, 0))
+
+            # log a raise
+            rr = tk.Frame(body, bg=BG_DARK, pady=8); rr.pack(fill=tk.X)
+            tk.Label(rr, text="🎉 Got a raise?  New pay  $", bg=BG_DARK,
+                     fg=FG_TEXT, font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+            new_var = tk.StringVar()
+            ne = tk.Entry(rr, textvariable=new_var, width=8, bg=BG_INPUT,
+                          fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                          font=("Segoe UI", 12, "bold"))
+            ne.pack(side=tk.LEFT, padx=(4, 6), ipady=2)
+            tk.Label(rr, text="/hr", bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 11)).pack(side=tk.LEFT)
+
+            def _log():
+                nw = self._money_parse(new_var.get())
+                if nw is None or nw <= 0:
+                    messagebox.showinfo("Raise", "Enter your new hourly pay.")
+                    return
+                sp = self._smart_log_raise(nw)
+                if sp is None:
+                    messagebox.showinfo(
+                        "Raise", "That's not higher than your current pay.")
+                    return
+                messagebox.showinfo(
+                    "Raise banked! 🎉",
+                    f"Raise of {self._money_fmt(sp['inc_hr'])}/hr.\n\n"
+                    f"🏖 Lifestyle (yours to enjoy): "
+                    f"{self._money_fmt(sp['life_monthly'])}/mo\n"
+                    f"💰 Swept to savings (automatic): "
+                    f"{self._money_fmt(sp['save_monthly'])}/mo "
+                    f"({self._money_fmt(sp['save_annual'])}/yr)\n\n"
+                    "You upgraded your life with half and built wealth with "
+                    "the other half.")
+                new_var.set(""); _render()
+            tk.Button(rr, text="📈 Bank the raise", command=_log,
+                      font=("Segoe UI", 10, "bold"), bg=ACCENT_TEAL, fg="white",
+                      activebackground=ACCENT_TEAL, relief=tk.FLAT, padx=12,
+                      pady=4, cursor="hand2", borderwidth=0).pack(side=tk.LEFT,
+                                                                  padx=(8, 0))
+
+            # sweep this month into actual savings (FI balance)
+            if mo > 0:
+                def _sweep():
+                    st = self._load_handoff_state() or {}
+                    try:
+                        ob = float(st.get("fi_opening_balance", 0))
+                    except (TypeError, ValueError):
+                        ob = 0.0
+                    st["fi_opening_balance"] = ob + mo
+                    try:
+                        self._save_handoff_state(st)
+                    except Exception:
+                        pass
+                    self.set_status(f"💸 Swept {self._money_fmt(mo)} into savings "
+                                    "(added to your Financial Independence balance).")
+                tk.Button(body, text=f"💸 Sweep this month (+{self._money_fmt(mo)} "
+                          "to savings)", command=_sweep,
+                          font=("Segoe UI", 10, "bold"), bg=ACCENT_EMERALD,
+                          fg="white", activebackground=ACCENT_EMERALD,
+                          relief=tk.FLAT, padx=12, pady=5, cursor="hand2",
+                          borderwidth=0).pack(anchor="w", pady=(6, 4))
+
+            # raise history
+            tk.Label(body, text="Raise history", bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(
+                         fill=tk.X, pady=(8, 2))
+            hwrap = tk.Frame(body, bg=BG_DARK); hwrap.pack(fill=tk.BOTH, expand=True)
+            hb = tk.Listbox(hwrap, bg=BG_INPUT, fg=FG_TEXT, font=("Consolas", 10),
+                            relief=tk.FLAT, bd=0, highlightthickness=0,
+                            activestyle="none", selectbackground=ACCENT_TEAL)
+            hsb = tk.Scrollbar(hwrap, command=hb.yview, width=16)
+            hb.configure(yscrollcommand=hsb.set)
+            hsb.pack(side=tk.RIGHT, fill=tk.Y)
+            hb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            rows = self._smart_raises()
+            if not rows:
+                hb.insert(tk.END, "  No raises logged yet — your contract is ready.")
+            for ow, nw, mw, aw, rdate in rows:
+                hb.insert(tk.END, f"{rdate}   ${ow:g}→${nw:g}/hr   "
+                          f"+{self._money_fmt(mw)}/mo saved")
+
+            # reset / re-sign
+            tk.Button(body, text="✎ Edit contract", command=lambda: (
+                self._db_exec("UPDATE smart_contract SET signed=0 WHERE id=1"),
+                _render()),
+                font=("Segoe UI", 8, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                activebackground=ACCENT_SLATE, activeforeground="white",
+                relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                borderwidth=0).pack(anchor="e", pady=(4, 0))
+
+        _render()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
