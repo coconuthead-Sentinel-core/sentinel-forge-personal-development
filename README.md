@@ -2,7 +2,7 @@
 
 > **A native Windows desktop reading app for `.docx`, `.pdf`, `.md`,
 > `.txt`, `.rtf`, and `.html` — with neural read-aloud, highlight-by-sentence,
-> a Pomodoro timer, and a Three-Zone Library that organises what you save.**
+> voice dictation, a zone-tagged Library, and a focus & study dashboard.**
 
 ![Status](https://img.shields.io/badge/status-MVP-success)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -21,10 +21,12 @@
 - **Save excerpts** — click Save, the selected (or whole) passage is
   written as a `.md` with YAML front-matter recording zone, cognitive
   load, source book, and timestamp
-- **Three-Zone Library** — GREEN (active, load 7–10), YELLOW (reference,
-  4–6), RED (archive, 1–3). The Library window auto-filters to the zone
-  matching your current cognitive load
-- **Pomodoro timer** built in (5 / 10 / 15 / 20 / 25 / 45 min)
+- **Library with in-window reading view** — pick a book and read it in
+  place with chapter / page navigation. Saved excerpts are tagged with a
+  **GREEN / YELLOW / RED** zone (recorded in their front-matter), and the
+  Library can filter by zone
+- **Timed focus blocks** — distraction-free **Focus Mode** with 60 / 90-minute
+  work blocks (see the dashboard section below)
 - **Session continuity** — start / end of session is written to
   `HANDOFF_STATE.json` so the next session knows where you left off
 - **Cross-excerpt AI search (✨ Ask Library)** — if the optional
