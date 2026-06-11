@@ -519,9 +519,14 @@ class BookReader:
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
-        money = section(row1, "MONEY")
+
+        # --- Row 1b: money / wealth-defense tools (their own row) ---
+        rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
+        money = section(rowm, "MONEY")
         btn(money, "💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD)
         btn(money, "🛡 Core Four", self.open_core_four, ACCENT_GREEN)
+        btn(money, "☕ Latte", self.open_latte_factor, ACCENT_AMBER)
+        btn(money, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -3385,6 +3390,581 @@ class BookReader:
 
         _recompute()
         av_ent.focus_set()
+
+    # ---- Latte Factor expense auditor (David Bach) ---------------------
+    LATTE_CHIPS = (("☕ Coffee", 5), ("🍫 Snack", 3), ("🥤 Drink", 3),
+                   ("🍔 Fast food", 10), ("📱 Subscription", 12), ("🛒 Impulse", 8))
+
+    def _latte_week_rows(self):
+        t = date.today()
+        mon = (t - timedelta(days=t.weekday())).strftime("%Y-%m-%d")
+        try:
+            return self._db_query(
+                "SELECT id,spend_date,amount,label FROM small_expenses "
+                "WHERE spend_date>=? ORDER BY id DESC", (mon,))
+        except Exception:
+            return []
+
+    def _latte_add(self, amount, label):
+        now = datetime.now()
+        try:
+            self._db_exec(
+                "INSERT INTO small_expenses (spend_date,amount,label,created_at) "
+                "VALUES (?,?,?,?)",
+                (now.strftime("%Y-%m-%d"), float(amount), label or "",
+                 now.isoformat()))
+        except Exception:
+            pass
+
+    def open_latte_factor(self) -> None:
+        """David Bach's Latte Factor: the small daily leaks — coffees, snacks,
+        subscriptions — that sink the ship. Punch in each little purchase; the
+        weekly total shows what slipped through and what it could become."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_latte_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._latte_win = win
+        win.title("☕ Latte Factor — Expense Auditor")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(540, sw - 80)); h = min(640, max(450, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(540, 450)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._latte_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="☕ Latte Factor", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="It's the small daily leaks that sink a great ship. "
+                 "Catch every little purchase — awareness is the whole point.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 2))
+
+        # ---- fast entry ----
+        erow = tk.Frame(win, bg=BG_DARK, padx=12, pady=4); erow.pack(fill=tk.X)
+        tk.Label(erow, text="$", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+        amt_var = tk.StringVar()
+        amt_ent = tk.Entry(erow, textvariable=amt_var, width=8, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 13, "bold"))
+        amt_ent.pack(side=tk.LEFT, padx=(4, 6), ipady=2)
+        lbl_var = tk.StringVar()
+        lbl_ent = tk.Entry(erow, textvariable=lbl_var, width=18, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 11))
+        lbl_ent.pack(side=tk.LEFT, padx=(0, 6), ipady=2)
+        tk.Label(erow, text="(what was it?)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8)).pack(side=tk.LEFT)
+
+        def _add(amount=None, label=None):
+            a = amount if amount is not None else self._money_parse(amt_var.get())
+            if a is None or a <= 0:
+                messagebox.showinfo("Latte Factor", "Enter an amount, e.g. 4.50")
+                return
+            self._latte_add(a, label if label is not None else lbl_var.get().strip())
+            amt_var.set(""); lbl_var.set("")
+            _refresh()
+        tk.Button(erow, text="+ Add", command=_add,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_AMBER, fg="white",
+                  activebackground=ACCENT_AMBER, relief=tk.FLAT, padx=12, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        amt_ent.bind("<Return>", lambda _e: _add())
+        lbl_ent.bind("<Return>", lambda _e: _add())
+
+        # ---- one-tap common leaks ----
+        chips = tk.Frame(win, bg=BG_DARK, padx=12, pady=2); chips.pack(fill=tk.X)
+        tk.Label(chips, text="Quick add:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        for label, amt in self.LATTE_CHIPS:
+            tk.Button(chips, text=f"{label} ${amt}",
+                      command=lambda l=label, a=amt: _add(a, l),
+                      font=("Segoe UI", 9, "bold"), bg=BG_PANEL, fg=FG_TEXT,
+                      activebackground=ACCENT_AMBER, activeforeground="white",
+                      relief=tk.FLAT, padx=8, pady=3, cursor="hand2",
+                      borderwidth=0).pack(side=tk.LEFT, padx=2)
+
+        # ---- summary ----
+        summary = tk.Frame(win, bg="#3b2f0b", padx=14, pady=8)
+        summary.pack(fill=tk.X, padx=12, pady=(6, 4))
+        wk_var = tk.StringVar(); yr_var = tk.StringVar(); buy_var = tk.StringVar()
+        tk.Label(summary, textvariable=wk_var, bg="#3b2f0b", fg="#fcd34d",
+                 font=("Segoe UI", 16, "bold")).pack(anchor="w")
+        tk.Label(summary, textvariable=yr_var, bg="#3b2f0b", fg="#fde68a",
+                 font=("Segoe UI", 10)).pack(anchor="w")
+        tk.Label(summary, textvariable=buy_var, bg="#3b2f0b", fg="#fef3c7",
+                 font=("Segoe UI", 10, "italic"), wraplength=w - 60,
+                 justify=tk.LEFT).pack(anchor="w", pady=(2, 0))
+
+        # ---- this week's entries ----
+        tk.Label(win, text="This week", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(
+                     fill=tk.X, padx=14)
+        lwrap = tk.Frame(win, bg=BG_DARK, padx=12); lwrap.pack(fill=tk.BOTH, expand=True)
+        self._latte_ids = []
+        listbox = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT,
+                             selectbackground=ACCENT_AMBER, selectforeground="white",
+                             font=("Consolas", 11), relief=tk.FLAT, bd=0,
+                             highlightthickness=0, activestyle="none")
+        lsb = tk.Scrollbar(lwrap, command=listbox.yview, width=16)
+        listbox.configure(yscrollcommand=lsb.set)
+        lsb.pack(side=tk.RIGHT, fill=tk.Y)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _remove():
+            sel = listbox.curselection()
+            if not sel or sel[0] >= len(self._latte_ids):
+                return
+            try:
+                self._db_exec("DELETE FROM small_expenses WHERE id=?",
+                              (self._latte_ids[sel[0]],))
+            except Exception:
+                pass
+            _refresh()
+        tk.Button(win, text="🗑 Remove selected", command=_remove,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(anchor="e", padx=14, pady=(2, 8))
+
+        def _refresh():
+            rows = self._latte_week_rows()
+            self._latte_ids = [r[0] for r in rows]
+            listbox.delete(0, tk.END)
+            for _id, sdate, amt, lab in rows:
+                tag = f"  {lab}" if lab else ""
+                listbox.insert(tk.END, f"{sdate}   {self._money_fmt(amt):>9}{tag}")
+            total = sum(r[2] for r in rows)
+            wk_var.set(f"This week's leaks: {self._money_fmt(total)}")
+            monthly = total * 4.33
+            yearly = total * 52
+            yr_var.set(f"At this pace: {self._money_fmt(monthly)}/month  ·  "
+                       f"{self._money_fmt(yearly)}/year")
+            buckets = [b for b in self._dream_buckets() if b[2] > 0]  # target>0
+            if total <= 0:
+                buy_var.set("Nothing logged yet this week — log even the $3 ones.")
+            elif buckets:
+                b = max(buckets, key=lambda r: r[2])
+                name, target = b[1], b[2]
+                pct = min(999, round(100 * yearly / target)) if target else 0
+                buy_var.set(f"A year of this = {self._money_fmt(yearly)} — that's "
+                            f"{pct}% of your {name} dream ({self._money_fmt(target)}). "
+                            f"Skip them and fund the bucket instead.")
+            else:
+                buy_var.set(f"A year of this = {self._money_fmt(yearly)}. Skipped "
+                            f"and saved, that becomes a Dream Bucket.")
+
+        _refresh()
+        amt_ent.focus_set()
+
+    # ---- Dream Bucket target funder (Dave Ramsey) ----------------------
+    def _ask_amount(self, title, prompt, initial=""):
+        """Tiny modal number prompt (simpledialog isn't imported). Returns a
+        non-negative float, or None if cancelled."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title); dlg.configure(bg=BG_DARK)
+        dlg.transient(self.root)
+        try:
+            sw = dlg.winfo_screenwidth(); sh = dlg.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        dlg.geometry(f"320x150+{(sw-320)//2}+{(sh-150)//2}")
+        tk.Label(dlg, text=prompt, bg=BG_DARK, fg=FG_TEXT, wraplength=290,
+                 justify=tk.LEFT, font=("Segoe UI", 10)).pack(padx=14, pady=(14, 6))
+        row = tk.Frame(dlg, bg=BG_DARK); row.pack(padx=14)
+        tk.Label(row, text="$", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+        var = tk.StringVar(value=str(initial))
+        ent = tk.Entry(row, textvariable=var, width=14, bg=BG_INPUT, fg=FG_TEXT,
+                       insertbackground=FG_TEXT, relief=tk.FLAT,
+                       font=("Segoe UI", 13, "bold"))
+        ent.pack(side=tk.LEFT, padx=(4, 0), ipady=3)
+        ent.focus_set(); ent.select_range(0, tk.END)
+        result = {"v": None}
+
+        def _ok():
+            result["v"] = self._money_parse(var.get())
+            dlg.destroy()
+
+        def _cancel():
+            dlg.destroy()
+        brow = tk.Frame(dlg, bg=BG_DARK); brow.pack(pady=12)
+        tk.Button(brow, text="OK", command=_ok, font=("Segoe UI", 10, "bold"),
+                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
+                  relief=tk.FLAT, padx=16, pady=4, cursor="hand2",
+                  borderwidth=0).pack(side=tk.LEFT, padx=4)
+        tk.Button(brow, text="Cancel", command=_cancel,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
+        ent.bind("<Return>", lambda _e: _ok())
+        dlg.bind("<Escape>", lambda _e: _cancel())
+        try:
+            dlg.grab_set()
+        except tk.TclError:
+            pass
+        self.root.wait_window(dlg)
+        return result["v"]
+
+    def _load_thumb(self, path, size=72):
+        """Best-effort image thumbnail: PIL if present, else PhotoImage for
+        png/gif, else None. Caller keeps a reference (Tk GC's images)."""
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            from PIL import Image, ImageTk
+            im = Image.open(path); im.thumbnail((size, size))
+            return ImageTk.PhotoImage(im)
+        except Exception:
+            pass
+        try:
+            img = tk.PhotoImage(file=path)
+            wd = img.width()
+            if wd > size:
+                img = img.subsample(max(1, wd // size), max(1, wd // size))
+            return img
+        except Exception:
+            return None
+
+    def _dream_buckets(self):
+        try:
+            return self._db_query(
+                "SELECT id,name,target,saved,emoji,image_path FROM dream_buckets "
+                "ORDER BY sort_order, id")
+        except Exception:
+            return []
+
+    def _dream_seed_defaults(self):
+        try:
+            n = self._db_query("SELECT COUNT(*) FROM dream_buckets")[0][0]
+        except Exception:
+            return
+        if n:
+            return
+        now = datetime.now().isoformat()
+        for i, (name, emoji) in enumerate((("Refrigerator", "🧊"),
+                                           ("Washer", "🧺"), ("Dryer", "🌀"),
+                                           ("Car", "🚗"))):
+            try:
+                self._db_exec(
+                    "INSERT INTO dream_buckets (name,target,saved,emoji,"
+                    "image_path,sort_order,created_at,updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    (name, 0, 0, emoji, "", i, now, now))
+            except Exception:
+                pass
+
+    def open_dream_buckets(self) -> None:
+        """Dave Ramsey's Dream Bucket: save cash for the fridge, washer, dryer,
+        and car so you never need debt. Each save fills a visual progress bar —
+        an instant reward that keeps the ADHD brain motivated."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        self._dream_seed_defaults()
+        existing = getattr(self, "_dream_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._dream_win = win
+        self._dream_imgs = []   # keep PhotoImage refs alive
+        win.title("🪣 Dream Buckets")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(820, max(560, sw - 80)); h = min(680, max(460, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 460)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._dream_win = None
+            self._dream_imgs = []
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🪣 Dream Buckets", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(head, text="➕ New bucket", command=lambda: _new_bucket(),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=(0, 8))
+
+        tk.Label(win, text="Save cash for the big things — no debt. Every dollar "
+                 "you skip-and-stash fills the bar. 🎉", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 2))
+
+        # scrollable list of bucket cards
+        outer = tk.Frame(win, bg=BG_DARK); outer.pack(fill=tk.BOTH, expand=True,
+                                                      padx=12, pady=6)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=canvas.yview, width=16)
+        cards = tk.Frame(canvas, bg=BG_DARK)
+        cards.bind("<Configure>",
+                   lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=cards, anchor="nw", width=w - 56)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _new_bucket():
+            name = self._ask_text("New Dream Bucket", "Name it (e.g. Vacation):")
+            if not name:
+                return
+            now = datetime.now().isoformat()
+            try:
+                self._db_exec(
+                    "INSERT INTO dream_buckets (name,target,saved,emoji,"
+                    "image_path,sort_order,created_at,updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    (name, 0, 0, "🎯", "", 99, now, now))
+            except Exception:
+                pass
+            _render()
+
+        def _touch(bid):
+            try:
+                self._db_exec("UPDATE dream_buckets SET updated_at=? WHERE id=?",
+                              (datetime.now().isoformat(), bid))
+            except Exception:
+                pass
+
+        def _add_saved(bid, cur_saved):
+            amt = self._ask_amount("Add to bucket",
+                                   "How much did you save / skip?", "")
+            if amt is None or amt <= 0:
+                return
+            try:
+                self._db_exec(
+                    "UPDATE dream_buckets SET saved=?, updated_at=? WHERE id=?",
+                    (float(cur_saved) + float(amt), datetime.now().isoformat(), bid))
+            except Exception:
+                pass
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_OK)
+            except Exception:
+                pass
+            self.set_status(f"🎉 {self._money_fmt(amt)} into your dream bucket!")
+            _render()
+
+        def _set_target(bid):
+            amt = self._ask_amount("Set target", "What does it cost?", "")
+            if amt is None:
+                return
+            try:
+                self._db_exec(
+                    "UPDATE dream_buckets SET target=?, updated_at=? WHERE id=?",
+                    (float(amt), datetime.now().isoformat(), bid))
+            except Exception:
+                pass
+            _render()
+
+        def _set_image(bid):
+            path = filedialog.askopenfilename(
+                title="Pick a picture of the thing you want",
+                filetypes=[("Images", "*.png *.gif *.jpg *.jpeg *.bmp"),
+                           ("All files", "*.*")])
+            if not path:
+                return
+            try:
+                self._db_exec(
+                    "UPDATE dream_buckets SET image_path=?, updated_at=? WHERE id=?",
+                    (path, datetime.now().isoformat(), bid))
+            except Exception:
+                pass
+            _render()
+
+        def _delete(bid, name):
+            if not messagebox.askyesno("Delete bucket",
+                                       f"Delete the '{name}' dream bucket?"):
+                return
+            try:
+                self._db_exec("DELETE FROM dream_buckets WHERE id=?", (bid,))
+            except Exception:
+                pass
+            _render()
+
+        def _render():
+            for ch in cards.winfo_children():
+                ch.destroy()
+            self._dream_imgs = []
+            rows = self._dream_buckets()
+            if not rows:
+                tk.Label(cards, text="No buckets yet — ➕ New bucket.",
+                         bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 11)).pack(
+                             anchor="w", pady=10)
+                return
+            for bid, name, target, saved, emoji, image_path in rows:
+                card = tk.Frame(cards, bg=BG_PANEL, padx=10, pady=8)
+                card.pack(fill=tk.X, pady=4)
+                # left: picture or emoji
+                thumb = self._load_thumb(image_path) if image_path else None
+                if thumb is not None:
+                    self._dream_imgs.append(thumb)
+                    tk.Label(card, image=thumb, bg=BG_PANEL).pack(side=tk.LEFT,
+                                                                  padx=(0, 10))
+                else:
+                    tk.Label(card, text=emoji or "🎯", bg=BG_PANEL, fg=FG_TEXT,
+                             font=("Segoe UI", 30)).pack(side=tk.LEFT, padx=(2, 12))
+                body = tk.Frame(card, bg=BG_PANEL); body.pack(side=tk.LEFT,
+                                                              fill=tk.BOTH, expand=True)
+                pct = 0.0 if target <= 0 else min(1.0, saved / target)
+                topline = tk.Frame(body, bg=BG_PANEL); topline.pack(fill=tk.X)
+                tk.Label(topline, text=name, bg=BG_PANEL, fg=FG_TEXT,
+                         font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+                goal = (f"{self._money_fmt(saved)} / {self._money_fmt(target)}"
+                        if target > 0 else
+                        f"{self._money_fmt(saved)} saved — set a target")
+                tk.Label(topline, text=f"{goal}   {round(pct*100)}%", bg=BG_PANEL,
+                         fg=("#34d399" if pct >= 1 else FG_MUTED),
+                         font=("Segoe UI", 10, "bold")).pack(side=tk.RIGHT)
+                bar = tk.Canvas(body, height=18, bg=BG_INPUT,
+                                highlightthickness=0)
+                bar.pack(fill=tk.X, pady=(4, 4))
+                self._draw_dream_bar(bar, pct)
+                btns = tk.Frame(body, bg=BG_PANEL); btns.pack(fill=tk.X)
+
+                def _mini(parent, text, cmd, color):
+                    return tk.Button(parent, text=text, command=cmd,
+                                     font=("Segoe UI", 9, "bold"), bg=color,
+                                     fg="white", activebackground=color,
+                                     relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                                     borderwidth=0)
+                for q in (5, 10, 20):
+                    _mini(btns, f"+${q}",
+                          lambda b=bid, s=saved, qq=q: _quick_add(b, s, qq),
+                          ACCENT_GREEN).pack(side=tk.LEFT, padx=2)
+                _mini(btns, "+ custom", lambda b=bid, s=saved: _add_saved(b, s),
+                      ACCENT_EMERALD).pack(side=tk.LEFT, padx=2)
+                _mini(btns, "🎯 Target", lambda b=bid: _set_target(b),
+                      ACCENT_SLATE).pack(side=tk.LEFT, padx=2)
+                _mini(btns, "🖼 Image", lambda b=bid: _set_image(b),
+                      ACCENT_SLATE).pack(side=tk.LEFT, padx=2)
+                _mini(btns, "🗑", lambda b=bid, n=name: _delete(b, n),
+                      ACCENT_RED).pack(side=tk.LEFT, padx=2)
+
+        def _quick_add(bid, cur_saved, amt):
+            try:
+                self._db_exec(
+                    "UPDATE dream_buckets SET saved=?, updated_at=? WHERE id=?",
+                    (float(cur_saved) + float(amt), datetime.now().isoformat(), bid))
+            except Exception:
+                pass
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_OK)
+            except Exception:
+                pass
+            self.set_status(f"🎉 +{self._money_fmt(amt)} — keep filling that bucket!")
+            _render()
+
+        _render()
+
+    def _draw_dream_bar(self, canvas, pct):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W = 320; H = 18
+        if W < 10:
+            W = 320
+        if H < 6:
+            H = 18
+        pct = max(0.0, min(1.0, pct))
+        canvas.create_rectangle(0, 0, W, H, fill=BG_INPUT, outline="#334155")
+        if pct > 0:
+            fill = "#22c55e" if pct >= 1.0 else ACCENT_GREEN
+            canvas.create_rectangle(0, 0, int(W * pct), H, fill=fill, outline="")
+        canvas.create_text(W // 2, H // 2,
+                           text=("🎉 FUNDED!" if pct >= 1.0 else f"{round(pct*100)}%"),
+                           fill="white", font=("Segoe UI", 9, "bold"))
+
+    def _ask_text(self, title, prompt, initial=""):
+        """Tiny modal text prompt (for naming a new bucket)."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title(title); dlg.configure(bg=BG_DARK); dlg.transient(self.root)
+        try:
+            sw = dlg.winfo_screenwidth(); sh = dlg.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        dlg.geometry(f"340x150+{(sw-340)//2}+{(sh-150)//2}")
+        tk.Label(dlg, text=prompt, bg=BG_DARK, fg=FG_TEXT, wraplength=300,
+                 justify=tk.LEFT, font=("Segoe UI", 10)).pack(padx=14, pady=(14, 6))
+        var = tk.StringVar(value=initial)
+        ent = tk.Entry(dlg, textvariable=var, width=28, bg=BG_INPUT, fg=FG_TEXT,
+                       insertbackground=FG_TEXT, relief=tk.FLAT,
+                       font=("Segoe UI", 12))
+        ent.pack(padx=14); ent.focus_set()
+        result = {"v": None}
+
+        def _ok():
+            result["v"] = var.get().strip()
+            dlg.destroy()
+        brow = tk.Frame(dlg, bg=BG_DARK); brow.pack(pady=12)
+        tk.Button(brow, text="OK", command=_ok, font=("Segoe UI", 10, "bold"),
+                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
+                  relief=tk.FLAT, padx=16, pady=4, cursor="hand2",
+                  borderwidth=0).pack(side=tk.LEFT, padx=4)
+        tk.Button(brow, text="Cancel", command=dlg.destroy,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
+        ent.bind("<Return>", lambda _e: _ok())
+        dlg.bind("<Escape>", lambda _e: dlg.destroy())
+        try:
+            dlg.grab_set()
+        except tk.TclError:
+            pass
+        self.root.wait_window(dlg)
+        return result["v"]
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

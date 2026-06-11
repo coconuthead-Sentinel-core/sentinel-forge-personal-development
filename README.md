@@ -79,6 +79,17 @@ Beyond reading, the app is a study and focus workstation:
   **green when secured, red when not covered** — and tells you if you're short
   and by how much, so your most basic needs get covered *first*. Can pull the
   spendable figure straight from your latest paycheck.
+- **☕ Latte Factor (expense auditor)** — the small daily leaks sink the ship.
+  Fast-entry (one-tap chips for coffee, snacks, subscriptions, or any custom
+  amount) logs every little purchase, and the weekly total projects it out to
+  the **month and year** — showing what slipped through and what it could have
+  funded in a Dream Bucket instead.
+- **🪣 Dream Buckets (target funder)** — save cash for the big things (fridge,
+  washer, dryer, car) so you never need debt. Each bucket has a **visual
+  progress bar** that fills as you transfer in money you saved by skipping a
+  purchase (one-tap +$5/+$10/+$20), with a 🎉 reward — instant dopamine for an
+  ADHD brain. Add your own buckets, set targets, and drop in a picture of the
+  exact thing you want.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

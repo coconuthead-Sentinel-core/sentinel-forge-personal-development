@@ -308,6 +308,33 @@ CREATE TABLE IF NOT EXISTS budget_items (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_budget_paycheck ON budget_items(paycheck_id);
+
+-- "Latte Factor" (David Bach): the small daily leaks — coffees, snacks,
+-- subscriptions — that sink the ship. Fast-entry of any purchase; the weekly
+-- total shows what slipped through and what it could have become if saved.
+CREATE TABLE IF NOT EXISTS small_expenses (
+    id INTEGER PRIMARY KEY,
+    spend_date TEXT NOT NULL,          -- YYYY-MM-DD
+    amount REAL NOT NULL DEFAULT 0,
+    label TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_smallexp_date ON small_expenses(spend_date);
+
+-- "Dream Bucket" (Dave Ramsey): save cash for big goals (fridge, washer,
+-- dryer, car) to avoid debt. A visual progress bar fills as you transfer in
+-- money you saved by skipping a purchase — an instant dopamine reward.
+CREATE TABLE IF NOT EXISTS dream_buckets (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    target REAL NOT NULL DEFAULT 0,
+    saved REAL NOT NULL DEFAULT 0,
+    emoji TEXT NOT NULL DEFAULT '🎯',
+    image_path TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
