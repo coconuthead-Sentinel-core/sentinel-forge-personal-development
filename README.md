@@ -62,6 +62,11 @@ Beyond reading, the app is a study and focus workstation:
   list of past days so the week can be reviewed (James Clear). A gentle
   evening nudge reminds you if today's is still blank. *Experience alone
   doesn't make you better — evaluated experience does.*
+- **🚀 5-4-3-2-1 Momentum button** — Mel Robbins' 5-Second Rule + Tracy's
+  *"Do it now!"*: when starting feels impossible, hit it and the screen
+  counts down **5 – 4 – 3 – 2 – 1 – GO!** with a beat per second, then drops
+  you straight into **Focus Mode** on your #1 task — the activation energy to
+  *move* before your brain talks you out of it.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

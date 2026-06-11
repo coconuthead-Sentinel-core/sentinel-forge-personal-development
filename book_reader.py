@@ -244,6 +244,7 @@ ACCENT_MIC    = "#0ea5e9"   # mic button idle (sky-blue); turns red while record
 ACCENT_AMBER  = "#d97706"   # paste-from-clipboard button
 ACCENT_PINK   = "#db2777"   # save-for-Claude button
 ACCENT_INDIGO = "#4f46e5"   # After-Action Review (daily reflection)
+ACCENT_ORANGE = "#ea580c"   # 5-4-3-2-1 Momentum / Launch button
 
 # "Winner's Time Log" categories — one quick tap files where the last hour
 # went. (label, pie color). High-value first so the eye lands on A-1 work;
@@ -497,6 +498,7 @@ class BookReader:
 
         # (📂 Open and 📚 Library moved into the Study workspace.)
         self._ideas_btn = btn(topbar, "🧠  Ideas", self.open_idea_warehouse, ACCENT_AMBER)
+        btn(topbar, "🚀  5-4-3-2-1",         self.launch_momentum,      ACCENT_ORANGE)
         btn(topbar, "🎯  Focus",             self.open_focus_mode,      ACCENT_PURPLE)
         btn(topbar, "🚫  Not-To-Do",         self.open_not_to_do,       ACCENT_RED)
         btn(topbar, "⏱  Time Log",           self.open_time_log,        ACCENT_CYAN)
@@ -11764,6 +11766,130 @@ try {
 
         _load()
 
+    # ---- 5-4-3-2-1 Momentum button (Mel Robbins / Tracy "Do it now!") --
+    def launch_momentum(self) -> None:
+        """Mel Robbins' 5-Second Rule + Tracy's 'Do it now!': a big backward
+        5-4-3-2-1 countdown that supplies the activation energy to START — the
+        hardest moment for a neurodivergent brain. On GO it drops you straight
+        into Focus Mode on your #1 task, physically moving you into the work
+        before the brain can talk you out of it."""
+        existing = getattr(self, "_momentum_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    try:
+                        existing.lift(); existing.focus_force()
+                    except tk.TclError:
+                        pass
+                    return
+            except tk.TclError:
+                pass
+
+        task = self._focus_pick_task()
+        task_text = task[1] if task else ""
+
+        MBG = "#0b1220"
+        win = tk.Toplevel(self.root)
+        self._momentum_win = win
+        self._momentum_after_id = None
+        win.title("🚀 5-4-3-2-1")
+        win.configure(bg=MBG)
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(720, max(460, sw - 80)); h = min(560, max(360, sh - 120))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.transient(self.root)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+
+        def _cancel(*_a):
+            aid = getattr(self, "_momentum_after_id", None)
+            if aid is not None:
+                try:
+                    self.root.after_cancel(aid)
+                except Exception:
+                    pass
+            self._momentum_after_id = None
+            self._momentum_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _cancel)
+        win.bind("<Escape>", _cancel)
+
+        tk.Label(win, text="Don't feel like it? Count down and MOVE on GO.",
+                 bg=MBG, fg=FG_MUTED, font=("Segoe UI", 11)).pack(pady=(18, 2))
+        if task_text:
+            tk.Label(win, text="Your #1 task", bg=MBG, fg=FG_MUTED,
+                     font=("Segoe UI", 10)).pack()
+            tk.Label(win, text=task_text, bg=MBG, fg=FG_TEXT,
+                     font=("Segoe UI", 16, "bold"), wraplength=w - 80,
+                     justify=tk.CENTER).pack(pady=(2, 4))
+        else:
+            tk.Label(win, text="Just start the next right thing.", bg=MBG,
+                     fg=FG_TEXT, font=("Segoe UI", 16, "bold")).pack(pady=(2, 4))
+
+        num_var = tk.StringVar(value="5")
+        num_lbl = tk.Label(win, textvariable=num_var, bg=MBG, fg=ACCENT_CYAN,
+                           font=("Segoe UI", 120, "bold"))
+        num_lbl.pack(expand=True)
+
+        tk.Button(win, text="Cancel (Esc)", command=_cancel,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
+                  borderwidth=0).pack(pady=(0, 16))
+
+        seq = [("5", ACCENT_CYAN), ("4", ACCENT_CYAN), ("3", ACCENT_AMBER),
+               ("2", ACCENT_AMBER), ("1", ACCENT_RED), ("GO!", ACCENT_GREEN)]
+
+        def _go():
+            self._momentum_after_id = None
+            self._momentum_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+            self.set_status("🚀 GO — you're moving. Single-handle it now.")
+            try:
+                self.open_focus_mode()
+            except Exception:
+                pass
+
+        def _step(i):
+            self._momentum_after_id = None
+            try:
+                if not win.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            label, color = seq[i]
+            num_var.set(label)
+            try:
+                num_lbl.configure(fg=color)
+            except tk.TclError:
+                pass
+            try:
+                import winsound
+                winsound.MessageBeep(
+                    winsound.MB_OK if label == "GO!" else winsound.MB_ICONASTERISK)
+            except Exception:
+                pass
+            if i < len(seq) - 1:
+                self._momentum_after_id = self.root.after(
+                    1000, lambda: _step(i + 1))
+            else:
+                # Hold "GO!" a beat, then physically move into the work.
+                self._momentum_after_id = self.root.after(700, _go)
+
+        _step(0)
+
     # ---- Quadrant-II weekly roles view (Covey) -------------------------
     def open_weekly_roles(self) -> None:
         """Organize the week by ROLES (Student, Parent, CNA…) and give each
@@ -13115,6 +13241,10 @@ def main() -> None:
         try: app._stop_timer(announce=False)
         except Exception: pass
         try: app._cancel_time_auditor()
+        except Exception: pass
+        try:
+            _maid = getattr(app, "_momentum_after_id", None)
+            if _maid is not None: root.after_cancel(_maid)
         except Exception: pass
         # Lift any distraction block so the user is never left blocked after
         # the app exits (closing the app is the safety release).
