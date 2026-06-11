@@ -95,6 +95,12 @@ Beyond reading, the app is a study and focus workstation:
   or 30-day countdown** — you literally can't mark it "bought" until the timer
   hits zero. By then the urge has usually cooled and you **let it go** (one tap),
   which tallies the **money kept**. Buying stays disabled while it's cooling.
+- **🔋 Run Rate (emergency-fund meter)** — how many months you could survive if
+  income stopped today: cash savings ÷ your Core Four monthly expenses. A
+  **battery meter** shows the charge (*"You have exactly 1.5 months of survival
+  fuel"*) with a marked 3-month safe line, and one tap sets an automatic
+  **3-month Emergency Fund goal** as a Dream Bucket. Pulls expenses from Core
+  Four and cash from your Pay-First balance.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

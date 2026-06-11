@@ -528,6 +528,7 @@ class BookReader:
         btn(money, "☕ Latte", self.open_latte_factor, ACCENT_AMBER)
         btn(money, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
         btn(money, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
+        btn(money, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -4213,6 +4214,250 @@ class BookReader:
         _render()
         self._wishlist_after_id = self.root.after(60_000, _tick)
         item_ent.focus_set()
+
+    # ---- Run Rate / Emergency-Fund calculator --------------------------
+    @staticmethod
+    def _run_rate_months(cash, monthly):
+        """Months of survival if income stopped today. None if no expenses set."""
+        if monthly is None or monthly <= 0:
+            return None
+        return float(cash) / float(monthly)
+
+    def _emergency_fund_goal(self, target, cash):
+        """Create/refresh a '🔋 Emergency Fund' Dream Bucket as the auto-goal."""
+        now = datetime.now().isoformat()
+        try:
+            rows = self._db_query(
+                "SELECT id FROM dream_buckets WHERE name=?", ("Emergency Fund",))
+            if rows:
+                self._db_exec(
+                    "UPDATE dream_buckets SET target=?, saved=?, emoji='🔋', "
+                    "updated_at=? WHERE id=?",
+                    (float(target), float(cash), now, rows[0][0]))
+            else:
+                self._db_exec(
+                    "INSERT INTO dream_buckets (name,target,saved,emoji,"
+                    "image_path,sort_order,created_at,updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    ("Emergency Fund", float(target), float(cash), "🔋", "",
+                     -1, now, now))
+        except Exception:
+            pass
+
+    def _draw_battery(self, canvas, months, safe=3.0, full=6.0):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W, H = 380, 96
+        if W < 20:
+            W = 380
+        if H < 20:
+            H = 96
+        pad = 12; nub = 10
+        bx0, by0 = pad, pad
+        bx1, by1 = W - pad - nub, H - pad
+        midy = (by0 + by1) // 2
+        canvas.create_rectangle(bx0, by0, bx1, by1, outline="#94a3b8", width=3)
+        canvas.create_rectangle(bx1, midy - 13, bx1 + nub, midy + 13,
+                                fill="#94a3b8", outline="")
+        inner_x = bx0 + 4; inner_w = (bx1 - 4) - inner_x
+        m = max(0.0, float(months))
+        frac = max(0.0, min(1.0, m / full))
+        color = ("#dc2626" if m < 1 else "#d97706" if m < safe else "#16a34a")
+        if frac > 0:
+            canvas.create_rectangle(inner_x, by0 + 4,
+                                    inner_x + int(inner_w * frac), by1 - 4,
+                                    fill=color, outline="")
+        for mo in range(1, int(full) + 1):
+            tx = inner_x + inner_w * (mo / full)
+            canvas.create_line(tx, by0 + 4, tx, by1 - 4, fill="#0f172a", width=1)
+        sx = inner_x + inner_w * (safe / full)
+        canvas.create_line(sx, by0 - 2, sx, by1 + 2, fill="#22c55e", width=2,
+                           dash=(4, 3))
+        canvas.create_text((bx0 + bx1) // 2, midy,
+                           text=(f"{m:.1f} months" if m < full else "6+ months"),
+                           fill="white", font=("Segoe UI", 17, "bold"))
+
+    def open_run_rate(self) -> None:
+        """Run Rate: how many months you could survive if income stopped today
+        — cash savings ÷ your Core Four monthly survival expenses. A battery
+        meter shows the charge; the goal is a 3-to-6 month emergency fund."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_runrate_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        st = self._load_handoff_state() or {}
+        cf = self._core_four_load()
+        cf_total = (cf["core_rent"] + cf["core_utilities"] + cf["core_food"]
+                    + cf["core_gas"])
+        try:
+            exp0 = float(st.get("run_rate_expenses", 0)) or cf_total
+        except (TypeError, ValueError):
+            exp0 = cf_total
+        try:
+            cash0 = float(st.get("emergency_cash", 0))
+        except (TypeError, ValueError):
+            cash0 = 0.0
+
+        win = tk.Toplevel(self.root)
+        self._runrate_win = win
+        win.title("🔋 Run Rate — Emergency Fund")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(720, max(540, sw - 90)); h = min(600, max(440, sh - 120))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(540, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._runrate_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🔋 Run Rate", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="If your income stopped today, how long could you "
+                 "survive? That's your run rate — the heart of financial peace.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 4))
+
+        # ---- inputs ----
+        inp = tk.Frame(win, bg=BG_DARK, padx=12); inp.pack(fill=tk.X)
+        tk.Label(inp, text="Survival expenses / month  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w",
+                                                     pady=3)
+        exp_var = tk.StringVar(value=(f"{exp0:g}" if exp0 else ""))
+        exp_ent = tk.Entry(inp, textvariable=exp_var, width=12, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 12, "bold"))
+        exp_ent.grid(row=0, column=1, sticky="w", padx=(4, 6))
+        tk.Button(inp, text="↩ Use Core Four",
+                  command=lambda: (exp_var.set(f"{cf_total:g}"), _save(), _recompute()),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).grid(row=0, column=2, sticky="w")
+
+        tk.Label(inp, text="Cash savings  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).grid(row=1, column=0, sticky="w",
+                                                     pady=3)
+        cash_var = tk.StringVar(value=(f"{cash0:g}" if cash0 else ""))
+        cash_ent = tk.Entry(inp, textvariable=cash_var, width=12, bg=BG_INPUT,
+                            fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                            font=("Segoe UI", 12, "bold"))
+        cash_ent.grid(row=1, column=1, sticky="w", padx=(4, 6))
+        tk.Button(inp, text="↩ Use savings balance",
+                  command=lambda: (cash_var.set(f"{self._fi_balance():g}"),
+                                   _save(), _recompute()),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_EMERALD, fg="white",
+                  activebackground=ACCENT_EMERALD, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).grid(row=1, column=2, sticky="w")
+
+        # ---- battery meter ----
+        battery = tk.Canvas(win, height=96, bg=BG_DARK, highlightthickness=0)
+        battery.pack(fill=tk.X, padx=16, pady=(10, 2))
+
+        big_var = tk.StringVar()
+        tk.Label(win, textvariable=big_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold"), wraplength=w - 30, justify=tk.LEFT,
+                 padx=14).pack(fill=tk.X)
+        zone_var = tk.StringVar()
+        tk.Label(win, textvariable=zone_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11), wraplength=w - 30, justify=tk.LEFT,
+                 padx=14).pack(fill=tk.X, pady=(2, 6))
+
+        # ---- goal ----
+        goalrow = tk.Frame(win, bg=BG_DARK, padx=12); goalrow.pack(fill=tk.X, pady=(4, 8))
+        tk.Button(goalrow, text="🎯 Set 3-month goal in Dream Buckets",
+                  command=lambda: _make_goal(),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_PINK, fg="white",
+                  activebackground=ACCENT_PINK, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        def _save():
+            stt = self._load_handoff_state() or {}
+            stt["run_rate_expenses"] = self._money_parse(exp_var.get()) or 0.0
+            stt["emergency_cash"] = self._money_parse(cash_var.get()) or 0.0
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+
+        def _make_goal():
+            exp = self._money_parse(exp_var.get()) or 0.0
+            cash = self._money_parse(cash_var.get()) or 0.0
+            if exp <= 0:
+                messagebox.showinfo("Run Rate",
+                                    "Set your monthly survival expenses first.")
+                return
+            self._emergency_fund_goal(exp * 3, cash)
+            self.set_status("🎯 Emergency Fund goal set (3 months) — fund it in "
+                            "🪣 Dream Buckets.")
+            messagebox.showinfo(
+                "Goal set",
+                "Added a '🔋 Emergency Fund' bucket targeting 3 months "
+                f"({self._money_fmt(exp * 3)}) in your Dream Buckets. "
+                "Fund it there to charge the battery.")
+
+        def _recompute(*_a):
+            exp = self._money_parse(exp_var.get()) or 0.0
+            cash = self._money_parse(cash_var.get()) or 0.0
+            months = self._run_rate_months(cash, exp)
+            if months is None:
+                self._draw_battery(battery, 0.0)
+                big_var.set("Enter your monthly survival expenses to see your "
+                            "run rate.")
+                zone_var.set("Tip: tap “Use Core Four” to pull Rent + Utilities "
+                             "+ Food + Transportation.")
+                return
+            self._draw_battery(battery, months)
+            big_var.set(f"You have exactly {months:.1f} months of survival fuel.")
+            to3 = max(0.0, exp * 3 - cash)
+            to6 = max(0.0, exp * 6 - cash)
+            if months < 1:
+                ztxt = "🛑 Under a month of runway — pure defense mode. "
+            elif months < 3:
+                ztxt = "⚠ Building — keep charging toward 3 months. "
+            elif months < 6:
+                ztxt = "✅ Solid 3-month base — now stretch toward 6. "
+            else:
+                ztxt = "🏆 Fully charged — 6+ months. Financial peace. "
+            zone_var.set(ztxt + (f"To 3 mo: add {self._money_fmt(to3)}  ·  "
+                                 f"To 6 mo: add {self._money_fmt(to6)}"
+                                 if (to3 > 0 or to6 > 0) else "Goal met!"))
+
+        exp_ent.bind("<KeyRelease>", _recompute)
+        cash_ent.bind("<KeyRelease>", _recompute)
+        exp_ent.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
+        cash_ent.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
+        win.bind("<Destroy>", lambda _e: None)
+        battery.bind("<Configure>", lambda _e: _recompute())
+
+        _recompute()
+        (cash_ent if cash0 == 0 else exp_ent).focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
