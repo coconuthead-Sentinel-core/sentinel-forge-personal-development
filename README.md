@@ -90,6 +90,11 @@ Beyond reading, the app is a study and focus workstation:
   purchase (one-tap +$5/+$10/+$20), with a 🎉 reward — instant dopamine for an
   ADHD brain. Add your own buckets, set targets, and drop in a picture of the
   exact thing you want.
+- **⏳ Wishlist (7-day purchase delay)** — fast money decisions are usually poor
+  ones. Park anything you want-but-don't-need here and it's **locked with a 7-
+  or 30-day countdown** — you literally can't mark it "bought" until the timer
+  hits zero. By then the urge has usually cooled and you **let it go** (one tap),
+  which tallies the **money kept**. Buying stays disabled while it's cooling.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

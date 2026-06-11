@@ -527,6 +527,7 @@ class BookReader:
         btn(money, "🛡 Core Four", self.open_core_four, ACCENT_GREEN)
         btn(money, "☕ Latte", self.open_latte_factor, ACCENT_AMBER)
         btn(money, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
+        btn(money, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -3965,6 +3966,253 @@ class BookReader:
             pass
         self.root.wait_window(dlg)
         return result["v"]
+
+    # ---- 7-Day Purchase Delay Enforcer (the cooling-off wishlist) ------
+    @staticmethod
+    def _wishlist_fmt_remaining(secs):
+        secs = int(secs)
+        if secs <= 0:
+            return "🔓 Ready to decide"
+        d = secs // 86400
+        h = (secs % 86400) // 3600
+        m = (secs % 3600) // 60
+        if d > 0:
+            return f"⏳ {d}d {h}h left"
+        if h > 0:
+            return f"⏳ {h}h {m}m left"
+        return f"⏳ {m}m left"
+
+    def _wishlist_add(self, item, price, days):
+        now = datetime.now()
+        unlock = now + timedelta(days=int(days))
+        try:
+            self._db_exec(
+                "INSERT INTO wishlist (item,price,created_at,unlock_at,status) "
+                "VALUES (?,?,?,?,'waiting')",
+                (item, float(price or 0), now.isoformat(), unlock.isoformat()))
+        except Exception:
+            pass
+
+    def _wishlist_waiting(self):
+        try:
+            return self._db_query(
+                "SELECT id,item,price,created_at,unlock_at FROM wishlist "
+                "WHERE status='waiting' ORDER BY unlock_at")
+        except Exception:
+            return []
+
+    def _wishlist_counts(self):
+        try:
+            dropped = self._db_query(
+                "SELECT COUNT(*),COALESCE(SUM(price),0) FROM wishlist "
+                "WHERE status='dropped'")[0]
+            bought = self._db_query(
+                "SELECT COUNT(*) FROM wishlist WHERE status='bought'")[0][0]
+        except Exception:
+            return 0, 0.0, 0
+        return int(dropped[0]), float(dropped[1] or 0), int(bought)
+
+    def open_wishlist(self) -> None:
+        """The 7-day (or 30-day) purchase-delay rule: a wanted non-essential is
+        locked with a countdown. You can't mark it 'bought' until the timer
+        hits zero — by then the urge has usually cooled and you let it go.
+        Fast money decisions are usually poor ones."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_wishlist_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._wishlist_win = win
+        self._wishlist_after_id = None
+        win.title("⏳ Wishlist — Purchase Delay")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(780, max(560, sw - 80)); h = min(660, max(460, sh - 110))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 460)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _cancel_tick():
+            aid = getattr(self, "_wishlist_after_id", None)
+            if aid is not None:
+                try:
+                    self.root.after_cancel(aid)
+                except Exception:
+                    pass
+            self._wishlist_after_id = None
+
+        def _close():
+            _cancel_tick()
+            self._wishlist_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="⏳ Wishlist — Cooling Off", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Want something you don't need? Park it here. Fast "
+                 "money decisions are usually poor ones — let the urge cool, "
+                 "then decide.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 2))
+
+        # ---- add row ----
+        arow = tk.Frame(win, bg=BG_DARK, padx=12, pady=4); arow.pack(fill=tk.X)
+        item_var = tk.StringVar()
+        item_ent = tk.Entry(arow, textvariable=item_var, width=22, bg=BG_INPUT,
+                            fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                            font=("Segoe UI", 12))
+        item_ent.pack(side=tk.LEFT, ipady=2)
+        tk.Label(arow, text="  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        price_var = tk.StringVar()
+        price_ent = tk.Entry(arow, textvariable=price_var, width=8, bg=BG_INPUT,
+                             fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                             font=("Segoe UI", 12))
+        price_ent.pack(side=tk.LEFT, padx=(2, 6), ipady=2)
+        delay_var = tk.StringVar(value="7 days")
+        delay_menu = tk.OptionMenu(arow, delay_var, "7 days", "30 days")
+        _style_optionmenu(delay_menu); delay_menu.configure(width=8, font=("Segoe UI", 10, "bold"))
+        delay_menu.pack(side=tk.LEFT, padx=(0, 6))
+
+        def _add():
+            name = item_var.get().strip()
+            if not name:
+                messagebox.showinfo("Wishlist", "What do you want to buy?")
+                return
+            days = 30 if delay_var.get().startswith("30") else 7
+            self._wishlist_add(name, self._money_parse(price_var.get()) or 0, days)
+            item_var.set(""); price_var.set("")
+            self.set_status(f"⏳ '{name}' locked for {days} days. Sleep on it.")
+            _render()
+        tk.Button(arow, text="🔒 Lock it", command=_add,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_INDIGO, fg="white",
+                  activebackground=ACCENT_INDIGO, relief=tk.FLAT, padx=12, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        item_ent.bind("<Return>", lambda _e: _add())
+        price_ent.bind("<Return>", lambda _e: _add())
+
+        # ---- stats ----
+        stat_var = tk.StringVar()
+        tk.Label(win, textvariable=stat_var, bg=BG_DARK, fg="#34d399",
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W, padx=14).pack(
+                     fill=tk.X, pady=(4, 0))
+
+        # ---- scrollable cards of waiting items ----
+        outer = tk.Frame(win, bg=BG_DARK); outer.pack(fill=tk.BOTH, expand=True,
+                                                      padx=12, pady=6)
+        lcanvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=lcanvas.yview, width=16)
+        cards = tk.Frame(lcanvas, bg=BG_DARK)
+        cards.bind("<Configure>",
+                   lambda _e: lcanvas.configure(scrollregion=lcanvas.bbox("all")))
+        lcanvas.create_window((0, 0), window=cards, anchor="nw", width=w - 56)
+        lcanvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        lcanvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _decide(bid, status):
+            try:
+                self._db_exec(
+                    "UPDATE wishlist SET status=?, decided_at=? WHERE id=?",
+                    (status, datetime.now().isoformat(), bid))
+            except Exception:
+                pass
+            if status == "dropped":
+                self.set_status("💪 Let it go — that's money kept. Well played.")
+            _render()
+
+        def _delete(bid):
+            try:
+                self._db_exec("DELETE FROM wishlist WHERE id=?", (bid,))
+            except Exception:
+                pass
+            _render()
+
+        def _render():
+            for ch in cards.winfo_children():
+                ch.destroy()
+            rows = self._wishlist_waiting()
+            now = datetime.now()
+            if not rows:
+                tk.Label(cards, text="Nothing waiting. Next time you feel the "
+                         "urge to buy, park it here first.", bg=BG_DARK,
+                         fg=FG_MUTED, font=("Segoe UI", 11), wraplength=w - 80,
+                         justify=tk.LEFT).pack(anchor="w", pady=10)
+            for bid, item, price, created, unlock in rows:
+                try:
+                    secs = (datetime.fromisoformat(unlock) - now).total_seconds()
+                except Exception:
+                    secs = 0
+                ready = secs <= 0
+                card = tk.Frame(cards, bg=BG_PANEL, padx=12, pady=8)
+                card.pack(fill=tk.X, pady=4)
+                topline = tk.Frame(card, bg=BG_PANEL); topline.pack(fill=tk.X)
+                tk.Label(topline, text=item, bg=BG_PANEL, fg=FG_TEXT,
+                         font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+                if price and price > 0:
+                    tk.Label(topline, text=self._money_fmt(price), bg=BG_PANEL,
+                             fg=FG_MUTED, font=("Segoe UI", 11, "bold")).pack(
+                                 side=tk.RIGHT)
+                tk.Label(card, text=self._wishlist_fmt_remaining(secs),
+                         bg=BG_PANEL, fg=("#34d399" if ready else ACCENT_AMBER),
+                         font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(2, 4))
+                btns = tk.Frame(card, bg=BG_PANEL); btns.pack(fill=tk.X)
+                if ready:
+                    tk.Button(btns, text="✅ I still want it — buy",
+                              command=lambda b=bid: _decide(b, "bought"),
+                              font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN,
+                              fg="white", activebackground=ACCENT_GREEN,
+                              relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                              borderwidth=0).pack(side=tk.LEFT, padx=2)
+                else:
+                    tk.Label(btns, text="🔒 Locked — buying disabled until the "
+                             "timer ends", bg=BG_PANEL, fg=FG_MUTED,
+                             font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT)
+                tk.Button(btns, text="🗑 Let it go",
+                          command=lambda b=bid: _decide(b, "dropped"),
+                          font=("Segoe UI", 9, "bold"), bg=ACCENT_EMERALD,
+                          fg="white", activebackground=ACCENT_EMERALD,
+                          relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT, padx=2)
+            dn, dsum, bn = self._wishlist_counts()
+            stat_var.set(f"🧊 Cooling off: {len(rows)}   ·   💪 Let go: {dn} "
+                         f"({self._money_fmt(dsum)} kept)   ·   🛒 Bought: {bn}")
+
+        def _tick():
+            self._wishlist_after_id = None
+            try:
+                if not win.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            _render()
+            self._wishlist_after_id = self.root.after(60_000, _tick)
+
+        _render()
+        self._wishlist_after_id = self.root.after(60_000, _tick)
+        item_ent.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
@@ -14477,6 +14725,10 @@ def main() -> None:
         try:
             _maid = getattr(app, "_momentum_after_id", None)
             if _maid is not None: root.after_cancel(_maid)
+        except Exception: pass
+        try:
+            _waid = getattr(app, "_wishlist_after_id", None)
+            if _waid is not None: root.after_cancel(_waid)
         except Exception: pass
         # Lift any distraction block so the user is never left blocked after
         # the app exits (closing the app is the safety release).

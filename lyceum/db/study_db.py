@@ -335,6 +335,22 @@ CREATE TABLE IF NOT EXISTS dream_buckets (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- 7-Day Purchase Delay (the "30-day rule" / frugality): fast money decisions
+-- are usually poor ones. A wanted non-essential is locked with a countdown;
+-- you can't mark it "bought" until the timer hits zero — by then the urge has
+-- usually cooled and you let it go. Dropped items tally "money kept".
+CREATE TABLE IF NOT EXISTS wishlist (
+    id INTEGER PRIMARY KEY,
+    item TEXT NOT NULL DEFAULT '',
+    price REAL NOT NULL DEFAULT 0,
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    unlock_at TEXT NOT NULL,                  -- ISO; buying allowed only after
+    status TEXT NOT NULL DEFAULT 'waiting',   -- waiting | bought | dropped
+    decided_at TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_wishlist_status ON wishlist(status);
 """
 
 
