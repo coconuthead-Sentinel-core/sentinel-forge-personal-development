@@ -73,6 +73,12 @@ Beyond reading, the app is a study and focus workstation:
   Financial Independence balance you can't budget away, and only lets you
   allocate the **spendable remainder** across rent, gas, food, etc. — it
   refuses any budget line that would dip into your savings.
+- **🛡 Core Four (Defense Mode)** — when money's tight, strip the budget down
+  to the four survival numbers: **Rent · Utilities · Food · Transportation**.
+  A bold 2×2 grid checks them against the cash you have — each box turns
+  **green when secured, red when not covered** — and tells you if you're short
+  and by how much, so your most basic needs get covered *first*. Can pull the
+  spendable figure straight from your latest paycheck.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 

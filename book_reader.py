@@ -521,6 +521,7 @@ class BookReader:
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
         money = section(row1, "MONEY")
         btn(money, "💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD)
+        btn(money, "🛡 Core Four", self.open_core_four, ACCENT_GREEN)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -3161,6 +3162,229 @@ class BookReader:
         _refresh_balance()
         _refresh_list()
         pay_ent.focus_set()
+
+    # ---- Core Four Survival Budget (Defense Mode) ----------------------
+    CORE_FOUR = (
+        ("🏠", "Rent",           "core_rent"),
+        ("💡", "Utilities",      "core_utilities"),
+        ("🍎", "Food",           "core_food"),
+        ("⛽", "Transportation", "core_gas"),
+    )
+
+    def _core_four_load(self) -> dict:
+        st = self._load_handoff_state() or {}
+
+        def g(k):
+            try:
+                return float(st.get(k, 0))
+            except (TypeError, ValueError):
+                return 0.0
+        return {"available": g("core_available"),
+                "core_rent": g("core_rent"),
+                "core_utilities": g("core_utilities"),
+                "core_food": g("core_food"),
+                "core_gas": g("core_gas")}
+
+    @staticmethod
+    def _core_four_eval(available: float, amounts: list) -> tuple:
+        """Pure budget logic. amounts are in survival priority order. Returns
+        (statuses, total, secured, delta): statuses[i] in 'green'/'red'/
+        'neutral'; secured = the cash covers all four; delta = available-total
+        (positive = surplus, negative = short)."""
+        total = sum(a for a in amounts if a > 0)
+        running = float(available)
+        short_hit = False
+        statuses = []
+        for a in amounts:
+            if a <= 0:
+                statuses.append("neutral")
+                continue
+            if not short_hit and running + 0.001 >= a:
+                running -= a
+                statuses.append("green")
+            else:
+                short_hit = True
+                statuses.append("red")
+        secured = total > 0 and available + 0.001 >= total
+        return statuses, total, secured, available - total
+
+    def open_core_four(self) -> None:
+        """Defense-mode budget: just the four survival numbers — Rent,
+        Utilities, Food, Transportation — checked against the cash you have.
+        Bold green = secured, red = short, so your most basic needs are always
+        covered FIRST. Great financial defense is how wealth gets built."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_core_four_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        data = self._core_four_load()
+        GREEN, RED, NEUTRAL = ACCENT_GREEN, ACCENT_RED, BG_PANEL
+
+        win = tk.Toplevel(self.root)
+        self._core_four_win = win
+        win.title("🛡 Core Four — Survival Budget")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(720, max(520, sw - 90)); h = min(620, max(440, sh - 120))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(520, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._core_four_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🛡 Core Four — Defense Mode", bg=BG_PANEL,
+                 fg=FG_TEXT, font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Your four basic survival numbers vs. the cash you "
+                 "have. Secure these FIRST — that's great financial defense.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 2))
+
+        # ---- money available ----
+        avrow = tk.Frame(win, bg=BG_DARK, padx=12, pady=4); avrow.pack(fill=tk.X)
+        tk.Label(avrow, text="Money available  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        avail_var = tk.StringVar(
+            value=(f"{data['available']:g}" if data["available"] else ""))
+        av_ent = tk.Entry(avrow, textvariable=avail_var, width=12, bg=BG_INPUT,
+                          fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                          font=("Segoe UI", 13, "bold"))
+        av_ent.pack(side=tk.LEFT, padx=(4, 8), ipady=3)
+
+        def _use_latest():
+            rows = self._fi_paychecks()
+            if not rows:
+                self.set_status("No paycheck yet — add one in 💰 Pay First.")
+                return
+            _id, _d, gross, _p, saved = rows[0]
+            avail_var.set(f"{(gross - saved):g}")
+            _save_all(); _recompute()
+        tk.Button(avrow, text="↩ Use latest spendable", command=_use_latest,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_EMERALD, fg="white",
+                  activebackground=ACCENT_EMERALD, relief=tk.FLAT, padx=10,
+                  pady=3, cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        # ---- 2x2 grid of the four boxes ----
+        grid = tk.Frame(win, bg=BG_DARK, padx=10, pady=6)
+        grid.pack(fill=tk.BOTH, expand=True)
+        grid.columnconfigure(0, weight=1); grid.columnconfigure(1, weight=1)
+        grid.rowconfigure(0, weight=1); grid.rowconfigure(1, weight=1)
+
+        boxes = {}
+        for i, (icon, name, key) in enumerate(self.CORE_FOUR):
+            bf = tk.Frame(grid, bg=NEUTRAL, padx=12, pady=10,
+                          highlightthickness=2, highlightbackground="#334155")
+            bf.grid(row=i // 2, column=i % 2, sticky="nsew", padx=6, pady=6)
+            hdr = tk.Label(bf, text=f"{icon}  {name}", bg=NEUTRAL, fg=FG_TEXT,
+                           font=("Segoe UI", 14, "bold"))
+            hdr.pack(anchor="w")
+            erow = tk.Frame(bf, bg=NEUTRAL); erow.pack(anchor="w", pady=(6, 2))
+            tk.Label(erow, text="$", bg=NEUTRAL, fg=FG_TEXT,
+                     font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+            var = tk.StringVar(value=(f"{data[key]:g}" if data[key] else ""))
+            ent = tk.Entry(erow, textvariable=var, width=10, bg=BG_INPUT,
+                           fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                           font=("Segoe UI", 13, "bold"))
+            ent.pack(side=tk.LEFT, padx=(4, 0), ipady=2)
+            status = tk.Label(bf, text="", bg=NEUTRAL, fg="white",
+                              font=("Segoe UI", 10, "bold"))
+            status.pack(anchor="w", pady=(4, 0))
+            boxes[key] = {"frame": bf, "hdr": hdr, "erow": erow, "status": status,
+                          "var": var, "icon": icon, "name": name}
+
+        # ---- bottom status banner ----
+        banner = tk.Label(win, text="", bg=BG_DARK, fg=FG_TEXT,
+                          font=("Segoe UI", 14, "bold"), padx=14, pady=10,
+                          wraplength=w - 30, justify=tk.LEFT)
+        banner.pack(fill=tk.X)
+
+        def _save_all():
+            st = self._load_handoff_state() or {}
+            st["core_available"] = self._money_parse(avail_var.get()) or 0.0
+            for icon, name, key in self.CORE_FOUR:
+                st[key] = self._money_parse(boxes[key]["var"].get()) or 0.0
+            try:
+                self._save_handoff_state(st)
+            except Exception:
+                pass
+
+        def _paint_box(key, color, status_text):
+            b = boxes[key]
+            fg = "white" if color != NEUTRAL else FG_MUTED
+            for wdg in (b["frame"], b["hdr"], b["erow"], b["status"]):
+                try:
+                    wdg.configure(bg=color)
+                except tk.TclError:
+                    pass
+            try:
+                b["hdr"].configure(fg=fg)
+                b["status"].configure(bg=color, fg=fg, text=status_text)
+                b["frame"].configure(
+                    highlightbackground=("#22c55e" if color == GREEN else
+                                         "#ef4444" if color == RED else "#334155"))
+            except tk.TclError:
+                pass
+
+        def _recompute(*_a):
+            avail = self._money_parse(avail_var.get()) or 0.0
+            amounts = [self._money_parse(boxes[key]["var"].get()) or 0.0
+                       for _i, _n, key in self.CORE_FOUR]
+            statuses, total, _secured, _delta = self._core_four_eval(avail, amounts)
+            cmap = {"green": (GREEN, "✅ secured"), "red": (RED, "🛑 not covered"),
+                    "neutral": (NEUTRAL, "set amount")}
+            for (_i, _n, key), st in zip(self.CORE_FOUR, statuses):
+                color, txt = cmap[st]
+                _paint_box(key, color, txt)
+            if total <= 0:
+                banner.configure(text="Enter your four survival numbers above.",
+                                 bg=BG_DARK, fg=FG_MUTED)
+            elif avail + 0.001 >= total:
+                banner.configure(
+                    text=f"✅ Core Four secured — {self._money_fmt(total)} needed, "
+                         f"{self._money_fmt(avail - total)} left over.",
+                    bg="#064e3b", fg="#6ee7b7")
+            else:
+                banner.configure(
+                    text=f"🛑 Short by {self._money_fmt(total - avail)} — "
+                         f"{self._money_fmt(total)} needed, only "
+                         f"{self._money_fmt(avail)} available. Defense first: "
+                         f"cover Rent → Utilities → Food → Gas in that order.",
+                    bg="#7f1d1d", fg="#fecaca")
+
+        av_ent.bind("<KeyRelease>", _recompute)
+        av_ent.bind("<FocusOut>", lambda _e: (_save_all(), _recompute()))
+        for icon, name, key in self.CORE_FOUR:
+            ent = boxes[key]["erow"].winfo_children()[1]
+            ent.bind("<KeyRelease>", _recompute)
+            ent.bind("<FocusOut>", lambda _e: (_save_all(), _recompute()))
+
+        _recompute()
+        av_ent.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
