@@ -249,6 +249,7 @@ ACCENT_EMERALD = "#059669"  # Pay Yourself First (money / savings)
 ACCENT_GOLD    = "#ca8a04"  # Money hub (at-a-glance summary)
 ACCENT_TEAL    = "#0d9488"  # Save More Tomorrow (raise wedge)
 ACCENT_LIME    = "#65a30d"  # Rule-of-72 compound growth simulator
+ACCENT_SKY     = "#0284c7"  # Blue-Sky vision board
 
 # "Winner's Time Log" categories — one quick tap files where the last hour
 # went. (label, pie color). High-value first so the eye lands on A-1 work;
@@ -549,6 +550,7 @@ class BookReader:
         btn(plan, "⚖ Roles", self.open_weekly_roles, ACCENT_GREEN)
         btn(plan, "🔁 Habits", self.open_habits, ACCENT_INDIGO)
         btn(plan, "⏪ Backplan", self.open_pert, ACCENT_GOLD)
+        self._vision_btn = btn(plan, "🌤 Vision", self.open_vision_board, ACCENT_SKY)
 
         # --- Row 1b: tracking & review tools (own row) ---
         rowt = tk.Frame(topbar, bg=BG_PANEL); rowt.pack(fill=tk.X, pady=(4, 0))
@@ -7872,6 +7874,430 @@ class BookReader:
         timeline.bind("<Configure>", lambda _e: _render())
 
         _refresh_plans()
+
+    # ---- "Blue-Sky" multimedia vision board (Tracy / Robbins) ---------
+    def _vision_all(self):
+        try:
+            return self._db_query(
+                "SELECT id,path,caption FROM vision_images ORDER BY sort_order, id")
+        except Exception:
+            return []
+
+    def _vision_add(self, path, caption=""):
+        try:
+            mx = self._db_query(
+                "SELECT COALESCE(MAX(sort_order),0) FROM vision_images")[0][0]
+            self._db_exec(
+                "INSERT INTO vision_images (path,caption,sort_order,created_at) "
+                "VALUES (?,?,?,?)",
+                (path, caption, int(mx) + 1, datetime.now().isoformat()))
+        except Exception:
+            pass
+
+    def _vision_set_caption(self, vid, caption):
+        try:
+            self._db_exec("UPDATE vision_images SET caption=? WHERE id=?",
+                          (caption, vid))
+        except Exception:
+            pass
+
+    def _vision_delete(self, vid):
+        try:
+            self._db_exec("DELETE FROM vision_images WHERE id=?", (vid,))
+        except Exception:
+            pass
+
+    def _vision_move(self, vid, direction):
+        imgs = self._vision_all()
+        ids = [i[0] for i in imgs]
+        if vid not in ids:
+            return
+        i = ids.index(vid); j = i + direction
+        if j < 0 or j >= len(imgs):
+            return
+        # reassign sort_order across all, swapping positions i and j
+        order = ids[:]
+        order[i], order[j] = order[j], order[i]
+        for k, rid in enumerate(order):
+            try:
+                self._db_exec("UPDATE vision_images SET sort_order=? WHERE id=?",
+                              (k, rid))
+            except Exception:
+                pass
+
+    def _load_image_fit(self, path, maxw, maxh):
+        """Load an image scaled to fit (maxw x maxh): PIL if present, else a
+        subsampled PhotoImage (png/gif). Caller keeps a reference."""
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            from PIL import Image, ImageTk
+            im = Image.open(path); im.thumbnail((maxw, maxh))
+            return ImageTk.PhotoImage(im)
+        except Exception:
+            pass
+        try:
+            img = tk.PhotoImage(file=path)
+            fx = max(1, img.width() // maxw); fy = max(1, img.height() // maxh)
+            f = max(fx, fy)
+            if f > 1:
+                img = img.subsample(f, f)
+            return img
+        except Exception:
+            return None
+
+    def _vision_music_path(self):
+        return str((self._load_handoff_state() or {}).get("vision_music", ""))
+
+    def _vision_start_music(self):
+        p = self._vision_music_path()
+        if p and p.lower().endswith(".wav") and os.path.exists(p):
+            try:
+                import winsound
+                winsound.PlaySound(p, winsound.SND_FILENAME | winsound.SND_ASYNC
+                                   | winsound.SND_LOOP)
+            except Exception:
+                pass
+
+    def _vision_stop_music(self):
+        try:
+            import winsound
+            winsound.PlaySound(None, winsound.SND_PURGE)
+        except Exception:
+            pass
+
+    def _flash_vision_button(self, times=6):
+        btn = getattr(self, "_vision_btn", None)
+        if btn is None:
+            return
+
+        def _pulse(n):
+            try:
+                if not btn.winfo_exists():
+                    return
+                btn.configure(bg=ACCENT_AMBER if n % 2 else ACCENT_SKY,
+                              activebackground=ACCENT_AMBER if n % 2 else ACCENT_SKY)
+            except tk.TclError:
+                return
+            if n > 0:
+                self.root.after(350, lambda: _pulse(n - 1))
+        _pulse(times)
+
+    def _maybe_vision_nudge(self):
+        """Daily prompt to watch the vision board before the day begins."""
+        try:
+            if not self._vision_all():
+                return
+            st = self._load_handoff_state() or {}
+            if st.get("vision_last_watched", "") == date.today().isoformat():
+                return
+            self.set_status("🌤 Watch your Vision Board before your shift — see "
+                            "the life you're building, vividly.")
+            self._flash_vision_button()
+        except Exception:
+            pass
+
+    def open_vision_board(self):
+        """Tracy & Robbins: vividly visualizing your goals programs your
+        reticular activating system. Add images of the life you want and play
+        the daily slideshow to supercharge the subconscious."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_vision_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._vision_win = win
+        self._vision_thumbs = []
+        win.title("🌤 Blue-Sky Vision Board")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(820, max(580, sw - 70)); h = min(700, max(490, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(580, 490)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._vision_win = None
+            self._vision_thumbs = []
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🌤 Blue-Sky Vision Board", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="See the life you want — the exact car, the house, the "
+                 "diploma. Watch it daily, with feeling, to program your mind to "
+                 "notice the path.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        # toolbar
+        tb = tk.Frame(win, bg=BG_DARK, padx=12, pady=4); tb.pack(fill=tk.X)
+
+        def _add_images():
+            paths = filedialog.askopenfilenames(
+                title="Add images of the life you want",
+                filetypes=[("Images", "*.png *.gif *.jpg *.jpeg *.bmp"),
+                           ("All files", "*.*")])
+            for p in paths:
+                self._vision_add(p, "")
+            if paths:
+                _render()
+        tk.Button(tb, text="🖼 Add images", command=_add_images,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_SKY, fg="white",
+                  activebackground=ACCENT_SKY, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        music_var = tk.StringVar()
+
+        def _pick_music():
+            p = filedialog.askopenfilename(
+                title="Pick motivational music (.wav plays in-app)",
+                filetypes=[("WAV audio", "*.wav"), ("All files", "*.*")])
+            if not p:
+                return
+            st = self._load_handoff_state() or {}
+            st["vision_music"] = p
+            try:
+                self._save_handoff_state(st)
+            except Exception:
+                pass
+            _refresh_music()
+        tk.Button(tb, text="🎵 Music", command=_pick_music,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_PURPLE, fg="white",
+                  activebackground=ACCENT_PURPLE, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(6, 0))
+        tk.Label(tb, textvariable=music_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(6, 0))
+
+        tk.Button(tb, text="▶ Play (60s)", command=lambda: self._play_vision(),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        def _refresh_music():
+            p = self._vision_music_path()
+            if not p:
+                music_var.set("(no music — WAV recommended)")
+            else:
+                note = "" if p.lower().endswith(".wav") else "  (WAV only for in-app)"
+                music_var.set("♪ " + os.path.basename(p) + note)
+
+        # thumbnails grid
+        outer = tk.Frame(win, bg=BG_DARK); outer.pack(fill=tk.BOTH, expand=True,
+                                                      padx=12, pady=8)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=canvas.yview, width=16)
+        inner = tk.Frame(canvas, bg=BG_DARK)
+        inner.bind("<Configure>",
+                   lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw", width=w - 56)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _render():
+            for ch in inner.winfo_children():
+                ch.destroy()
+            self._vision_thumbs = []
+            imgs = self._vision_all()
+            if not imgs:
+                tk.Label(inner, text="No images yet. Click 🖼 Add images and "
+                         "picture the exact life you're building.", bg=BG_DARK,
+                         fg=FG_MUTED, font=("Segoe UI", 11), wraplength=w - 100,
+                         justify=tk.LEFT).pack(anchor="w", pady=10)
+                return
+            for vid, path, caption in imgs:
+                card = tk.Frame(inner, bg=BG_PANEL, padx=8, pady=6); card.pack(
+                    fill=tk.X, pady=3)
+                thumb = self._load_thumb(path, 84)
+                if thumb is not None:
+                    self._vision_thumbs.append(thumb)
+                    tk.Label(card, image=thumb, bg=BG_PANEL).pack(side=tk.LEFT,
+                                                                  padx=(0, 10))
+                else:
+                    tk.Label(card, text="🖼", bg=BG_PANEL, fg=FG_MUTED,
+                             font=("Segoe UI", 26)).pack(side=tk.LEFT, padx=(4, 12))
+                mid = tk.Frame(card, bg=BG_PANEL); mid.pack(side=tk.LEFT, fill=tk.X,
+                                                            expand=True)
+                tk.Label(mid, text=os.path.basename(path), bg=BG_PANEL, fg=FG_MUTED,
+                         font=("Segoe UI", 8)).pack(anchor="w")
+                cap = tk.StringVar(value=caption)
+                ce = tk.Entry(mid, textvariable=cap, bg=BG_INPUT, fg=FG_TEXT,
+                              insertbackground=FG_TEXT, relief=tk.FLAT,
+                              font=("Segoe UI", 11))
+                ce.pack(fill=tk.X, ipady=2)
+                ce.bind("<FocusOut>",
+                        lambda _e, i=vid, v=cap: self._vision_set_caption(i, v.get().strip()))
+                tk.Button(card, text="🗑", command=lambda i=vid: (
+                              self._vision_delete(i), _render()),
+                          font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
+                          activebackground=ACCENT_RED, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Button(card, text="↓", command=lambda i=vid: (
+                              self._vision_move(i, 1), _render()),
+                          font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Button(card, text="↑", command=lambda i=vid: (
+                              self._vision_move(i, -1), _render()),
+                          font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+
+        _refresh_music()
+        _render()
+
+    def _play_vision(self):
+        imgs = self._vision_all()
+        if not imgs:
+            messagebox.showinfo("Vision Board", "Add some images first.")
+            return
+        existing = getattr(self, "_vision_show_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); return
+            except tk.TclError:
+                pass
+
+        # mark watched for today
+        st = self._load_handoff_state() or {}
+        st["vision_last_watched"] = date.today().isoformat()
+        try:
+            self._save_handoff_state(st)
+        except Exception:
+            pass
+
+        win = tk.Toplevel(self.root)
+        self._vision_show_win = win
+        self._vision_after = None
+        self._vision_show_imgs = []
+        win.title("🌤 Your Vision")
+        win.configure(bg="#000000")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(1000, sw - 40); h = min(720, sh - 60)
+        win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//2-20)}")
+        win.transient(self.root)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+
+        PER = 4   # seconds per image
+        state = {"i": 0, "left": 60, "paused": False}
+
+        img_lbl = tk.Label(win, bg="#000000")
+        img_lbl.pack(expand=True)
+        cap_lbl = tk.Label(win, text="", bg="#000000", fg="#fde68a",
+                           font=("Segoe UI", 18, "bold"), wraplength=w - 80)
+        cap_lbl.pack(pady=(0, 4))
+        bar = tk.Frame(win, bg="#000000"); bar.pack(fill=tk.X, pady=(0, 8))
+        time_var = tk.StringVar(value="1:00")
+        tk.Label(bar, textvariable=time_var, bg="#000000", fg="#94a3b8",
+                 font=("Consolas", 12, "bold")).pack(side=tk.LEFT, padx=12)
+
+        def _stop():
+            aid = getattr(self, "_vision_after", None)
+            if aid is not None:
+                try:
+                    self.root.after_cancel(aid)
+                except Exception:
+                    pass
+            self._vision_after = None
+            self._vision_stop_music()
+            self._vision_show_win = None
+            self._vision_show_imgs = []
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _stop)
+        win.bind("<Escape>", lambda _e: _stop())
+
+        def _show(i):
+            vid, path, caption = imgs[i % len(imgs)]
+            im = self._load_image_fit(path, w - 60, h - 140)
+            self._vision_show_imgs = [im]   # keep ref
+            if im is not None:
+                img_lbl.configure(image=im, text="")
+            else:
+                img_lbl.configure(image="", text="🖼 (image unavailable)",
+                                  fg="#475569", font=("Segoe UI", 20))
+            cap_lbl.configure(text=caption or "")
+
+        def _finish():
+            cap_lbl.configure(text="✨ You've seen it. Now go make it real.")
+            self._vision_stop_music()
+            self._vision_after = self.root.after(2500, _stop)
+
+        def _tick():
+            self._vision_after = None
+            try:
+                if not win.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            if state["paused"]:
+                self._vision_after = self.root.after(1000, _tick); return
+            state["left"] -= 1
+            time_var.set(f"0:{state['left']:02d}" if state['left'] < 60 else "1:00")
+            if state["left"] <= 0:
+                _finish(); return
+            if state["left"] % PER == 0:
+                state["i"] += 1
+                _show(state["i"])
+            self._vision_after = self.root.after(1000, _tick)
+
+        def _toggle_pause():
+            state["paused"] = not state["paused"]
+            pause_btn.configure(text=("▶ Resume" if state["paused"] else "⏸ Pause"))
+
+        def _nav(n):
+            state["i"] += n
+            _show(state["i"])
+
+        def _vbtn(parent, text, cmd):
+            return tk.Button(parent, text=text, command=cmd,
+                             font=("Segoe UI", 10, "bold"), bg="#1e293b",
+                             fg="#e2e8f0", activebackground=ACCENT_SLATE,
+                             relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
+                             borderwidth=0)
+        _vbtn(bar, "‹ Prev", lambda: _nav(-1)).pack(side=tk.LEFT, padx=4)
+        pause_btn = _vbtn(bar, "⏸ Pause", _toggle_pause); pause_btn.pack(side=tk.LEFT, padx=4)
+        _vbtn(bar, "Next ›", lambda: _nav(1)).pack(side=tk.LEFT, padx=4)
+        _vbtn(bar, "✕ Close", _stop).pack(side=tk.RIGHT, padx=12)
+
+        self._vision_start_music()
+        _show(0)
+        self._vision_after = self.root.after(1000, _tick)
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
@@ -18375,6 +18801,8 @@ def main() -> None:
     root.after(2600, app._maybe_quarterly_audit)
     # Daily 10-Goal ritual: nudge (and open) if today's goals aren't written.
     root.after(3000, app._maybe_morning_goals)
+    # Vision board: nudge to watch the daily slideshow before the day begins.
+    root.after(3400, app._maybe_vision_nudge)
     # Warm the Whisper speech model in the background so the first 🎤 click
     # doesn't pause to load it.
     root.after(1500, app._preload_whisper)
@@ -18392,6 +18820,11 @@ def main() -> None:
         try:
             _waid = getattr(app, "_wishlist_after_id", None)
             if _waid is not None: root.after_cancel(_waid)
+        except Exception: pass
+        try:
+            _vaid = getattr(app, "_vision_after", None)
+            if _vaid is not None: root.after_cancel(_vaid)
+            app._vision_stop_music()
         except Exception: pass
         # Lift any distraction block so the user is never left blocked after
         # the app exits (closing the app is the safety release).

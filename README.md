@@ -43,6 +43,11 @@ Beyond reading, the app is a study and focus workstation:
   Science Degree by 2028"*) stares back at you whatever you're doing — schedule,
   bills, reading — because Hill and Tracy found that one organizing goal is what
   separates the achievers. Click it to edit; it persists across sessions.
+- **🌤 Blue-Sky Vision Board** — upload images of the life you want (the exact
+  car, the house, the diploma), add captions, and play the **60-second slideshow**
+  — optionally set to your own **WAV music** — to vividly program your reticular
+  activating system (Tracy, Robbins). A daily nudge reminds you to watch it
+  before the day begins; play/pause, prev/next, and a countdown included.
 - **🧭 V2MOM "Why" Engine** — knowing *why* beats knowing *how* (Sinek, Robbins).
   Every major goal is captured through the V2MOM intake — **Vision, Values
   (your Why), Methods, Obstacles, Measurement** — and the app **won't let you

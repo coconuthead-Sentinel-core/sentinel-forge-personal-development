@@ -491,6 +491,17 @@ CREATE TABLE IF NOT EXISTS pert_steps (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pert_steps ON pert_steps(plan_id);
+
+-- "Blue-Sky" vision board (Tracy / Robbins): images of the life you want,
+-- compiled into a daily slideshow (optional music) to vividly program the
+-- reticular activating system before each day begins.
+CREATE TABLE IF NOT EXISTS vision_images (
+    id INTEGER PRIMARY KEY,
+    path TEXT NOT NULL DEFAULT '',
+    caption TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
 """
 
 
