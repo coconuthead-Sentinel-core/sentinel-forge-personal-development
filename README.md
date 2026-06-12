@@ -48,6 +48,12 @@ Beyond reading, the app is a study and focus workstation:
   (your Why), Methods, Obstacles, Measurement** — and the app **won't let you
   save** until you've written your **Why** and named the **Obstacles** in the
   way. Goals you can't justify don't get made.
+- **✍ Daily 10 Goals (spiral notebook)** — Brian Tracy's exercise: each morning
+  the app gives you a **blank, numbered list** and you rewrite your top 10 goals
+  **from memory, in the present tense** (*"I earn $80,000 as a software
+  engineer."*). Writing them daily programs them into the subconscious; a
+  🔥 **day-streak** rewards the habit, and it nudges you each morning until it's
+  done. (Blank each day on purpose — recalling them is the point.)
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
   Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊

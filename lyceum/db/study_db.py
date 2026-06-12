@@ -407,6 +407,18 @@ CREATE TABLE IF NOT EXISTS v2mom_goals (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Daily "10-Goal" spiral notebook (Brian Tracy): each morning, rewrite your
+-- top 10 goals FROM MEMORY in the present tense ("I earn $80,000 …"). Writing
+-- them daily programs them into the subconscious. One row per day; what stays
+-- top-of-mind day to day reveals what matters most.
+CREATE TABLE IF NOT EXISTS goal_journal (
+    id INTEGER PRIMARY KEY,
+    entry_date TEXT NOT NULL UNIQUE,   -- YYYY-MM-DD, one per day
+    goals TEXT NOT NULL DEFAULT '',     -- the goals, newline-separated
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 

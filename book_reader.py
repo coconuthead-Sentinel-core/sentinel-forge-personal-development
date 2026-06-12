@@ -544,6 +544,7 @@ class BookReader:
         btn(plan, "🚀 Launch", self.launch_momentum, ACCENT_ORANGE)
         btn(plan, "🎯 Focus",  self.open_focus_mode,  ACCENT_PURPLE)
         btn(plan, "🧭 Why",    self.open_v2mom,       ACCENT_CYAN)
+        self._ten_goals_btn = btn(plan, "✍ 10 Goals", self.open_ten_goals, ACCENT_PINK)
         track = section(row1, "TRACK")
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
@@ -6039,6 +6040,218 @@ class BookReader:
 
         _refresh_list()
         _new()
+
+    # ---- Daily 10-Goal spiral notebook (Brian Tracy) ------------------
+    def _ten_goals_dates(self):
+        try:
+            return [r[0] for r in self._db_query(
+                "SELECT entry_date FROM goal_journal WHERE TRIM(goals)<>'' "
+                "ORDER BY entry_date DESC")]
+        except Exception:
+            return []
+
+    def _ten_goals_done_today(self):
+        return date.today().isoformat() in set(self._ten_goals_dates())
+
+    def _ten_goals_today(self):
+        try:
+            r = self._db_query("SELECT goals FROM goal_journal WHERE entry_date=?",
+                               (date.today().isoformat(),))
+            return r[0][0] if r else ""
+        except Exception:
+            return ""
+
+    def _ten_goals_save(self, text):
+        now = datetime.now().isoformat()
+        try:
+            self._db_exec(
+                "INSERT INTO goal_journal (entry_date,goals,created_at,updated_at) "
+                "VALUES (?,?,?,?) ON CONFLICT(entry_date) DO UPDATE SET "
+                "goals=excluded.goals, updated_at=excluded.updated_at",
+                (date.today().isoformat(), text, now, now))
+        except Exception:
+            pass
+
+    def _ten_goals_streak(self):
+        dates = set(self._ten_goals_dates())
+        if not dates:
+            return 0
+        d = date.today()
+        if d.isoformat() not in dates:
+            d = d - timedelta(days=1)
+            if d.isoformat() not in dates:
+                return 0
+        streak = 0
+        while d.isoformat() in dates:
+            streak += 1
+            d -= timedelta(days=1)
+        return streak
+
+    def _flash_ten_goals_button(self, times=6):
+        btn = getattr(self, "_ten_goals_btn", None)
+        if btn is None:
+            return
+
+        def _pulse(n):
+            try:
+                if not btn.winfo_exists():
+                    return
+                btn.configure(bg=ACCENT_AMBER if n % 2 else ACCENT_PINK,
+                              activebackground=ACCENT_AMBER if n % 2 else ACCENT_PINK)
+            except tk.TclError:
+                return
+            if n > 0:
+                self.root.after(350, lambda: _pulse(n - 1))
+        _pulse(times)
+
+    def _maybe_morning_goals(self):
+        """Morning ritual: if today's 10 goals aren't written yet, nudge — and
+        open the notebook (unless the Session Start wizard is already up, to
+        avoid two windows stacking)."""
+        try:
+            if self._ten_goals_done_today():
+                return
+            self.set_status("✍ Morning ritual: write your top 10 goals from "
+                            "memory, in the present tense — it programs them deep.")
+            self._flash_ten_goals_button()
+            sw = getattr(self, "_session_start_win", None)
+            busy = False
+            if sw is not None:
+                try:
+                    busy = bool(sw.winfo_exists())
+                except tk.TclError:
+                    busy = False
+            if not busy:
+                self.open_ten_goals()
+        except Exception:
+            pass
+
+    def open_ten_goals(self):
+        """Brian Tracy's daily exercise: every morning, rewrite your top 10
+        goals FROM MEMORY in the present tense, as if already true. Writing them
+        daily drives them into the subconscious; what you remember reveals what
+        matters most."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_ten_goals_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._ten_goals_win = win
+        win.title("✍ Daily 10 Goals")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(680, max(520, sw - 100)); h = min(680, max(480, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(520, 480)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._ten_goals_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="✍ Daily 10 Goals", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        streak_var = tk.StringVar()
+        tk.Label(head, textvariable=streak_var, bg=BG_PANEL, fg=ACCENT_AMBER,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(12, 0))
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="From memory, write your top 10 goals in the PRESENT "
+                 "TENSE — as if already true.  e.g. “I earn $80,000 as a software "
+                 "engineer.”  “I weigh 175 lbs and feel strong.”", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        # bottom save row reserved first
+        srow = tk.Frame(win, bg=BG_DARK, padx=12); srow.pack(side=tk.BOTTOM,
+                                                             fill=tk.X, pady=(4, 10))
+
+        # scrollable list of 10 numbered lines
+        outer = tk.Frame(win, bg=BG_DARK); outer.pack(fill=tk.BOTH, expand=True,
+                                                      padx=12, pady=4)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=canvas.yview, width=16)
+        inner = tk.Frame(canvas, bg=BG_DARK)
+        inner.bind("<Configure>",
+                   lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw", width=w - 56)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        entries = []
+        for i in range(10):
+            r = tk.Frame(inner, bg=BG_DARK); r.pack(fill=tk.X, pady=3)
+            tk.Label(r, text=f"{i + 1:>2}.", bg=BG_DARK, fg=ACCENT_PINK,
+                     font=("Segoe UI", 12, "bold"), width=3).pack(side=tk.LEFT)
+            tk.Label(r, text="I ", bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 12, "italic")).pack(side=tk.LEFT)
+            ev = tk.StringVar()
+            e = tk.Entry(r, textvariable=ev, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 12))
+            e.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+            e.bind("<FocusIn>", lambda _e, b=e: self._set_mic_target(b), add="+")
+            if i < 9:
+                e.bind("<Return>", lambda _e, nx=i: entries[nx + 1][1].focus_set())
+            entries.append((ev, e))
+
+        # prefill today's saved goals (same-day editing) — blank on a fresh day
+        existing_today = self._ten_goals_today()
+        if existing_today:
+            lines = existing_today.split("\n")
+            for i, ln in enumerate(lines[:10]):
+                # strip a leading "I " if present so the prefix label isn't doubled
+                entries[i][0].set(ln[2:] if ln.startswith("I ") else ln)
+
+        def _refresh_streak():
+            s = self._ten_goals_streak()
+            done = " ✓ done today" if self._ten_goals_done_today() else ""
+            streak_var.set((f"🔥 {s}-day streak" if s else "Start your streak today")
+                           + done)
+
+        def _save():
+            lines = []
+            for ev, _e in entries:
+                v = ev.get().strip()
+                if v:
+                    lines.append("I " + v)
+            if not lines:
+                messagebox.showinfo("10 Goals",
+                                    "Write at least one goal in the present tense.")
+                return
+            self._ten_goals_save("\n".join(lines))
+            self.set_status(f"✍ {len(lines)} goals written into your "
+                            "subconscious. See you tomorrow.")
+            _refresh_streak()
+        tk.Button(srow, text="💾 Save today's goals", command=_save,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_PINK, fg="white",
+                  activebackground=ACCENT_PINK, relief=tk.FLAT, padx=14, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        _refresh_streak()
+        entries[0][1].focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
@@ -16540,6 +16753,8 @@ def main() -> None:
     root.after(2200, app._maybe_evening_review_nudge)
     # Zero-Based Audit: force a recurring-expense review every ~90 days.
     root.after(2600, app._maybe_quarterly_audit)
+    # Daily 10-Goal ritual: nudge (and open) if today's goals aren't written.
+    root.after(3000, app._maybe_morning_goals)
     # Warm the Whisper speech model in the background so the first 🎤 click
     # doesn't pause to load it.
     root.after(1500, app._preload_whisper)
