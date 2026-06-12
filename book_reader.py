@@ -567,7 +567,8 @@ class BookReader:
         right_frame = tk.Frame(disp_wrap, bg=BG_DARK, padx=4, pady=3)
         right_frame.pack()
 
-        read = section(row2, "READ ALOUD")
+        # READ ALOUD sits on the SAME row as Planning / Track / Money.
+        read = section(row1, "READ ALOUD")
         btn(read, "🔊 Read", self.read_aloud, ACCENT_GREEN)
         btn(read, "■ Stop",  self.stop_reading, ACCENT_SLATE)
         self.mic_btn = btn(read, "🎤 Voice", self.toggle_mic, ACCENT_MIC)
