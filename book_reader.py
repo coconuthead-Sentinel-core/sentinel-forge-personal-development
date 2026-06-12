@@ -5556,10 +5556,13 @@ class BookReader:
                            - datetime.fromisoformat(last).date()).days >= 90
                 except Exception:
                     due = True
-            if not due or not self._subs_all(active_only=True):
+            has_items = bool(self._subs_all(active_only=True)) or bool(
+                self._assets_in("security") + self._assets_in("growth")
+                + self._assets_in("dream"))
+            if not due or not has_items:
                 return
-            self.set_status("🔍 Your quarterly Zero-Based audit is due — does "
-                            "every subscription still earn its place?")
+            self.set_status("🔍 Your quarterly Zero-Based audit is due — knowing "
+                            "what you now know, does each still earn its place?")
             self._run_zero_based_audit(force=True)
         except Exception:
             pass
@@ -5730,18 +5733,31 @@ class BookReader:
         name_ent.focus_set()
 
     def _run_zero_based_audit(self, force=False):
-        """Walk each active subscription and ask the zero-based question. A 'No'
-        cancels it on the spot. Records the audit date so it recurs ~quarterly."""
+        """KWINK / Zero-Based Thinking: walk each subscription AND investment and
+        ask 'knowing what you now know, would you do this again today?' A 'No'
+        cancels the sub or liquidates the holding — interrupting the sunk-cost
+        trap. Records the audit date so it recurs ~quarterly."""
         try:
             self._init_study_db()
         except Exception:
             pass
-        subs = self._subs_all(active_only=True)
-        if not subs:
+        # Build a combined queue: subscriptions + investment holdings.
+        items = []
+        for sid, name, amount, cycle, act, lastr in self._subs_all(active_only=True):
+            mo = self._subs_monthly(amount, cycle)
+            items.append({"kind": "sub", "id": sid, "name": name, "mo": mo,
+                          "detail": f"{self._money_fmt(mo)}/mo"})
+        for bkt in ("security", "growth", "dream"):
+            for hid, hname, hamt in self._assets_in(bkt):
+                items.append({"kind": "invest", "id": hid, "name": hname,
+                              "value": float(hamt),
+                              "detail": f"{self._money_fmt(hamt)} invested"})
+        if not items:
             if not force:
                 messagebox.showinfo(
                     "Zero-Based Audit",
-                    "Add your recurring expenses first, then run the audit.")
+                    "Add recurring expenses (🔍 Audit) or investment holdings "
+                    "(🧺 Allocate) first, then run the audit.")
             return
 
         existing = getattr(self, "_zba_win", None)
@@ -5768,26 +5784,27 @@ class BookReader:
         except tk.TclError:
             pass
 
-        state = {"i": 0, "kept": 0, "cut": 0, "saved": 0.0}
+        state = {"i": 0, "kept": 0, "cut": 0, "sold": 0, "saved": 0.0, "freed": 0.0}
 
-        tk.Label(win, text="🔍 Zero-Based Audit", bg="#1a0a0a", fg="#fca5a5",
+        tk.Label(win, text="🔍 Zero-Based Audit — KWINK", bg="#1a0a0a", fg="#fca5a5",
                  font=("Segoe UI", 13, "bold")).pack(pady=(16, 2))
         prog_var = tk.StringVar()
         tk.Label(win, textvariable=prog_var, bg="#1a0a0a", fg=FG_MUTED,
                  font=("Segoe UI", 9)).pack()
-        q_lbl = tk.Label(win, text="Knowing what you know now, would you sign "
-                         "up for…", bg="#1a0a0a", fg=FG_TEXT,
-                         font=("Segoe UI", 12), wraplength=w - 60,
-                         justify=tk.CENTER)
-        q_lbl.pack(pady=(18, 4))
+        q_top_var = tk.StringVar(value="Knowing what you now know…")
+        tk.Label(win, textvariable=q_top_var, bg="#1a0a0a", fg=FG_TEXT,
+                 font=("Segoe UI", 12), wraplength=w - 60,
+                 justify=tk.CENTER).pack(pady=(18, 4))
         sub_var = tk.StringVar()
         tk.Label(win, textvariable=sub_var, bg="#1a0a0a", fg="#fde68a",
                  font=("Segoe UI", 18, "bold"), wraplength=w - 60,
                  justify=tk.CENTER).pack(pady=(0, 4))
-        tk.Label(win, text="…again today?", bg="#1a0a0a", fg=FG_TEXT,
+        q_bot_var = tk.StringVar(value="…today?")
+        tk.Label(win, textvariable=q_bot_var, bg="#1a0a0a", fg=FG_TEXT,
                  font=("Segoe UI", 12)).pack()
 
         btnrow = tk.Frame(win, bg="#1a0a0a"); btnrow.pack(pady=20)
+        no_btn_text = tk.StringVar(value="❌ No — cancel it")
 
         def _finish():
             st = self._load_handoff_state() or {}
@@ -5801,58 +5818,79 @@ class BookReader:
                 win.destroy()
             except tk.TclError:
                 pass
-            if getattr(self, "_subs_render", None):
-                try:
-                    self._subs_render()
-                except Exception:
-                    pass
-            saved = state["saved"]
-            messagebox.showinfo(
-                "Audit complete",
-                f"Kept {state['kept']}, cancelled {state['cut']}.\n\n"
-                + (f"You just cut {self._money_fmt(saved)}/month — "
-                   f"{self._money_fmt(saved * 12)}/year of drains. 💪"
-                   if saved > 0 else
-                   "Everything still earns its place. Nicely lean. 👍"))
+            for r in ("_subs_render",):
+                fn = getattr(self, r, None)
+                if fn:
+                    try:
+                        fn()
+                    except Exception:
+                        pass
+            parts = [f"Kept {state['kept']}"]
+            if state["cut"]:
+                parts.append(f"cancelled {state['cut']} subs "
+                             f"({self._money_fmt(state['saved'] * 12)}/yr)")
+            if state["sold"]:
+                parts.append(f"flagged {state['sold']} investments to sell "
+                             f"({self._money_fmt(state['freed'])})")
+            tail = ("Good money no longer chasing bad. 💪"
+                    if (state["cut"] or state["sold"])
+                    else "Everything still earns its place. 👍")
+            messagebox.showinfo("Audit complete", "  ·  ".join(parts) + "\n\n" + tail)
 
         def _show():
             i = state["i"]
-            if i >= len(subs):
+            if i >= len(items):
                 _finish(); return
-            sid, name, amount, cycle, act, lastr = subs[i]
-            mo = self._subs_monthly(amount, cycle)
-            prog_var.set(f"{i + 1} of {len(subs)}")
-            sub_var.set(f"{name} — {self._money_fmt(mo)}/mo")
+            it = items[i]
+            prog_var.set(f"{i + 1} of {len(items)}")
+            sub_var.set(f"{it['name']} — {it['detail']}")
+            if it["kind"] == "sub":
+                q_top_var.set("Knowing what you now know, would you sign up for…")
+                q_bot_var.set("…again today?")
+                no_btn_text.set("❌ No — cancel it")
+            else:
+                q_top_var.set("Knowing what you now know, would you make this "
+                              "investment…")
+                q_bot_var.set("…again today?")
+                no_btn_text.set("❌ No — sell it")
 
         def _keep():
-            i = state["i"]
-            self._subs_set_reviewed(subs[i][0])
+            it = items[state["i"]]
+            if it["kind"] == "sub":
+                self._subs_set_reviewed(it["id"])
             state["kept"] += 1; state["i"] += 1; _show()
 
         def _cancel():
-            i = state["i"]
-            sid, name, amount, cycle, act, lastr = subs[i]
-            mo = self._subs_monthly(amount, cycle)
-            self._subs_set_active(sid, 0)
-            state["cut"] += 1; state["saved"] += mo; state["i"] += 1
+            it = items[state["i"]]
             try:
                 win.attributes("-topmost", False)
             except tk.TclError:
                 pass
-            messagebox.showinfo(
-                "Cancel it now",
-                f"Go cancel {name} right now, while you're thinking about it.\n\n"
-                f"That's {self._money_fmt(mo * 12)}/year back in your pocket.")
+            if it["kind"] == "sub":
+                self._subs_set_active(it["id"], 0)
+                state["cut"] += 1; state["saved"] += it["mo"]
+                messagebox.showinfo(
+                    "Cancel it now",
+                    f"Go cancel {it['name']} right now, while you're thinking "
+                    f"about it.\n\nThat's {self._money_fmt(it['mo'] * 12)}/year "
+                    "back in your pocket.")
+            else:
+                self._asset_delete(it["id"])
+                state["sold"] += 1; state["freed"] += it["value"]
+                messagebox.showinfo(
+                    "Liquidate it",
+                    f"Sell {it['name']} and redeploy the {self._money_fmt(it['value'])}.\n\n"
+                    "Don't throw good money after bad — the loss is already sunk.")
             try:
                 win.attributes("-topmost", True)
             except tk.TclError:
                 pass
-            _show()
+            state["i"] += 1; _show()
         tk.Button(btnrow, text="✅ Yes — keep it", command=_keep,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16, pady=7,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
-        tk.Button(btnrow, text="❌ No — cancel it", command=_cancel,
+        tk.Button(btnrow, textvariable=no_btn_text, command=_cancel,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_RED, fg="white",
                   activebackground=ACCENT_RED, relief=tk.FLAT, padx=16, pady=7,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)

@@ -213,12 +213,13 @@ Beyond reading, the app is a study and focus workstation:
   **years your nest egg lasts** under withdrawals (or whether it's self-sustaining),
   and shows what a **Fixed Indexed Annuity** could guarantee for life — upside
   participation, zero downside.
-- **🔍 Zero-Based Audit** — every recurring charge must re-earn its place. List
-  your subscriptions (Netflix, internet, phone, apps) and **every ~90 days the
-  app forces an audit** that walks each one and asks, *"Knowing what you know
-  now, would you sign up for this again today?"* A **No** cancels it on the spot
-  and tells you the yearly drain you just cut. Shows your total monthly/yearly
-  subscription burn at a glance.
+- **🔍 Zero-Based Audit (KWINK)** — Brian Tracy's "Knowing What I Now Know" cure
+  for the sunk-cost trap. Every recurring charge *and investment holding* must
+  re-earn its place: **every ~90 days the app forces an audit** that walks each
+  subscription **and** each holding from your Allocator and asks, *"Knowing what
+  you now know, would you do this again today?"* A **No** cancels the sub or
+  **liquidates the investment** on the spot — *don't throw good money after bad.*
+  Shows your total subscription burn at a glance.
 - **SQLite-backed** — all of the above persists in a local database
   managed by `lyceum/db/study_db.py`.
 
