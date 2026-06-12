@@ -538,60 +538,42 @@ class BookReader:
             return inner
 
         # (📂 Open and 📚 Library live in the Study workspace.)
-        # --- Row 1: plan & focus tools (own row) ---
+        # --- Row 1: one clean, evenly-spaced row of identical action buttons.
+        # Every button sits in its own equal-width grid column (uniform="topbtn")
+        # so each is guaranteed the SAME size and shape; together they stretch
+        # edge-to-edge with even gaps — no cramming, no clipping, no overflow.
         row1 = tk.Frame(topbar, bg=BG_PANEL); row1.pack(fill=tk.X)
-        plan = section(row1, "PLANNING")
-        # All ten planning tools now live inside the Planning hub, opened by
-        # this one button — isolated to their own panel.
-        # UW = uniform char width; every top-bar button ends up the same size.
-        UW = 11
-        _tb = []   # collect them so they can be compacted together below
-        self._planning_btn = btn(plan, "📋 Planning", self.open_planning_hub,
-                                 ACCENT_PURPLE, w=UW); _tb.append(self._planning_btn)
-        # The morning/evening nudges that used to flash Ideas / 10 Goals / Vision
-        # now flash the Planning button (those tools live in its hub).
+        TOPBAR_BUTTONS = [
+            ("📋 Planning", self.open_planning_hub,    ACCENT_PURPLE),
+            ("📊 Track",    self.open_track_hub,        ACCENT_INDIGO),
+            ("💰 Money",    self.open_money_panel,      ACCENT_GOLD),
+            ("🔊 Read",     self.read_aloud,            ACCENT_GREEN),
+            ("■ Stop",      self.stop_reading,          ACCENT_SLATE),
+            ("🎤 Voice",    self.toggle_mic,            ACCENT_MIC),
+            ("🗒 Prompts",  self.open_prompt_library,   ACCENT_GREEN),
+            ("💾 Save",     self.save_excerpt,          ACCENT_PINK),
+            ("📓 Study",    self.open_study_workspace,  ACCENT_RED),
+        ]
+        self._topbar_buttons = {}
+        for _col, (_text, _cmd, _color) in enumerate(TOPBAR_BUTTONS):
+            _b = tk.Button(
+                row1, text=_text, command=_cmd,
+                font=("Segoe UI", 10, "bold"),
+                bg=_color, fg="white", activebackground=_color,
+                relief=tk.FLAT, padx=4, pady=6, cursor="hand2", borderwidth=0,
+            )
+            _b.grid(row=0, column=_col, sticky="ew", padx=3, pady=2)
+            row1.grid_columnconfigure(_col, weight=1, uniform="topbtn")
+            self._topbar_buttons[_text] = _b
+        # References the rest of the app relies on (morning/evening nudges
+        # flash these; the mic button toggles its own label/colour).
+        self._planning_btn = self._topbar_buttons["📋 Planning"]
         self._ideas_btn = self._ten_goals_btn = self._vision_btn = self._planning_btn
-
-        # --- Track + Money sit on the SAME row, beside Planning. ---
-        track = section(row1, "TRACK")
-        self._track_btn = btn(track, "📊 Track", self.open_track_hub,
-                              ACCENT_INDIGO, w=UW); _tb.append(self._track_btn)
-        self._review_btn = self._track_btn   # evening review nudge flashes this
-
-        money = section(row1, "MONEY")
-        _tb.append(btn(money, "💰 Money", self.open_money_panel, ACCENT_GOLD, w=UW))
-
-        # DISPLAY (font + text size) — upper-right corner, on the SAME top row
-        # as the Planning / Track / Money / Read / Capture buttons.
-        right_frame = section(row1, "DISPLAY", side=tk.RIGHT)
-
-        # READ ALOUD sits on the SAME row as Planning / Track / Money, with the
-        # Voice picker stacked directly underneath its buttons.
-        read = section(row1, "READ ALOUD")
-        read_top = tk.Frame(read, bg=BG_DARK); read_top.pack(anchor="w")
-        _tb.append(btn(read_top, "🔊 Read", self.read_aloud, ACCENT_GREEN, w=UW))
-        _tb.append(btn(read_top, "■ Stop",  self.stop_reading, ACCENT_SLATE, w=UW))
-        self.mic_btn = btn(read_top, "🎤 Voice", self.toggle_mic, ACCENT_MIC, w=UW)
-        _tb.append(self.mic_btn)
-        # Mic accuracy: Fast (base) / Accurate (small) / Best (medium).
+        self._track_btn = self._review_btn = self._topbar_buttons["📊 Track"]
+        self.mic_btn = self._topbar_buttons["🎤 Voice"]
+        # Mic accuracy var lives here; its picker is built on the settings line
+        # below so the top row stays a clean, uniform line of buttons.
         self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _mq = tk.OptionMenu(read_top, self._whisper_quality_var,
-                            "Fast", "Accurate", "Best",
-                            command=self._set_mic_quality)
-        _style_optionmenu(_mq)
-        _mq.configure(width=6, font=("Segoe UI", 8, "bold"))
-        _mq.pack(side=tk.LEFT, padx=(2, 0))
-
-        # CAPTURE sits beside READ ALOUD on the same top row.
-        work = section(row1, "CAPTURE")
-        _tb.append(btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN, w=UW))
-        _tb.append(btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK, w=UW))
-        _tb.append(btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED, w=UW))
-
-        # Compact every top-bar button uniformly (smaller font + tighter
-        # padding) so the whole row fits and nothing is smushed or cut off.
-        for _b in _tb:
-            _b.configure(font=("Segoe UI", 8, "bold"), padx=2, pady=2)
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
@@ -626,18 +608,32 @@ class BookReader:
         self.available_voices.append("Microsoft System")
         self.voice_var = tk.StringVar(value=self.available_voices[0])
 
-        # Compact so the whole DISPLAY group fits in the top row's right gap.
+        # --- Settings line: font face, text size, and mic accuracy on their
+        # own uncrowded row directly under the action buttons. Kept off the
+        # button row so that row stays a clean, uniform line. ----------------
+        row1b = tk.Frame(topbar, bg=BG_PANEL); row1b.pack(fill=tk.X, pady=(6, 0))
+
+        tk.Label(row1b, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(2, 4))
         self.font_var = tk.StringVar(value=self.font_family)
         font_menu = tk.OptionMenu(
-            right_frame, self.font_var, *self.available_fonts,
+            row1b, self.font_var, *self.available_fonts,
             command=self._on_font_change,
         )
         _style_optionmenu(font_menu)
-        font_menu.configure(width=10, font=("Segoe UI", 8))
-        font_menu.pack(side=tk.LEFT, padx=(0, 4))
+        font_menu.configure(width=14, font=("Segoe UI", 9))
+        font_menu.pack(side=tk.LEFT, padx=(0, 6))
+        btn(row1b, "A−", self.smaller_text, ACCENT_SLATE)
+        btn(row1b, "A+", self.bigger_text, ACCENT_SLATE)
 
-        btn(right_frame, "A−", self.smaller_text, ACCENT_SLATE)
-        btn(right_frame, "A+", self.bigger_text, ACCENT_SLATE)
+        tk.Label(row1b, text="Mic accuracy:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(18, 4))
+        _mq = tk.OptionMenu(row1b, self._whisper_quality_var,
+                            "Fast", "Accurate", "Best",
+                            command=self._set_mic_quality)
+        _style_optionmenu(_mq)
+        _mq.configure(width=10, font=("Segoe UI", 9))
+        _mq.pack(side=tk.LEFT)
 
         # ---- Highlight controls (color + unit) -------------------------
         # Three reading-friendly highlight colors. Indigo is muted so the
