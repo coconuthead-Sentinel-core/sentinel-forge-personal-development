@@ -4295,7 +4295,7 @@ class BookReader:
         except Exception:
             pass
 
-    def _draw_battery(self, canvas, months, safe=3.0, full=6.0):
+    def _draw_battery(self, canvas, months, floor=2.0, safe=3.0, full=6.0):
         canvas.delete("all")
         try:
             W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
@@ -4309,10 +4309,16 @@ class BookReader:
         bx0, by0 = pad, pad
         bx1, by1 = W - pad - nub, H - pad
         midy = (by0 + by1) // 2
+        inner_x = bx0 + 4; inner_w = (bx1 - 4) - inner_x
+
+        def _x(mo):
+            return inner_x + inner_w * (min(mo, full) / full)
+        # Law-of-Three protected band (2-6 months) faintly shaded
+        canvas.create_rectangle(_x(floor), by0 + 2, _x(full), by1 - 2,
+                                fill="#0f261d", outline="")
         canvas.create_rectangle(bx0, by0, bx1, by1, outline="#94a3b8", width=3)
         canvas.create_rectangle(bx1, midy - 13, bx1 + nub, midy + 13,
                                 fill="#94a3b8", outline="")
-        inner_x = bx0 + 4; inner_w = (bx1 - 4) - inner_x
         m = max(0.0, float(months))
         frac = max(0.0, min(1.0, m / full))
         color = ("#dc2626" if m < 1 else "#d97706" if m < safe else "#16a34a")
@@ -4323,9 +4329,13 @@ class BookReader:
         for mo in range(1, int(full) + 1):
             tx = inner_x + inner_w * (mo / full)
             canvas.create_line(tx, by0 + 4, tx, by1 - 4, fill="#0f172a", width=1)
-        sx = inner_x + inner_w * (safe / full)
-        canvas.create_line(sx, by0 - 2, sx, by1 + 2, fill="#22c55e", width=2,
-                           dash=(4, 3))
+        # 2-month minimum (Law of Three lower bound) + 3-month safe line
+        canvas.create_line(_x(floor), by0 - 2, _x(floor), by1 + 2, fill="#fbbf24",
+                           width=2, dash=(2, 2))
+        canvas.create_text(_x(floor), by1 + 8, text="2mo min", fill="#fbbf24",
+                           font=("Segoe UI", 7, "bold"))
+        canvas.create_line(_x(safe), by0 - 2, _x(safe), by1 + 2, fill="#22c55e",
+                           width=2, dash=(4, 3))
         canvas.create_text((bx0 + bx1) // 2, midy,
                            text=(f"{m:.1f} months" if m < full else "6+ months"),
                            fill="white", font=("Segoe UI", 17, "bold"))
@@ -4391,7 +4401,8 @@ class BookReader:
                   borderwidth=0).pack(side=tk.RIGHT)
 
         tk.Label(win, text="If your income stopped today, how long could you "
-                 "survive? That's your run rate — the heart of financial peace.",
+                 "survive? Tracy's Law of Three: liquid savings of 2–6 months of "
+                 "expenses is full protection — and deep inner peace.",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
                  wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
                      fill=tk.X, pady=(6, 4))
@@ -4490,12 +4501,14 @@ class BookReader:
             to6 = max(0.0, exp * 6 - cash)
             if months < 1:
                 ztxt = "🛑 Under a month of runway — pure defense mode. "
+            elif months < 2:
+                ztxt = "⚠ Not yet protected — reach the 2-month Law-of-Three floor. "
             elif months < 3:
-                ztxt = "⚠ Building — keep charging toward 3 months. "
+                ztxt = "🟡 Protected (2-month floor) — keep charging toward 3. "
             elif months < 6:
-                ztxt = "✅ Solid 3-month base — now stretch toward 6. "
+                ztxt = "✅ Solid 3-month base, well inside the safe band — push to 6. "
             else:
-                ztxt = "🏆 Fully charged — 6+ months. Financial peace. "
+                ztxt = "🏆 Fully charged — 6+ months. Total protection, real peace. "
             zone_var.set(ztxt + (f"To 3 mo: add {self._money_fmt(to3)}  ·  "
                                  f"To 6 mo: add {self._money_fmt(to6)}"
                                  if (to3 > 0 or to6 > 0) else "Goal met!"))
