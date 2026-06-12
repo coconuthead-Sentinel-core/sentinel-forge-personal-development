@@ -859,55 +859,26 @@ class BookReader:
             "<FocusIn>", lambda _e: self._set_mic_target(self.notes_area), add="+")
         self._load_notes()
 
-        # ---- Commentary pane (middle of the right column) ------------
-        # Studies a *secondary* document alongside the primary book —
-        # e-Sword's commentary module concept applied to any subject.
-        # Source files live in COMMENTARIES_DIR so they stay separate
-        # from regular books in the Library.
-        commentary_frame = tk.Frame(right_pane, bg=BG_DARK)
-        commentary_header = tk.Frame(commentary_frame, bg=BG_PANEL, padx=8, pady=6)
-        commentary_header.pack(fill=tk.X)
+        # ---- Commentary now lives in the Study workspace -----------------
+        # The secondary-document reader (e-Sword-style commentary module) was
+        # moved out of the main reading column into its own Study tab/section
+        # ("📑 Commentary"). These attributes are (re)created when that tab is
+        # built; initialise them here so the load/clear helpers can guard
+        # safely whenever the Study window is closed.
         self.commentary_title_var = tk.StringVar(value="📑  Commentary")
-        tk.Label(
-            commentary_header, textvariable=self.commentary_title_var,
-            bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 11, "bold"),
-            anchor=tk.W,
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        tk.Button(
-            commentary_header, text="Clear", command=self._clear_commentary,
-            font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
-            relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=4)
-        tk.Button(
-            commentary_header, text="📂 Open commentary…",
-            command=self.open_commentary_picker,
-            font=("Segoe UI", 10), bg=ACCENT_CYAN, fg="white",
-            relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=4)
-        self.commentary_area = scrolledtext.ScrolledText(
-            commentary_frame, wrap=tk.WORD,
-            font=(self.font_family, 12),
-            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=14, pady=10, relief=tk.FLAT,
-            selectbackground="#1d4ed8", selectforeground="white",
-        )
-        self.commentary_area.pack(fill=tk.BOTH, expand=True)
-        # Start read-only — DISABLED still allows mouse selection + Ctrl+C
-        # so users can copy commentary excerpts into the Notes panel.
-        self.commentary_area.configure(state=tk.DISABLED)
+        self.commentary_area = None
 
         right_pane.add(chapters_frame,   minsize=120, stretch="never")
-        right_pane.add(commentary_frame, minsize=140, stretch="always")
         right_pane.add(notes_frame,      minsize=140, stretch="always")
 
         body.add(text_frame, minsize=320, stretch="always")
         body.add(right_pane, minsize=260, stretch="never")
-        # Default split: text gets ~60% of the window. The right column
-        # stacks chapters (~22%) / commentary (~40%) / notes (~38%).
+        # Default split: text gets ~60% of the window. The right column now
+        # stacks chapters (~28%) above notes (the Commentary pane moved to the
+        # Study workspace, so there are only two panes here now).
         root.after(50, lambda: (
             body.sash_place(0, int(root.winfo_width() * 0.60), 0),
-            right_pane.sash_place(0, 0, max(150, int(root.winfo_height() * 0.22))),
-            right_pane.sash_place(1, 0, max(380, int(root.winfo_height() * 0.62))),
+            right_pane.sash_place(0, 0, max(160, int(root.winfo_height() * 0.28))),
         ))
 
         # ---- Bottom hint line ------------------------------------------
@@ -11716,6 +11687,9 @@ class BookReader:
         self._commentary_file = path
         self.commentary_title_var.set(f"📑  {name}")
         w = self.commentary_area
+        if w is None:   # Commentary tab not open; state is saved for next open
+            self.set_status(f"📑 Loaded commentary: {name}")
+            return
         w.configure(state=tk.NORMAL)
         w.delete("1.0", tk.END)
         w.insert("1.0", text)
@@ -11728,6 +11702,9 @@ class BookReader:
         self._commentary_file = None
         self.commentary_title_var.set("📑  Commentary")
         w = self.commentary_area
+        if w is None:   # Commentary tab not open; nothing on screen to clear
+            self.set_status("Commentary cleared.")
+            return
         w.configure(state=tk.NORMAL)
         w.delete("1.0", tk.END)
         w.configure(state=tk.DISABLED)
@@ -13995,6 +13972,7 @@ try {
             self._eisenhower_save_after_ids = {}
             self._study_notes_widget = None
             self._study_notes_save_after_id = None
+            self.commentary_area = None   # widget about to be destroyed
             self._study_win = None
             win.destroy()
         win.protocol("WM_DELETE_WINDOW", on_close)
@@ -14011,6 +13989,7 @@ try {
             ("study_notes", "📝 Study Notes", self._build_tab_study_notes),
             ("topics",      "📌 Topics",      self._build_tab_topics),
             ("glossary",    "📒 Glossary",    self._build_tab_glossary),
+            ("commentary",  "📑 Commentary",  self._build_tab_commentary),
             ("journal",     "📅 Journal",     self._build_tab_journal),
             ("matrix",      "🎯 Matrix",      self._build_tab_eisenhower),
             ("planner",     "🗓 Planner",     self._build_tab_planner),
@@ -16436,6 +16415,50 @@ try {
     # working notes); Study Notes is for collected excerpts, summaries,
     # and dictation done from the Study workspace itself. Highlights can
     # be sent here directly via the right-click menu in the Highlights tab.
+    def _build_tab_commentary(self, parent: tk.Frame) -> None:
+        """📑 Commentary — study a secondary document (e-Sword-style commentary
+        module) alongside your books. Moved here from the main reading column
+        into its own Study section. Source files live in COMMENTARIES_DIR so
+        they stay separate from regular books in the Library."""
+        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        head.pack(fill=tk.X)
+        tk.Label(head, textvariable=self.commentary_title_var,
+                 bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 13, "bold"),
+                 anchor=tk.W).pack(side=tk.LEFT)
+        tk.Button(
+            head, text="📂 Open commentary…", command=self.open_commentary_picker,
+            font=("Segoe UI", 10), bg=ACCENT_CYAN, fg="white",
+            activebackground=ACCENT_CYAN, relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        ).pack(side=tk.RIGHT, padx=4)
+        tk.Button(
+            head, text="Clear", command=self._clear_commentary,
+            font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
+            activebackground=ACCENT_SLATE, relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        ).pack(side=tk.RIGHT, padx=4)
+
+        body_frame = tk.Frame(parent, bg=BG_DARK, padx=8, pady=8)
+        body_frame.pack(fill=tk.BOTH, expand=True)
+        self.commentary_area = scrolledtext.ScrolledText(
+            body_frame, wrap=tk.WORD,
+            font=(self.font_family, 12),
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            padx=14, pady=10, relief=tk.FLAT,
+            selectbackground="#1d4ed8", selectforeground="white",
+        )
+        self.commentary_area.pack(fill=tk.BOTH, expand=True)
+        # Re-display whatever was loaded before (if the Study window was
+        # closed and reopened), then lock it read-only — selection + Ctrl+C
+        # still work so excerpts can be copied into Notes.
+        if self._commentary_file:
+            try:
+                text, _chs = self._extract_text_with_chapters(self._commentary_file)
+                self.commentary_area.insert("1.0", text)
+            except Exception:
+                pass
+        self.commentary_area.configure(state=tk.DISABLED)
+
     def _build_tab_study_notes(self, parent: tk.Frame) -> None:
         head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
         head.pack(fill=tk.X)
