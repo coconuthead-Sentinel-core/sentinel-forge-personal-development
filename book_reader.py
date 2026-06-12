@@ -572,6 +572,7 @@ class BookReader:
         btn(build, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
         btn(build, "📊 Net Worth", self.open_net_worth, ACCENT_INDIGO)
         btn(build, "🧺 Allocate", self.open_asset_buckets, ACCENT_PURPLE)
+        btn(build, "🌦 All Seasons", self.open_all_seasons, ACCENT_SKY)
 
         rowm2 = tk.Frame(topbar, bg=BG_PANEL); rowm2.pack(fill=tk.X, pady=(4, 0))
         spend = section(rowm2, "MONEY · SPEND")
@@ -9072,6 +9073,166 @@ class BookReader:
                      fill=tk.X, pady=(2, 8))
 
         _render()
+
+    # ---- Ray Dalio "All Seasons" portfolio simulator ------------------
+    # His exact All-Weather allocation, balanced across the four economic
+    # seasons (rising/falling growth, rising/falling inflation).
+    ALL_SEASONS = (
+        ("Stocks (US total market)", 30.0, "#0891b2"),
+        ("Long-term bonds (20–25yr Treasuries)", 40.0, "#16a34a"),
+        ("Intermediate bonds (7–10yr Treasuries)", 15.0, "#65a30d"),
+        ("Gold", 7.5, "#d97706"),
+        ("Commodities", 7.5, "#dc2626"),
+    )
+
+    def _all_seasons_alloc(self, amount):
+        return [(name, pct, float(amount) * pct / 100.0, color)
+                for name, pct, color in self.ALL_SEASONS]
+
+    def _draw_alloc_pie(self, canvas, amount):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W, H = 280, 240
+        if W < 30:
+            W = 280
+        if H < 30:
+            H = 240
+        pad = 12
+        d = max(40, min(W, H) - 2 * pad)
+        x0 = (W - d) // 2; y0 = (H - d) // 2
+        x1 = x0 + d; y1 = y0 + d
+        start = 90.0
+        for name, pct, color in self.ALL_SEASONS:
+            extent = -360.0 * pct / 100.0
+            canvas.create_arc(x0, y0, x1, y1, start=start, extent=extent,
+                              fill=color, outline=BG_DARK, width=2)
+            start += extent
+        canvas.create_oval(x0 + d * 0.30, y0 + d * 0.30, x1 - d * 0.30,
+                           y1 - d * 0.30, fill=BG_DARK, outline="")
+        canvas.create_text(W // 2, H // 2,
+                           text=(self._money_fmt(amount) if amount > 0
+                                 else "All\nSeasons"),
+                           fill="white", font=("Segoe UI", 11, "bold"),
+                           justify=tk.CENTER)
+
+    def open_all_seasons(self):
+        """Ray Dalio's All-Weather / All Seasons portfolio: an allocation built
+        to make money in any economic environment. Enter an amount and it splits
+        it across his exact mix — a robo-advisor modeling the best balanced
+        portfolio in the world."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_seasons_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        st = self._load_handoff_state() or {}
+        amt0 = 0.0
+        try:
+            amt0 = float(st.get("allseasons_amount", 0))
+        except (TypeError, ValueError):
+            amt0 = 0.0
+
+        win = tk.Toplevel(self.root)
+        self._seasons_win = win
+        win.title("🌦 All Seasons Portfolio")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(580, sw - 80)); h = min(660, max(480, sh - 100))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(580, 480)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._seasons_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🌦 All Seasons Portfolio", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Ray Dalio's All-Weather allocation — engineered to "
+                 "make money in any economic season. Enter an amount to see your "
+                 "split.", bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 4))
+
+        ar = tk.Frame(win, bg=BG_DARK, padx=14); ar.pack(fill=tk.X)
+        tk.Label(ar, text="Amount to invest  $", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        amt_var = tk.StringVar(value=(f"{amt0:g}" if amt0 else ""))
+        amt_e = tk.Entry(ar, textvariable=amt_var, width=12, bg=BG_INPUT,
+                         fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 13, "bold"))
+        amt_e.pack(side=tk.LEFT, padx=(4, 0), ipady=3)
+
+        body = tk.Frame(win, bg=BG_DARK, padx=12); body.pack(fill=tk.BOTH, expand=True)
+        pie = tk.Canvas(body, width=230, height=230, bg=BG_DARK,
+                        highlightthickness=0)
+        pie.pack(side=tk.LEFT, padx=(0, 10), pady=8)
+        legend = tk.Frame(body, bg=BG_DARK); legend.pack(side=tk.LEFT, fill=tk.BOTH,
+                                                         expand=True, pady=8)
+
+        facts = tk.Label(win, text="📊 Historically (≈75 yrs): positive about "
+                         "85% of all years. In the 2008 crash it fell just "
+                         "−3.93% while the S&P 500 lost ~37%. Balanced across the "
+                         "four seasons — rising & falling growth, rising & falling "
+                         "inflation — so something always works.",
+                         bg="#0b2942", fg="#bae6fd", font=("Segoe UI", 9),
+                         wraplength=w - 40, justify=tk.LEFT, padx=12, pady=8)
+        facts.pack(fill=tk.X, padx=12, pady=(2, 10))
+
+        def _save():
+            stt = self._load_handoff_state() or {}
+            stt["allseasons_amount"] = self._money_parse(amt_var.get()) or 0.0
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+
+        def _render(*_a):
+            amount = self._money_parse(amt_var.get()) or 0.0
+            self._draw_alloc_pie(pie, amount)
+            for ch in legend.winfo_children():
+                ch.destroy()
+            for name, pct, dollars, color in self._all_seasons_alloc(amount):
+                row = tk.Frame(legend, bg=BG_DARK); row.pack(fill=tk.X, anchor="w",
+                                                             pady=2)
+                tk.Label(row, text="  ", bg=color).pack(side=tk.LEFT)
+                txt = f"  {pct:g}%  {name}"
+                if amount > 0:
+                    txt += f"  →  {self._money_fmt(dollars)}"
+                tk.Label(row, text=txt, bg=BG_DARK, fg=FG_TEXT,
+                         font=("Segoe UI", 10), anchor=tk.W, justify=tk.LEFT,
+                         wraplength=w - 300).pack(side=tk.LEFT)
+
+        amt_e.bind("<KeyRelease>", _render)
+        amt_e.bind("<FocusOut>", lambda _e: (_save(), _render()))
+        pie.bind("<Configure>", lambda _e: _render())
+
+        _render()
+        amt_e.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

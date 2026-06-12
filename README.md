@@ -194,6 +194,12 @@ Beyond reading, the app is a study and focus workstation:
   equities, real estate), and **✨ Dream** (strategic splurges). Each bucket shows
   its total and **% of your portfolio** with a share bar; move any holding
   between buckets with → to tune the balance of safety and growth.
+- **🌦 All Seasons Portfolio (Ray Dalio)** — a robo-advisor pre-programmed with
+  Dalio's exact **All-Weather** allocation (**30%** stocks · **40%** long-term
+  bonds · **15%** intermediate bonds · **7.5%** gold · **7.5%** commodities).
+  Enter an amount and it splits it across the mix in a pie chart with dollar
+  figures — a portfolio built to make money in any economic season (historically
+  positive ~85% of years; only −3.93% in the 2008 crash).
 - **🔍 Zero-Based Audit** — every recurring charge must re-earn its place. List
   your subscriptions (Netflix, internet, phone, apps) and **every ~90 days the
   app forces an audit** that walks each one and asks, *"Knowing what you know
