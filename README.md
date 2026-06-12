@@ -38,6 +38,11 @@
 
 Beyond reading, the app is a study and focus workstation:
 
+- **⭐ Major Definite Purpose banner** — a permanent North Star pinned to the
+  very top of the dashboard. Your one burning goal (e.g. *"Earn my Computer
+  Science Degree by 2028"*) stares back at you whatever you're doing — schedule,
+  bills, reading — because Hill and Tracy found that one organizing goal is what
+  separates the achievers. Click it to edit; it persists across sessions.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
   Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊

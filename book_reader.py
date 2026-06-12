@@ -442,6 +442,31 @@ class BookReader:
         # unbind_all would otherwise kill dashboard scrolling.
         self._dash_mousewheel = _on_dash_mousewheel
 
+        # ---- Major Definite Purpose banner (Hill / Tracy North Star) ---
+        # Packed FIRST so it's pinned to the very top of the dashboard — your
+        # one burning goal staring back at you no matter what you're doing.
+        MDP_BG = "#1e1b4b"
+        mdp_bar = tk.Frame(dash, bg=MDP_BG, padx=14, pady=8)
+        mdp_bar.pack(fill=tk.X)
+        tk.Label(mdp_bar, text="⭐", bg=MDP_BG, fg="#fcd34d",
+                 font=("Segoe UI", 18)).pack(side=tk.LEFT, padx=(0, 10))
+        tk.Button(mdp_bar, text="✎ Edit", command=self.edit_major_purpose,
+                  font=("Segoe UI", 9, "bold"), bg="#312e81", fg="#c7d2fe",
+                  activebackground=ACCENT_INDIGO, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+        mdp_left = tk.Frame(mdp_bar, bg=MDP_BG)
+        mdp_left.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Label(mdp_left, text="MAJOR DEFINITE PURPOSE — your North Star",
+                 bg=MDP_BG, fg="#a5b4fc", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self._mdp_var = tk.StringVar()
+        self._mdp_label = tk.Label(mdp_left, textvariable=self._mdp_var, bg=MDP_BG,
+                                   fg="#fef9c3", font=("Segoe UI", 15, "bold"),
+                                   anchor="w", cursor="hand2")
+        self._mdp_label.pack(anchor="w", fill=tk.X)
+        self._mdp_label.bind("<Button-1>", lambda _e: self.edit_major_purpose())
+        self._mdp_refresh()
+
         # ---- Session Header --------------------------------------------
         # Persistent strip above the action topbar. Cognitive load (1–10)
         # is the master control — it drives the zone indicator and the
@@ -5746,6 +5771,44 @@ class BookReader:
                 pass
         win.protocol("WM_DELETE_WINDOW", _wclose)
         _show()
+
+    # ---- Major Definite Purpose (North Star banner) --------------------
+    def _mdp_get(self) -> str:
+        st = self._load_handoff_state() or {}
+        return str(st.get("major_purpose", "")).strip()
+
+    def _mdp_refresh(self) -> None:
+        if not hasattr(self, "_mdp_var"):
+            return
+        txt = self._mdp_get()
+        self._mdp_var.set(txt if txt else
+                          "Click to set your one burning goal — your North Star.")
+        try:
+            self._mdp_label.configure(
+                fg=("#fef9c3" if txt else "#818cf8"))
+        except (tk.TclError, AttributeError):
+            pass
+
+    def edit_major_purpose(self) -> None:
+        """Set/edit the single burning goal that organizes everything (Napoleon
+        Hill's Definite Chief Aim / Tracy's Major Definite Purpose)."""
+        cur = self._mdp_get()
+        val = self._ask_text(
+            "Major Definite Purpose",
+            "Your ONE burning goal — the North Star that organizes your whole "
+            "life. Make it specific and dated, e.g. "
+            "“Earn my Computer Science Degree by 2028.”", cur)
+        if val is None:
+            return
+        st = self._load_handoff_state() or {}
+        st["major_purpose"] = val.strip()
+        try:
+            self._save_handoff_state(st)
+        except Exception:
+            pass
+        self._mdp_refresh()
+        if val.strip():
+            self.set_status("⭐ North Star set. Let it pull every day forward.")
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
