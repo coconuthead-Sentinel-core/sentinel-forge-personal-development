@@ -582,6 +582,7 @@ class BookReader:
         btn(spend, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
         btn(spend, "🔍 Audit", self.open_subscription_audit, ACCENT_RED)
         btn(spend, "📒 Spending", self.open_expense_tracker, ACCENT_GOLD)
+        btn(spend, "🔎 Fees", self.open_fee_checker, ACCENT_INDIGO)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -9233,6 +9234,233 @@ class BookReader:
 
         _render()
         amt_e.focus_set()
+
+    # ---- Hidden Fee Checker & Optimizer -------------------------------
+    @staticmethod
+    def _fee_future_value(start, monthly, years, gross_pct, fee_pct):
+        """Monthly-compounded future value with the fee dragging the return.
+        net annual return = gross - fee."""
+        net = (float(gross_pct) - float(fee_pct)) / 100.0
+        r = net / 12.0
+        months = max(0, int(round(float(years) * 12)))
+        bal = float(start)
+        m = float(monthly)
+        for _ in range(months):
+            bal = bal * (1 + r) + m
+        return bal
+
+    LOW_COST_FUNDS = (
+        ("Total US Stock Market index", "~0.03%", "the whole US market in one fund"),
+        ("S&P 500 index", "~0.015–0.09%", "the 500 largest US companies"),
+        ("Total Bond Market index", "~0.03%", "broad US bonds, lower volatility"),
+        ("Total International index", "~0.06%", "stocks outside the US"),
+        ("Target-Date index fund", "~0.08–0.15%", "auto-balances as you age"),
+    )
+
+    def _draw_fee_bars(self, canvas, fv_index, fv_yours):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W, H = 460, 150
+        if W < 40:
+            W = 460
+        if H < 30:
+            H = 150
+        mx = max(fv_index, fv_yours, 1.0)
+        base = H - 22
+        top = 18
+        maxh = base - top
+        bw = int(W * 0.26)
+        x_index = int(W * 0.22) - bw // 2
+        x_yours = int(W * 0.68) - bw // 2
+        for x, val, color, label in (
+                (x_index, fv_index, "#22c55e", "Low-cost index"),
+                (x_yours, fv_yours, "#ef4444", "Your fund")):
+            bh = int(maxh * val / mx)
+            canvas.create_rectangle(x, base - bh, x + bw, base, fill=color,
+                                    outline="")
+            canvas.create_text(x + bw // 2, base - bh - 8,
+                               text=self._money_fmt(val), fill="#e2e8f0",
+                               font=("Segoe UI", 10, "bold"))
+            canvas.create_text(x + bw // 2, base + 11, text=label, fill=FG_MUTED,
+                               font=("Segoe UI", 9))
+
+    def open_fee_checker(self):
+        """Wall Street fees can quietly eat 50–70% of a lifetime nest egg. This
+        shows the lifetime cost of your fund's expense ratio versus a low-cost
+        index fund — and what to switch to. (It can't scan your accounts; enter
+        the numbers off your statement.)"""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_fee_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        st = self._load_handoff_state() or {}
+
+        def _g(k, d):
+            try:
+                return float(st.get(k, d))
+            except (TypeError, ValueError):
+                return d
+        bal0 = _g("hf_balance", 0); mon0 = _g("hf_monthly", 0)
+        yrs0 = _g("hf_years", 30); gr0 = _g("hf_gross", 8)
+        yf0 = _g("hf_yourfee", 1.0); xf0 = _g("hf_indexfee", 0.04)
+
+        win = tk.Toplevel(self.root)
+        self._fee_win = win
+        win.title("🔎 Hidden Fee Checker")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(780, max(600, sw - 70)); h = min(720, max(520, sh - 80))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(600, 520)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._fee_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🔎 Hidden Fee Checker", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Hidden fund fees can devour 50–70% of a lifetime nest "
+                 "egg. Enter your numbers (from your statement) to see the real "
+                 "cost — and what to switch to.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        inp = tk.Frame(win, bg=BG_DARK, padx=12); inp.pack(fill=tk.X)
+        bal_v = tk.StringVar(value=(f"{bal0:g}" if bal0 else ""))
+        mon_v = tk.StringVar(value=(f"{mon0:g}" if mon0 else ""))
+        yrs_v = tk.StringVar(value=f"{yrs0:g}")
+        gr_v = tk.StringVar(value=f"{gr0:g}")
+        yf_v = tk.StringVar(value=f"{yf0:g}")
+        xf_v = tk.StringVar(value=f"{xf0:g}")
+
+        def _field(r, c, label, var, width, suffix=""):
+            cell = tk.Frame(inp, bg=BG_DARK); cell.grid(row=r, column=c,
+                                                        sticky="w", padx=(0, 14), pady=3)
+            tk.Label(cell, text=label, bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w")
+            rr = tk.Frame(cell, bg=BG_DARK); rr.pack(anchor="w")
+            e = tk.Entry(rr, textvariable=var, width=width, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 11, "bold"))
+            e.pack(side=tk.LEFT, ipady=2)
+            if suffix:
+                tk.Label(rr, text=suffix, bg=BG_DARK, fg=FG_MUTED,
+                         font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(2, 0))
+            return e
+        e1 = _field(0, 0, "BALANCE  $", bal_v, 10)
+        e2 = _field(0, 1, "CONTRIBUTION  $/mo", mon_v, 8)
+        e3 = _field(0, 2, "YEARS", yrs_v, 4)
+        e4 = _field(1, 0, "GROSS RETURN", gr_v, 5, "%")
+        e5 = _field(1, 1, "YOUR FUND FEE", yf_v, 5, "%")
+        e6 = _field(1, 2, "INDEX FUND FEE", xf_v, 5, "%")
+
+        head_var = tk.StringVar()
+        tk.Label(win, textvariable=head_var, bg=BG_DARK, fg="#f87171",
+                 font=("Segoe UI", 15, "bold"), wraplength=w - 30, justify=tk.LEFT,
+                 padx=14).pack(fill=tk.X, pady=(10, 0))
+        sub_var = tk.StringVar()
+        tk.Label(win, textvariable=sub_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10), wraplength=w - 30, justify=tk.LEFT,
+                 padx=14).pack(fill=tk.X, pady=(2, 4))
+        bars = tk.Canvas(win, height=150, bg="#0b1220", highlightthickness=0)
+        bars.pack(fill=tk.X, padx=14, pady=(2, 6))
+
+        # suggested funds
+        sw_ = tk.Frame(win, bg=BG_DARK, padx=14); sw_.pack(fill=tk.BOTH, expand=True)
+        tk.Label(sw_, text="✅ Low-cost index funds to look for (educational, "
+                 "not financial advice):", bg=BG_DARK, fg="#6ee7b7",
+                 font=("Segoe UI", 9, "bold"), anchor=tk.W, wraplength=w - 40,
+                 justify=tk.LEFT).pack(fill=tk.X, pady=(2, 2))
+        for name, er, desc in self.LOW_COST_FUNDS:
+            row = tk.Frame(sw_, bg=BG_PANEL, padx=8, pady=4); row.pack(fill=tk.X, pady=1)
+            tk.Label(row, text=f"{name}", bg=BG_PANEL, fg=FG_TEXT,
+                     font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+            tk.Label(row, text=f"  expense ratio {er}", bg=BG_PANEL, fg="#34d399",
+                     font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+            tk.Label(row, text=f"  — {desc}", bg=BG_PANEL, fg=FG_MUTED,
+                     font=("Segoe UI", 9)).pack(side=tk.LEFT)
+
+        def _save():
+            stt = self._load_handoff_state() or {}
+            stt["hf_balance"] = self._money_parse(bal_v.get()) or 0.0
+            stt["hf_monthly"] = self._money_parse(mon_v.get()) or 0.0
+            for k, v in (("hf_years", yrs_v), ("hf_gross", gr_v),
+                         ("hf_yourfee", yf_v), ("hf_indexfee", xf_v)):
+                try:
+                    stt[k] = float(v.get() or 0)
+                except ValueError:
+                    pass
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+
+        def _recompute(*_a):
+            bal = self._money_parse(bal_v.get()) or 0.0
+            mon = self._money_parse(mon_v.get()) or 0.0
+            try:
+                yrs = float(yrs_v.get() or 0); gross = float(gr_v.get() or 0)
+                yf = float(yf_v.get() or 0); xf = float(xf_v.get() or 0)
+            except ValueError:
+                yrs = gross = yf = xf = 0
+            if yrs <= 0 or gross <= 0 or (bal <= 0 and mon <= 0):
+                head_var.set("Enter your balance, return, and fees to see the "
+                             "damage.")
+                sub_var.set(""); self._draw_fee_bars(bars, 0, 0)
+                return
+            fv_index = self._fee_future_value(bal, mon, yrs, gross, xf)
+            fv_yours = self._fee_future_value(bal, mon, yrs, gross, yf)
+            lost = max(0.0, fv_index - fv_yours)
+            pct = (lost / fv_index * 100) if fv_index else 0
+            self._draw_fee_bars(bars, fv_index, fv_yours)
+            head_var.set(f"💸 Those fees will cost you {self._money_fmt(lost)} "
+                         f"— {pct:.0f}% of your nest egg.")
+            # years of retirement stolen, using Core Four monthly expenses
+            cf = self._core_four_load()
+            monthly_need = (cf["core_rent"] + cf["core_utilities"] + cf["core_food"]
+                            + cf["core_gas"])
+            extra = ""
+            if monthly_need > 0:
+                yrs_stolen = lost / (monthly_need * 12)
+                extra = (f"  That's ~{yrs_stolen:.1f} years of your retirement "
+                         f"(at {self._money_fmt(monthly_need)}/mo expenses).")
+            sub_var.set(f"You'd keep {self._money_fmt(fv_index)} in a "
+                        f"{xf:g}%-fee index fund vs {self._money_fmt(fv_yours)} in "
+                        f"your {yf:g}%-fee fund." + extra)
+
+        for e in (e1, e2, e3, e4, e5, e6):
+            e.bind("<KeyRelease>", _recompute)
+            e.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
+        bars.bind("<Configure>", lambda _e: _recompute())
+
+        _recompute()
+        e1.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

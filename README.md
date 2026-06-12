@@ -135,6 +135,12 @@ Beyond reading, the app is a study and focus workstation:
   (defense = green, discretionary = amber). Your **Core Defense** numbers (Rent /
   Utilities / Food / Transportation) sit up top, checked against your Core Four
   targets — wealth is won with great financial defense.
+- **🔎 Hidden Fee Checker** — Wall Street fees can quietly eat 50–70% of a
+  lifetime nest egg. Enter your balance, contributions, return, and your fund's
+  expense ratio, and it shows the **lifetime cost vs a low-cost index fund** in a
+  side-by-side bar chart — *"those fees will cost you $398k — 22% of your nest
+  egg, ~18 years of retirement"* — and lists low-cost index funds to switch to.
+  (Manual entry — it does not connect to your accounts.)
 - **☕ Latte Factor (expense auditor)** — the small daily leaks sink the ship.
   Fast-entry (one-tap chips for coffee, snacks, subscriptions, or any custom
   amount) logs every little purchase, and the weekly total projects it out to
