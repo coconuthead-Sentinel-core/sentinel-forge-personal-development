@@ -541,16 +541,13 @@ class BookReader:
         # --- Row 1: plan & focus tools (own row) ---
         row1 = tk.Frame(topbar, bg=BG_PANEL); row1.pack(fill=tk.X)
         plan = section(row1, "PLANNING")
-        self._ideas_btn = btn(plan, "🧠 Ideas",  self.open_idea_warehouse, ACCENT_AMBER)
-        btn(plan, "🚀 Launch", self.launch_momentum, ACCENT_ORANGE)
-        btn(plan, "🎯 Focus",  self.open_focus_mode,  ACCENT_PURPLE)
-        btn(plan, "🧭 Why",    self.open_v2mom,       ACCENT_CYAN)
-        self._ten_goals_btn = btn(plan, "✍ 10 Goals", self.open_ten_goals, ACCENT_PINK)
-        btn(plan, "🪜 Systems", self.open_systems, ACCENT_TEAL)
-        btn(plan, "⚖ Roles", self.open_weekly_roles, ACCENT_GREEN)
-        btn(plan, "🔁 Habits", self.open_habits, ACCENT_INDIGO)
-        btn(plan, "⏪ Backplan", self.open_pert, ACCENT_GOLD)
-        self._vision_btn = btn(plan, "🌤 Vision", self.open_vision_board, ACCENT_SKY)
+        # All ten planning tools now live inside the Planning hub, opened by
+        # this one button — isolated to their own panel.
+        self._planning_btn = btn(plan, "📋 Planning", self.open_planning_hub,
+                                 ACCENT_PURPLE)
+        # The morning/evening nudges that used to flash Ideas / 10 Goals / Vision
+        # now flash the Planning button (those tools live in its hub).
+        self._ideas_btn = self._ten_goals_btn = self._vision_btn = self._planning_btn
 
         # --- Row 1b: tracking & review tools (own row) ---
         rowt = tk.Frame(topbar, bg=BG_PANEL); rowt.pack(fill=tk.X, pady=(4, 0))
@@ -9731,6 +9728,97 @@ class BookReader:
 
         _recompute()
         e1.focus_set()
+
+    # ---- Planning hub (all the planning tools in one panel) -----------
+    def open_planning_hub(self):
+        """One panel that holds every planning tool — Ideas, Launch, Focus, Why,
+        10 Goals, Systems, Roles, Habits, Backplan, Vision — isolated from the
+        main dashboard. Push a tool to open it."""
+        existing = getattr(self, "_planning_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._planning_win = win
+        win.title("📋 Planning")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(640, max(480, sw - 110)); h = min(640, max(440, sh - 100))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(480, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._planning_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="📋 Planning", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="All your planning tools in one place — pick one to "
+                 "open it.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), padx=14).pack(
+                     fill=tk.X, pady=(6, 6))
+
+        tools = [
+            ("🧠 Ideas", self.open_idea_warehouse, ACCENT_AMBER,
+             "Capture & prioritize every idea"),
+            ("🚀 Launch", self.launch_momentum, ACCENT_ORANGE,
+             "5-4-3-2-1 momentum to start"),
+            ("🎯 Focus", self.open_focus_mode, ACCENT_PURPLE,
+             "Single-task focus mode"),
+            ("🧭 Why", self.open_v2mom, ACCENT_CYAN,
+             "V2MOM goal — your Why"),
+            ("✍ 10 Goals", self.open_ten_goals, ACCENT_PINK,
+             "Daily 10-goal writing"),
+            ("🪜 Systems", self.open_systems, ACCENT_TEAL,
+             "A→B→Z checklists"),
+            ("⚖ Roles", self.open_weekly_roles, ACCENT_GREEN,
+             "Quadrant-II weekly roles"),
+            ("🔁 Habits", self.open_habits, ACCENT_INDIGO,
+             "Habit stacking + 2-min rule"),
+            ("⏪ Backplan", self.open_pert, ACCENT_GOLD,
+             "Back-from-the-future PERT"),
+            ("🌤 Vision", self.open_vision_board, ACCENT_SKY,
+             "Vision-board slideshow"),
+        ]
+
+        grid = tk.Frame(win, bg=BG_DARK, padx=12, pady=4)
+        grid.pack(fill=tk.BOTH, expand=True)
+        cols = 2
+        for c in range(cols):
+            grid.columnconfigure(c, weight=1, uniform="plan")
+        for i, (label, opener, color, desc) in enumerate(tools):
+            r, c = divmod(i, cols)
+            cell = tk.Frame(grid, bg=BG_PANEL, padx=8, pady=8,
+                            highlightthickness=1, highlightbackground="#334155")
+            cell.grid(row=r, column=c, sticky="nsew", padx=6, pady=6)
+            grid.rowconfigure(r, weight=1)
+            tk.Button(cell, text=label, command=opener,
+                      font=("Segoe UI", 12, "bold"), bg=color, fg="white",
+                      activebackground=color, relief=tk.FLAT, pady=8,
+                      cursor="hand2", borderwidth=0).pack(fill=tk.X)
+            tk.Label(cell, text=desc, bg=BG_PANEL, fg=FG_MUTED,
+                     font=("Segoe UI", 8), wraplength=w // 2 - 50,
+                     justify=tk.CENTER).pack(pady=(4, 0))
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
