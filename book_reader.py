@@ -709,183 +709,29 @@ class BookReader:
         )
         self.status.pack(fill=tk.X)
 
-        # ---- Main split: book text on the left, notes on the right ----
+        # ---- The book reader now lives in the Study workspace ------------
+        # The reading panes (book text + chapter navigator + Notes) moved off
+        # the main dashboard into the Study workspace's "📖 Reader" tab, built
+        # once by _build_tab_reader() when the (persistent) Study window is
+        # created hidden at the end of __init__. Every text_area / notes_area /
+        # chapter_listbox reference elsewhere therefore stays valid. Opening a
+        # book reveals that window on the Reader tab.
         self.font_size = 16
-        body = tk.PanedWindow(
-            dash, orient=tk.HORIZONTAL, sashwidth=6,
-            bg=BG_DARK, bd=0, sashrelief=tk.FLAT,
-            # Default vertical size keeps the body usable even inside the
-            # scrollable container; expand=True still lets it grow when
-            # the window is taller than the natural stack.
-            height=580,
-        )
-        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
-
-        # Left side — book text
-        text_frame = tk.Frame(body, bg=BG_DARK)
-        self.text_area = scrolledtext.ScrolledText(
-            text_frame, wrap=tk.WORD,
-            font=(self.font_family, self.font_size),
-            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=20, pady=20, relief=tk.FLAT,
-            selectbackground="#1d4ed8", selectforeground="white",
-            undo=True, autoseparators=True, maxundo=-1,
-        )
-        self.text_area.pack(fill=tk.BOTH, expand=True)
-        # Make it clear the user can select text
-        self.text_area.bind("<Control-a>", self._select_all)
-        # Right-click context menu — gives Cut/Copy/Paste an obvious affordance.
-        self._build_text_context_menu()
-        # Reading guide — highlights the chunk currently being spoken.
-        # Color and chunk size are user-selectable via the topbar controls.
-        self.text_area.tag_configure(
-            "reading",
-            background=self.HIGHLIGHT_COLORS[self.highlight_color_var.get()],
-            foreground="#0f172a",
-        )
-        # Make the reading tag win over the built-in selection highlight so
-        # the yellow line stays visible when reading selected text.
-        self.text_area.tag_raise("reading", "sel")
-
-        # ---- Right column: chapter navigator on top, Notes underneath
-        # The chapter navigator is the e-Sword-inspired addition — its
-        # header shows the current book's title (rather than a static
-        # "Bible Books" label) and clicking a chapter scrolls the reader
-        # to that offset. The list is rebuilt whenever a new book loads.
-        right_pane = tk.PanedWindow(
-            body, orient=tk.VERTICAL, sashwidth=6,
-            bg=BG_DARK, bd=0, sashrelief=tk.FLAT,
-        )
-
-        # Chapter navigator
-        chapters_frame = tk.Frame(right_pane, bg=BG_DARK)
-        chapter_header = tk.Frame(chapters_frame, bg=BG_PANEL, padx=8, pady=6)
-        chapter_header.pack(fill=tk.X)
+        self._reader_body = None
+        self._reader_right_pane = None
+        # The chapter navigator's title lives here so it exists app-wide even
+        # before the Reader tab is built.
         self.chapter_title_var = tk.StringVar(value="📖  No book open")
-        tk.Label(
-            chapter_header, textvariable=self.chapter_title_var,
-            bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 11, "bold"),
-            anchor=tk.W,
-        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
-        cl_frame = tk.Frame(chapters_frame, bg=BG_DARK)
-        cl_frame.pack(fill=tk.BOTH, expand=True)
-        self.chapter_listbox = tk.Listbox(
-            cl_frame, bg=BG_INPUT, fg=FG_TEXT,
-            selectbackground=ACCENT_CYAN, selectforeground="white",
-            font=("Segoe UI", 11), relief=tk.FLAT, bd=0,
-            highlightthickness=0, activestyle="none",
-        )
-        cl_sb = tk.Scrollbar(cl_frame, command=self.chapter_listbox.yview)
-        self.chapter_listbox.configure(yscrollcommand=cl_sb.set)
-        cl_sb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.chapter_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        # Single-click jumps; double-click and Enter also jump for keyboard nav.
-        self.chapter_listbox.bind("<<ListboxSelect>>", self._jump_to_selected_chapter)
-        self.chapter_listbox.bind("<Double-Button-1>", self._jump_to_selected_chapter)
-        self.chapter_listbox.bind("<Return>",          self._jump_to_selected_chapter)
-
-        # Notes panel (unchanged, just re-parented to right_pane)
-        notes_frame = tk.Frame(right_pane, bg=BG_DARK)
-        notes_header = tk.Frame(notes_frame, bg=BG_PANEL, padx=8, pady=6)
-        notes_header.pack(fill=tk.X)
-        tk.Label(notes_header, text="📝 Notes", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
-        # "← From Reader" — pulls the current selection FROM the reader
-        # INTO Notes. Renamed from "Add selection →" because the old
-        # arrow direction confused users (it looked like it would push
-        # Notes somewhere). The left-pointing arrow + "From" makes the
-        # source explicit.
-        tk.Button(
-            notes_header, text="←  From Reader",
-            command=self._copy_selection_to_notes,
-            font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white", relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=4)
-        # Save button — stores a reference so the manual-save handler
-        # can flash it green ("✓ Saved") after a successful write,
-        # giving visible feedback the user was missing.
-        self._notes_save_btn = tk.Button(
-            notes_header, text="💾  Save", command=self._save_notes_manually,
-            font=("Segoe UI", 10, "bold"),
-            bg=ACCENT_GREEN, fg="white", relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._notes_save_btn.pack(side=tk.RIGHT, padx=4)
-        # One-click send to the Eisenhower Matrix. Opens a tiny menu so
-        # the user picks which quadrant the note belongs in.
-        self._notes_to_matrix_btn = tk.Button(
-            notes_header, text="🎯  →  Matrix  ▾",
-            command=self._show_notes_to_matrix_menu,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_RED, fg="white",
-            activebackground=ACCENT_RED, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._notes_to_matrix_btn.pack(side=tk.RIGHT, padx=4)
-        # Second "→ Study" button — destinations OUTSIDE the Matrix.
-        # Sister to the Matrix button. Together they cover every Study-
-        # workspace destination the note can go to. Same MOVE behavior:
-        # text gets cleared from Notes after a successful save so the
-        # panel feels like a real conveyor belt to the Study workspace,
-        # not a sticky scratch pad.
-        self._notes_to_study_btn = tk.Button(
-            notes_header, text="📓  →  Study  ▾",
-            command=self._show_notes_to_study_menu,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_PURPLE, fg="white",
-            activebackground=ACCENT_PURPLE, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._notes_to_study_btn.pack(side=tk.RIGHT, padx=4)
-        self.notes_area = scrolledtext.ScrolledText(
-            notes_frame, wrap=tk.WORD,
-            font=(self.font_family, 13),
-            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=14, pady=14, relief=tk.FLAT,
-            selectbackground="#1d4ed8", selectforeground="white",
-            undo=True, autoseparators=True, maxundo=-1,
-        )
-        self.notes_area.pack(fill=tk.BOTH, expand=True)
-        # Auto-save notes whenever the user edits — debounced
-        self._notes_save_after_id: str | None = None
-        self.notes_area.bind("<<Modified>>", self._on_notes_modified)
-        self.notes_area.bind("<Control-a>", self._select_all_notes)
-        # Same right-click affordances the reader has — Cut/Copy/Paste/etc.
-        self._build_notes_context_menu()
-        # Focus tracking so the microphone can dictate into whichever
-        # text widget you last clicked into (reader OR notes).
-        self._mic_target: scrolledtext.ScrolledText = self.notes_area
-        self.text_area.bind(
-            "<FocusIn>", lambda _e: self._set_mic_target(self.text_area), add="+")
-        self.notes_area.bind(
-            "<FocusIn>", lambda _e: self._set_mic_target(self.notes_area), add="+")
-        self._load_notes()
-
-        # ---- Commentary now lives in the Study workspace -----------------
-        # The secondary-document reader (e-Sword-style commentary module) was
-        # moved out of the main reading column into its own Study tab/section
-        # ("📑 Commentary"). These attributes are (re)created when that tab is
-        # built; initialise them here so the load/clear helpers can guard
-        # safely whenever the Study window is closed.
+        # Commentary likewise lives in its own Study tab. Initialise its
+        # handles here so the load/clear helpers can guard when it isn't open.
         self.commentary_title_var = tk.StringVar(value="📑  Commentary")
         self.commentary_area = None
 
-        right_pane.add(chapters_frame,   minsize=120, stretch="never")
-        right_pane.add(notes_frame,      minsize=140, stretch="always")
-
-        body.add(text_frame, minsize=320, stretch="always")
-        body.add(right_pane, minsize=260, stretch="never")
-        # Default split: text gets ~60% of the window. The right column now
-        # stacks chapters (~28%) above notes (the Commentary pane moved to the
-        # Study workspace, so there are only two panes here now).
-        root.after(50, lambda: (
-            body.sash_place(0, int(root.winfo_width() * 0.60), 0),
-            right_pane.sash_place(0, 0, max(160, int(root.winfo_height() * 0.28))),
-        ))
-
-        # ---- Bottom hint line ------------------------------------------
+        # ---- Bottom hint line (stays on the main dashboard) ------------
         hint = tk.Label(
             dash,
-            text=("Tip: select a paragraph and click 💾 to save just that part to your 📚 Library. "
-                  "Otherwise the whole reader is saved. (Nothing gets lost — saved files appear in the Library.)  "
+            text=("Tip: open a book with 📓 Study → 📖 Reader → 📂 Open. Select a paragraph and click 💾 "
+                  "to save just that part to your 📚 Library. (Nothing gets lost — saved files appear in the Library.)  "
                   "Use the scrollbar on the right (or PgUp/PgDn) to pan the dashboard if your screen is short."),
             anchor=tk.W, font=("Segoe UI", 10), padx=12, pady=6,
             bg=BG_DARK, fg=FG_MUTED,
@@ -1033,6 +879,17 @@ class BookReader:
         # a non-main thread because the COM apartment isn't set up correctly.
         # Running this synchronously on the main thread fixes that.
         self._init_tts()
+
+        # Build the persistent Study workspace now (which builds the book
+        # reader inside its "📖 Reader" tab), then hide it. Building it eagerly
+        # means text_area / notes_area / chapter_listbox exist from startup, so
+        # every reference to them stays valid even before the user opens a book.
+        try:
+            self.open_study_workspace()
+            if self._study_win is not None:
+                self._study_win.withdraw()
+        except Exception as e:
+            print(f"[init] study window build: {e}", file=sys.stderr)
 
     # ---- Helpers --------------------------------------------------------
     def set_status(self, msg: str) -> None:
@@ -1339,6 +1196,13 @@ class BookReader:
         """Extract text from `path` and place it in the reading area.
         Shared by the file-picker (Open), the Library window, and any
         other future loader."""
+        # The reader lives in the Study workspace now — make sure it's open and
+        # on the Reader tab so the book is actually visible.
+        try:
+            self.open_study_workspace()
+            self._show_study_tab("reader")
+        except Exception:
+            pass
         self.set_status(f"Loading {os.path.basename(path)}…")
         self.root.update_idletasks()
         try:
@@ -13942,39 +13806,34 @@ try {
         # Alt+Tab participation, independent minimize/restore.
 
         def on_close():
-            # Force-save any pending Matrix edits before the widgets die.
+            # The Study window is PERSISTENT: it hosts the book reader, so we
+            # never destroy it (that would tear down text_area / notes_area and
+            # the ~150 references to them). Force-save any open editors, then
+            # HIDE the window. Reopening just shows it again with all state.
             try:
                 if self._eisenhower_widgets:
                     self._save_all_eisenhower()
             except Exception:
                 pass
-            # Force-save pending Study Notes too.
             try:
                 if self._study_notes_widget is not None:
                     self._save_study_notes()
             except Exception:
                 pass
-            # If the mic target points at a Study workspace widget that's
-            # about to be destroyed (Matrix quadrant, journal body, or
-            # study notes), redirect it back to Notes so the next mic
-            # session lands somewhere real.
             try:
-                doomed = set(self._eisenhower_widgets.values())
-                for w in (getattr(self, "_journal_body", None),
-                          getattr(self, "_study_notes_widget", None)):
-                    if w is not None:
-                        doomed.add(w)
-                if self._mic_target in doomed:
-                    self._mic_target = self.notes_area
+                if (self._journal_current_id is not None and
+                        hasattr(self, "_journal_body")):
+                    self._save_current_journal_entry()
             except Exception:
                 pass
-            self._eisenhower_widgets = {}
-            self._eisenhower_save_after_ids = {}
-            self._study_notes_widget = None
-            self._study_notes_save_after_id = None
-            self.commentary_area = None   # widget about to be destroyed
-            self._study_win = None
-            win.destroy()
+            try:
+                self._save_notes()      # the reader's quick Notes panel
+            except Exception:
+                pass
+            try:
+                win.withdraw()          # hide, don't destroy
+            except Exception:
+                pass
         win.protocol("WM_DELETE_WINDOW", on_close)
 
         tabbar = tk.Frame(win, bg=BG_PANEL, padx=10, pady=8)
@@ -13986,6 +13845,7 @@ try {
         self._study_tab_buttons = {}
 
         tabs = [
+            ("reader",      "📖 Reader",      self._build_tab_reader),
             ("study_notes", "📝 Study Notes", self._build_tab_study_notes),
             ("topics",      "📌 Topics",      self._build_tab_topics),
             ("glossary",    "📒 Glossary",    self._build_tab_glossary),
@@ -14007,7 +13867,12 @@ try {
             self._study_tab_buttons[key] = b
             f = tk.Frame(content, bg=BG_DARK)
             self._study_tab_frames[key] = f
-            builder(f)
+            # Built once at startup (window is persistent). Guard each builder
+            # so one failing tab can never stop the app from starting.
+            try:
+                builder(f)
+            except Exception as e:
+                print(f"[study] build tab {key}: {e}", file=sys.stderr)
 
         # Open + Library — packed right after the last tab (Matrix), at the
         # exact same compact size as the tab buttons so the row is uniform.
@@ -14037,7 +13902,7 @@ try {
         )
         min_btn.pack(side=tk.RIGHT, padx=(4, 0))
 
-        self._show_study_tab("study_notes")
+        self._show_study_tab("reader")
 
     # ---- Audit tab ------------------------------------------------------
     # Matches the rubric structure shared by the Walkenbach Excel audits
@@ -14848,6 +14713,10 @@ try {
             self._study_tab_buttons[k].configure(bg=BG_INPUT, fg=FG_TEXT)
         self._study_tab_frames[key].pack(fill=tk.BOTH, expand=True)
         self._study_tab_buttons[key].configure(bg=ACCENT_CYAN, fg="white")
+        if key == "reader":
+            # Now that the Reader tab is visible it has a real size — lay out
+            # its text/chapters/notes panes.
+            self._place_reader_sashes()
         refresh = getattr(self, f"_refresh_tab_{key}", None)
         if refresh:
             try:
@@ -16415,6 +16284,158 @@ try {
     # working notes); Study Notes is for collected excerpts, summaries,
     # and dictation done from the Study workspace itself. Highlights can
     # be sent here directly via the right-click menu in the Highlights tab.
+    def _build_tab_reader(self, parent: tk.Frame) -> None:
+        """📖 Reader — the book itself: full text on the left, a chapter
+        navigator and a quick Notes panel on the right. Moved here from the
+        main dashboard so all reading happens inside the Study workspace.
+        Built once (the Study window is persistent), so every reader-widget
+        reference elsewhere in the app stays valid."""
+        body = tk.PanedWindow(
+            parent, orient=tk.HORIZONTAL, sashwidth=6,
+            bg=BG_DARK, bd=0, sashrelief=tk.FLAT, height=580,
+        )
+        body.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
+        self._reader_body = body
+
+        # Left side — book text
+        text_frame = tk.Frame(body, bg=BG_DARK)
+        self.text_area = scrolledtext.ScrolledText(
+            text_frame, wrap=tk.WORD,
+            font=(self.font_family, self.font_size),
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            padx=20, pady=20, relief=tk.FLAT,
+            selectbackground="#1d4ed8", selectforeground="white",
+            undo=True, autoseparators=True, maxundo=-1,
+        )
+        self.text_area.pack(fill=tk.BOTH, expand=True)
+        # Make it clear the user can select text
+        self.text_area.bind("<Control-a>", self._select_all)
+        # Right-click context menu — gives Cut/Copy/Paste an obvious affordance.
+        self._build_text_context_menu()
+        # Reading guide — highlights the chunk currently being spoken.
+        self.text_area.tag_configure(
+            "reading",
+            background=self.HIGHLIGHT_COLORS[self.highlight_color_var.get()],
+            foreground="#0f172a",
+        )
+        self.text_area.tag_raise("reading", "sel")
+
+        # ---- Right column: chapter navigator on top, Notes underneath ----
+        right_pane = tk.PanedWindow(
+            body, orient=tk.VERTICAL, sashwidth=6,
+            bg=BG_DARK, bd=0, sashrelief=tk.FLAT,
+        )
+        self._reader_right_pane = right_pane
+
+        # Chapter navigator
+        chapters_frame = tk.Frame(right_pane, bg=BG_DARK)
+        chapter_header = tk.Frame(chapters_frame, bg=BG_PANEL, padx=8, pady=6)
+        chapter_header.pack(fill=tk.X)
+        tk.Label(
+            chapter_header, textvariable=self.chapter_title_var,
+            bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 11, "bold"),
+            anchor=tk.W,
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        cl_frame = tk.Frame(chapters_frame, bg=BG_DARK)
+        cl_frame.pack(fill=tk.BOTH, expand=True)
+        self.chapter_listbox = tk.Listbox(
+            cl_frame, bg=BG_INPUT, fg=FG_TEXT,
+            selectbackground=ACCENT_CYAN, selectforeground="white",
+            font=("Segoe UI", 11), relief=tk.FLAT, bd=0,
+            highlightthickness=0, activestyle="none",
+        )
+        cl_sb = tk.Scrollbar(cl_frame, command=self.chapter_listbox.yview)
+        self.chapter_listbox.configure(yscrollcommand=cl_sb.set)
+        cl_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.chapter_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.chapter_listbox.bind("<<ListboxSelect>>", self._jump_to_selected_chapter)
+        self.chapter_listbox.bind("<Double-Button-1>", self._jump_to_selected_chapter)
+        self.chapter_listbox.bind("<Return>",          self._jump_to_selected_chapter)
+
+        # Notes panel
+        notes_frame = tk.Frame(right_pane, bg=BG_DARK)
+        notes_header = tk.Frame(notes_frame, bg=BG_PANEL, padx=8, pady=6)
+        notes_header.pack(fill=tk.X)
+        tk.Label(notes_header, text="📝 Notes", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        tk.Button(
+            notes_header, text="←  From Reader",
+            command=self._copy_selection_to_notes,
+            font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white", relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        ).pack(side=tk.RIGHT, padx=4)
+        self._notes_save_btn = tk.Button(
+            notes_header, text="💾  Save", command=self._save_notes_manually,
+            font=("Segoe UI", 10, "bold"),
+            bg=ACCENT_GREEN, fg="white", relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        )
+        self._notes_save_btn.pack(side=tk.RIGHT, padx=4)
+        self._notes_to_matrix_btn = tk.Button(
+            notes_header, text="🎯  →  Matrix  ▾",
+            command=self._show_notes_to_matrix_menu,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_RED, fg="white",
+            activebackground=ACCENT_RED, relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        )
+        self._notes_to_matrix_btn.pack(side=tk.RIGHT, padx=4)
+        self._notes_to_study_btn = tk.Button(
+            notes_header, text="📓  →  Study  ▾",
+            command=self._show_notes_to_study_menu,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_PURPLE, fg="white",
+            activebackground=ACCENT_PURPLE, relief=tk.FLAT,
+            padx=10, pady=4, cursor="hand2", borderwidth=0,
+        )
+        self._notes_to_study_btn.pack(side=tk.RIGHT, padx=4)
+        self.notes_area = scrolledtext.ScrolledText(
+            notes_frame, wrap=tk.WORD,
+            font=(self.font_family, 13),
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            padx=14, pady=14, relief=tk.FLAT,
+            selectbackground="#1d4ed8", selectforeground="white",
+            undo=True, autoseparators=True, maxundo=-1,
+        )
+        self.notes_area.pack(fill=tk.BOTH, expand=True)
+        self._notes_save_after_id: str | None = None
+        self.notes_area.bind("<<Modified>>", self._on_notes_modified)
+        self.notes_area.bind("<Control-a>", self._select_all_notes)
+        self._build_notes_context_menu()
+        # Focus tracking so the microphone can dictate into whichever text
+        # widget you last clicked into (reader OR notes).
+        self._mic_target = self.notes_area
+        self.text_area.bind(
+            "<FocusIn>", lambda _e: self._set_mic_target(self.text_area), add="+")
+        self.notes_area.bind(
+            "<FocusIn>", lambda _e: self._set_mic_target(self.notes_area), add="+")
+        self._load_notes()
+
+        right_pane.add(chapters_frame, minsize=120, stretch="never")
+        right_pane.add(notes_frame,    minsize=140, stretch="always")
+        body.add(text_frame, minsize=320, stretch="always")
+        body.add(right_pane, minsize=260, stretch="never")
+        # Place the sashes once the tab has a real on-screen size (it may be
+        # hidden at build time since the Study window starts withdrawn).
+        self._place_reader_sashes()
+
+    def _place_reader_sashes(self) -> None:
+        """Position the Reader panes (~62% text, chapters over notes) once the
+        tab has a real size; retry while it's still hidden/unmapped."""
+        body = getattr(self, "_reader_body", None)
+        rp = getattr(self, "_reader_right_pane", None)
+        if body is None or rp is None:
+            return
+        try:
+            if not body.winfo_exists():
+                return
+            w = body.winfo_width(); h = body.winfo_height()
+            if w < 60 or h < 60:
+                body.after(150, self._place_reader_sashes)
+                return
+            body.sash_place(0, int(w * 0.62), 0)
+            rp.sash_place(0, 0, max(160, int(h * 0.30)))
+        except Exception:
+            pass
+
     def _build_tab_commentary(self, parent: tk.Frame) -> None:
         """📑 Commentary — study a secondary document (e-Sword-style commentary
         module) alongside your books. Moved here from the main reading column
