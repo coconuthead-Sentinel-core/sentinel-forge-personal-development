@@ -66,6 +66,11 @@ Beyond reading, the app is a study and focus workstation:
   top, and tap your daily levers below (shared with the 🏆 Scoreboard, with
   streaks and a WINNING tally) — so you always act where you actually have
   control.
+- **🔁 Habit Stacker + Two-Minute Rule (James Clear)** — write each habit as a
+  formula, **"After I [current habit], I will [new habit]"**, anchoring the new
+  one to something you already do, and shrink it to a **2-minute gateway version**
+  (*"read one page"*, *"put on my running shoes"*) so starting is effortless.
+  Tap ✓ each day; 🔥 streaks build the chain.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
   Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊

@@ -547,6 +547,7 @@ class BookReader:
         self._ten_goals_btn = btn(plan, "✍ 10 Goals", self.open_ten_goals, ACCENT_PINK)
         btn(plan, "🪜 Systems", self.open_systems, ACCENT_TEAL)
         btn(plan, "⚖ Roles", self.open_weekly_roles, ACCENT_GREEN)
+        btn(plan, "🔁 Habits", self.open_habits, ACCENT_INDIGO)
         track = section(row1, "TRACK")
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
@@ -6867,6 +6868,247 @@ class BookReader:
             _render()
 
         _render()
+
+    # ---- Habit Stacker & Two-Minute Downscaler (James Clear) ----------
+    @staticmethod
+    def _habit_formula(cue, new):
+        cue = (cue or "").strip().rstrip(".")
+        new = (new or "").strip().rstrip(".")
+        if not cue and not new:
+            return ""
+        return f"After I {cue or '…'}, I will {new or '…'}."
+
+    def _habits_all(self):
+        try:
+            return self._db_query(
+                "SELECT id,cue,new_habit,two_min FROM habits ORDER BY id DESC")
+        except Exception:
+            return []
+
+    def _habit_add(self, cue, new_habit, two_min):
+        now = datetime.now().isoformat()
+        try:
+            return self._db_exec(
+                "INSERT INTO habits (cue,new_habit,two_min,created_at,updated_at) "
+                "VALUES (?,?,?,?,?)", (cue, new_habit, two_min, now, now))
+        except Exception:
+            return 0
+
+    def _habit_delete(self, hid):
+        try:
+            self._db_exec("DELETE FROM habit_marks WHERE habit_id=?", (hid,))
+            self._db_exec("DELETE FROM habits WHERE id=?", (hid,))
+        except Exception:
+            pass
+
+    def _habit_dates(self, hid):
+        try:
+            return {r[0] for r in self._db_query(
+                "SELECT day FROM habit_marks WHERE habit_id=?", (hid,))}
+        except Exception:
+            return set()
+
+    def _habit_done_today(self, hid):
+        return date.today().isoformat() in self._habit_dates(hid)
+
+    def _habit_streak(self, hid):
+        dates = self._habit_dates(hid)
+        if not dates:
+            return 0
+        d = date.today()
+        if d.isoformat() not in dates:
+            d = d - timedelta(days=1)
+            if d.isoformat() not in dates:
+                return 0
+        s = 0
+        while d.isoformat() in dates:
+            s += 1
+            d -= timedelta(days=1)
+        return s
+
+    def _habit_toggle_today(self, hid):
+        today = date.today().isoformat()
+        try:
+            if self._habit_done_today(hid):
+                self._db_exec(
+                    "DELETE FROM habit_marks WHERE habit_id=? AND day=?",
+                    (hid, today))
+            else:
+                self._db_exec(
+                    "INSERT OR IGNORE INTO habit_marks (habit_id,day,created_at) "
+                    "VALUES (?,?,?)", (hid, today, datetime.now().isoformat()))
+        except Exception:
+            pass
+
+    def open_habits(self):
+        """James Clear's habit stacking ('After I [cue], I will [new habit]')
+        plus the Two-Minute Rule — every daunting goal gets a 2-minute gateway
+        version so starting is trivial. Small, repeated, anchored to what you
+        already do."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_habits_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._habits_win = win
+        win.title("🔁 Habit Stacker")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(560, sw - 80)); h = min(680, max(470, sh - 100))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 470)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._habits_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🔁 Habit Stacker", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Tie a new habit to one you already do, and shrink it "
+                 "to a 2-minute version so starting is effortless.", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        # ---- builder ----
+        form = tk.Frame(win, bg="#1e1b4b", padx=14, pady=10)
+        form.pack(fill=tk.X, padx=12, pady=(2, 6))
+        line = tk.Frame(form, bg="#1e1b4b"); line.pack(fill=tk.X)
+        tk.Label(line, text="After I", bg="#1e1b4b", fg="#c7d2fe",
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        cue_var = tk.StringVar()
+        cue_e = tk.Entry(line, textvariable=cue_var, width=20, bg=BG_INPUT,
+                         fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 11))
+        cue_e.pack(side=tk.LEFT, padx=(6, 6), ipady=2)
+        tk.Label(line, text=", I will", bg="#1e1b4b", fg="#c7d2fe",
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        new_var = tk.StringVar()
+        new_e = tk.Entry(line, textvariable=new_var, width=22, bg=BG_INPUT,
+                         fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 11))
+        new_e.pack(side=tk.LEFT, padx=(6, 0), ipady=2)
+        for e in (cue_e, new_e):
+            e.bind("<FocusIn>", lambda _ev, b=e: self._set_mic_target(b), add="+")
+
+        prev_var = tk.StringVar()
+        tk.Label(form, textvariable=prev_var, bg="#1e1b4b", fg="#fef9c3",
+                 font=("Segoe UI", 12, "bold italic"), wraplength=w - 60,
+                 justify=tk.LEFT, anchor=tk.W).pack(fill=tk.X, pady=(8, 4))
+
+        tk.Label(form, text="🔬 What's the 2-minute version? (the gateway — e.g. "
+                 "“read one page”, “put on my running shoes”)", bg="#1e1b4b",
+                 fg="#a5b4fc", font=("Segoe UI", 9), wraplength=w - 60,
+                 justify=tk.LEFT).pack(anchor="w")
+        two_var = tk.StringVar()
+        two_e = tk.Entry(form, textvariable=two_var, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 11))
+        two_e.pack(fill=tk.X, ipady=3, pady=(2, 6))
+        two_e.bind("<FocusIn>", lambda _ev: self._set_mic_target(two_e), add="+")
+
+        def _preview(*_a):
+            f = self._habit_formula(cue_var.get(), new_var.get())
+            prev_var.set(f if f else "After I … , I will … .")
+        cue_e.bind("<KeyRelease>", _preview)
+        new_e.bind("<KeyRelease>", _preview)
+
+        def _save():
+            cue = cue_var.get().strip(); new = new_var.get().strip()
+            if not cue or not new:
+                messagebox.showinfo("Habit", "Fill in both halves: After I __, "
+                                    "I will __.")
+                return
+            self._habit_add(cue, new, two_var.get().strip())
+            cue_var.set(""); new_var.set(""); two_var.set(""); _preview()
+            self.set_status("🔁 Habit stacked. Tiny + anchored = it sticks.")
+            _render()
+        tk.Button(form, text="＋ Stack this habit", command=_save,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_INDIGO, fg="white",
+                  activebackground=ACCENT_INDIGO, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(anchor="w")
+
+        # ---- list ----
+        tk.Label(win, text="Your habits", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(fill=tk.X, padx=14)
+        outer = tk.Frame(win, bg=BG_DARK); outer.pack(fill=tk.BOTH, expand=True,
+                                                      padx=12, pady=(2, 10))
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=canvas.yview, width=16)
+        inner = tk.Frame(canvas, bg=BG_DARK)
+        inner.bind("<Configure>",
+                   lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw", width=w - 56)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _render():
+            for ch in inner.winfo_children():
+                ch.destroy()
+            habits = self._habits_all()
+            if not habits:
+                tk.Label(inner, text="No habits yet — stack your first one above.",
+                         bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 11)).pack(
+                             anchor="w", pady=8)
+            for hid, cue, new, two in habits:
+                done = self._habit_done_today(hid)
+                streak = self._habit_streak(hid)
+                rb = "#1e293b" if done else BG_PANEL
+                card = tk.Frame(inner, bg=rb, padx=10, pady=7); card.pack(fill=tk.X, pady=3)
+                topl = tk.Frame(card, bg=rb); topl.pack(fill=tk.X)
+                tk.Button(topl, text=("✓ today" if done else "○ today"),
+                          command=lambda i=hid: (self._habit_toggle_today(i), _render()),
+                          font=("Segoe UI", 9, "bold"),
+                          bg=(ACCENT_GREEN if done else BG_INPUT),
+                          fg=("white" if done else FG_MUTED),
+                          activebackground=ACCENT_GREEN, activeforeground="white",
+                          relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                          borderwidth=0).pack(side=tk.LEFT)
+                if streak:
+                    tk.Label(topl, text=f"🔥 {streak}d", bg=rb, fg=ACCENT_AMBER,
+                             font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(8, 0))
+                tk.Button(topl, text="🗑", command=lambda i=hid: (
+                              self._habit_delete(i), _render()),
+                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
+                          activebackground=ACCENT_RED, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Label(card, text=self._habit_formula(cue, new), bg=rb, fg=FG_TEXT,
+                         font=("Segoe UI", 12, "bold"), wraplength=w - 130,
+                         justify=tk.LEFT, anchor=tk.W).pack(fill=tk.X, pady=(4, 0))
+                if two.strip():
+                    tk.Label(card, text=f"🔬 2-min start:  {two}", bg=rb,
+                             fg="#93c5fd", font=("Segoe UI", 10, "italic"),
+                             wraplength=w - 130, justify=tk.LEFT, anchor=tk.W).pack(
+                                 fill=tk.X)
+
+        _preview()
+        _render()
+        cue_e.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

@@ -453,6 +453,24 @@ CREATE TABLE IF NOT EXISTS lag_measures (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Habit stacking + Two-Minute Rule (James Clear). Each habit is a formula —
+-- "After I [cue], I will [new habit]" — with a 2-minute gateway version that
+-- makes starting trivial. habit_marks logs the days done so streaks can build.
+CREATE TABLE IF NOT EXISTS habits (
+    id INTEGER PRIMARY KEY,
+    cue TEXT NOT NULL DEFAULT '',          -- the existing habit (anchor)
+    new_habit TEXT NOT NULL DEFAULT '',    -- the new behavior
+    two_min TEXT NOT NULL DEFAULT '',      -- the 2-minute gateway version
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habit_marks (
+    habit_id INTEGER NOT NULL,
+    day TEXT NOT NULL,                      -- YYYY-MM-DD
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (habit_id, day)
+);
 """
 
 
