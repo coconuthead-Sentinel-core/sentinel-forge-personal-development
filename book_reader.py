@@ -540,7 +540,7 @@ class BookReader:
         # (📂 Open and 📚 Library live in the Study workspace.)
         # --- Row 1: plan & focus tools (own row) ---
         row1 = tk.Frame(topbar, bg=BG_PANEL); row1.pack(fill=tk.X)
-        plan = section(row1, "PLAN")
+        plan = section(row1, "PLANNING")
         self._ideas_btn = btn(plan, "🧠 Ideas",  self.open_idea_warehouse, ACCENT_AMBER)
         btn(plan, "🚀 Launch", self.launch_momentum, ACCENT_ORANGE)
         btn(plan, "🎯 Focus",  self.open_focus_mode,  ACCENT_PURPLE)
