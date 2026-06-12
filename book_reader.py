@@ -5030,9 +5030,9 @@ class BookReader:
                   relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
                   borderwidth=0).pack(side=tk.RIGHT)
 
-        tk.Label(win, text="You hate giving up money you have — but you'll "
-                 "happily promise future money. So promise it now: half of "
-                 "every raise goes to wealth before you ever feel it.",
+        tk.Label(win, text="Parkinson's Law: expenses rise to meet income. Beat "
+                 "it by driving a wedge — promise future money now, so half of "
+                 "every raise goes to wealth before your lifestyle ever feels it.",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
                  wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
                      fill=tk.X, pady=(6, 4))
