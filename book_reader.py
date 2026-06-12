@@ -579,8 +579,11 @@ class BookReader:
 
         # CAPTURE sits beside READ ALOUD on the same top row.
         work = section(row1, "CAPTURE")
-        btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
-        btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
+        _pbtn = btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
+        _sbtn = btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
+        # Prompts + Save are made more compact (smaller font + tighter padding).
+        for _b in (_pbtn, _sbtn):
+            _b.configure(font=("Segoe UI", 8, "bold"), padx=3, pady=1)
         btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED)
         btn(work, "⏱ Time Log", self.open_time_log,       ACCENT_CYAN)
 
