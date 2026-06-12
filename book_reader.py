@@ -556,32 +556,10 @@ class BookReader:
         self._track_btn = btn(track, "📊 Track", self.open_track_hub, ACCENT_INDIGO)
         self._review_btn = self._track_btn   # evening review nudge flashes this
 
-        # --- Money tools, split across rows so nothing overflows ---
+        # --- All money tools now live inside the Money panel, opened here. ---
         rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
-        build = section(rowm, "MONEY · BUILD")
-        btn(build, "💵 Money Hub", self.open_money_hub, ACCENT_GOLD)
-        btn(build, "💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD)
-        btn(build, "📈 Save More", self.open_save_more_tomorrow, ACCENT_TEAL)
-        btn(build, "🌱 Compound", self.open_compound_simulator, ACCENT_LIME)
-        btn(build, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
-        btn(build, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
-
-        rowmi = tk.Frame(topbar, bg=BG_PANEL); rowmi.pack(fill=tk.X, pady=(4, 0))
-        invest = section(rowmi, "MONEY · INVEST")
-        btn(invest, "📊 Net Worth", self.open_net_worth, ACCENT_INDIGO)
-        btn(invest, "🧺 Allocate", self.open_asset_buckets, ACCENT_PURPLE)
-        btn(invest, "🌦 All Seasons", self.open_all_seasons, ACCENT_SKY)
-        btn(invest, "🏁 Critical Mass", self.open_critical_mass, ACCENT_GOLD)
-
-        rowm2 = tk.Frame(topbar, bg=BG_PANEL); rowm2.pack(fill=tk.X, pady=(4, 0))
-        spend = section(rowm2, "MONEY · SPEND")
-        btn(spend, "🛡 Core Four", self.open_core_four, ACCENT_GREEN)
-        btn(spend, "☕ Latte", self.open_latte_factor, ACCENT_AMBER)
-        btn(spend, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
-        btn(spend, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
-        btn(spend, "🔍 Audit", self.open_subscription_audit, ACCENT_RED)
-        btn(spend, "📒 Spending", self.open_expense_tracker, ACCENT_GOLD)
-        btn(spend, "🔎 Fees", self.open_fee_checker, ACCENT_INDIGO)
+        money = section(rowm, "MONEY")
+        btn(money, "💰 Money", self.open_money_panel, ACCENT_GOLD)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -9886,6 +9864,103 @@ class BookReader:
             tk.Label(cell, text=desc, bg=BG_PANEL, fg=FG_MUTED,
                      font=("Segoe UI", 8), wraplength=w // 2 - 50,
                      justify=tk.CENTER).pack(pady=(4, 0))
+
+    # ---- Money panel (every money tool in one panel) ------------------
+    def open_money_panel(self):
+        """One panel that holds every money tool, grouped Build / Invest /
+        Spend. Push a tool to open it."""
+        existing = getattr(self, "_money_panel_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._money_panel_win = win
+        win.title("💰 Money")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(560, sw - 70)); h = min(680, max(460, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 460)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._money_panel_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="💰 Money", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        groups = [
+            ("BUILD", [
+                ("💵 Money Hub", self.open_money_hub, ACCENT_GOLD),
+                ("💰 Pay First", self.open_pay_yourself_first, ACCENT_EMERALD),
+                ("📈 Save More", self.open_save_more_tomorrow, ACCENT_TEAL),
+                ("🌱 Compound", self.open_compound_simulator, ACCENT_LIME),
+                ("🔋 Run Rate", self.open_run_rate, ACCENT_CYAN),
+                ("🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK),
+            ]),
+            ("INVEST", [
+                ("📊 Net Worth", self.open_net_worth, ACCENT_INDIGO),
+                ("🧺 Allocate", self.open_asset_buckets, ACCENT_PURPLE),
+                ("🌦 All Seasons", self.open_all_seasons, ACCENT_SKY),
+                ("🏁 Critical Mass", self.open_critical_mass, ACCENT_GOLD),
+            ]),
+            ("SPEND", [
+                ("🛡 Core Four", self.open_core_four, ACCENT_GREEN),
+                ("☕ Latte", self.open_latte_factor, ACCENT_AMBER),
+                ("⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO),
+                ("⌛ Time Cost", self.open_time_money, ACCENT_PURPLE),
+                ("🔍 Audit", self.open_subscription_audit, ACCENT_RED),
+                ("📒 Spending", self.open_expense_tracker, ACCENT_GOLD),
+                ("🔎 Fees", self.open_fee_checker, ACCENT_INDIGO),
+            ]),
+        ]
+
+        outer = tk.Frame(win, bg=BG_DARK); outer.pack(fill=tk.BOTH, expand=True,
+                                                      padx=12, pady=6)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=canvas.yview, width=16)
+        body = tk.Frame(canvas, bg=BG_DARK)
+        body.bind("<Configure>",
+                  lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=body, anchor="nw", width=w - 56)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        cols = 3
+        for title, tools in groups:
+            tk.Label(body, text=title, bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 9, "bold"), anchor=tk.W).pack(
+                         fill=tk.X, pady=(8, 2))
+            grid = tk.Frame(body, bg=BG_DARK); grid.pack(fill=tk.X)
+            for c in range(cols):
+                grid.columnconfigure(c, weight=1, uniform="money")
+            for i, (label, opener, color) in enumerate(tools):
+                r, c = divmod(i, cols)
+                tk.Button(grid, text=label, command=opener,
+                          font=("Segoe UI", 11, "bold"), bg=color, fg="white",
+                          activebackground=color, relief=tk.FLAT, pady=8,
+                          cursor="hand2", borderwidth=0).grid(
+                              row=r, column=c, sticky="nsew", padx=4, pady=4)
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
