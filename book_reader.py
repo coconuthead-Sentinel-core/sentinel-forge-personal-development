@@ -585,7 +585,6 @@ class BookReader:
         for _b in (_pbtn, _sbtn):
             _b.configure(font=("Segoe UI", 8, "bold"), padx=3, pady=1)
         btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED)
-        btn(work, "⏱ Time Log", self.open_time_log,       ACCENT_CYAN)
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
@@ -9830,6 +9829,8 @@ class BookReader:
                  padx=14).pack(fill=tk.X, pady=(6, 6))
 
         tools = [
+            ("⏱ Time Log", self.open_time_log, ACCENT_CYAN,
+             "Winner's Time Log — where the hours went"),
             ("🪞 Review", self.open_after_action_review, ACCENT_INDIGO,
              "Daily after-action review"),
             ("🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED,
