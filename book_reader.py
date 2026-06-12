@@ -543,19 +543,22 @@ class BookReader:
         plan = section(row1, "PLANNING")
         # All ten planning tools now live inside the Planning hub, opened by
         # this one button — isolated to their own panel.
+        # UW = uniform character width so every top-bar button is the same size.
+        UW = 11
         self._planning_btn = btn(plan, "📋 Planning", self.open_planning_hub,
-                                 ACCENT_PURPLE)
+                                 ACCENT_PURPLE, w=UW)
         # The morning/evening nudges that used to flash Ideas / 10 Goals / Vision
         # now flash the Planning button (those tools live in its hub).
         self._ideas_btn = self._ten_goals_btn = self._vision_btn = self._planning_btn
 
         # --- Track + Money sit on the SAME row, beside Planning. ---
         track = section(row1, "TRACK")
-        self._track_btn = btn(track, "📊 Track", self.open_track_hub, ACCENT_INDIGO)
+        self._track_btn = btn(track, "📊 Track", self.open_track_hub,
+                              ACCENT_INDIGO, w=UW)
         self._review_btn = self._track_btn   # evening review nudge flashes this
 
         money = section(row1, "MONEY")
-        btn(money, "💰 Money", self.open_money_panel, ACCENT_GOLD)
+        btn(money, "💰 Money", self.open_money_panel, ACCENT_GOLD, w=UW)
 
         # DISPLAY (font + text size) — upper-right corner, on the SAME top row
         # as the Planning / Track / Money / Read / Capture buttons.
@@ -565,9 +568,9 @@ class BookReader:
         # Voice picker stacked directly underneath its buttons.
         read = section(row1, "READ ALOUD")
         read_top = tk.Frame(read, bg=BG_DARK); read_top.pack(anchor="w")
-        btn(read_top, "🔊 Read", self.read_aloud, ACCENT_GREEN)
-        btn(read_top, "■ Stop",  self.stop_reading, ACCENT_SLATE)
-        self.mic_btn = btn(read_top, "🎤 Voice", self.toggle_mic, ACCENT_MIC)
+        btn(read_top, "🔊 Read", self.read_aloud, ACCENT_GREEN, w=UW)
+        btn(read_top, "■ Stop",  self.stop_reading, ACCENT_SLATE, w=UW)
+        self.mic_btn = btn(read_top, "🎤 Voice", self.toggle_mic, ACCENT_MIC, w=UW)
         # Mic accuracy: Fast (base) / Accurate (small) / Best (medium).
         self._whisper_quality_var = tk.StringVar(value="Accurate")
         _mq = tk.OptionMenu(read_top, self._whisper_quality_var,
@@ -579,12 +582,9 @@ class BookReader:
 
         # CAPTURE sits beside READ ALOUD on the same top row.
         work = section(row1, "CAPTURE")
-        _pbtn = btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
-        _sbtn = btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
-        # Prompts + Save are made more compact (smaller font + tighter padding).
-        for _b in (_pbtn, _sbtn):
-            _b.configure(font=("Segoe UI", 8, "bold"), padx=3, pady=1)
-        btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED)
+        btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN, w=UW)
+        btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK, w=UW)
+        btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED, w=UW)
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
