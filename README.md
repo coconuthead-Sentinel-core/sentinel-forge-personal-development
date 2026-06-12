@@ -177,9 +177,11 @@ Beyond reading, the app is a study and focus workstation:
 - **🌱 Compound Simulator (Rule of 72)** — compound interest is the most powerful
   force there is. Plug in a few dollars a week, a return rate, and your age, and
   a **growth graph** forecasts the fortune it becomes by retirement (e.g.
-  *$20/week at 8% → ~$179,000 by 65, only $36k of it your own money*). Shows how
-  often your money doubles (Rule of 72). Open it whenever you feel poor or stuck
-  and *see* your future wealth — instant hope.
+  *$20/week at 8% → ~$179,000 by 65, only $36k of it your own money*). A visual
+  **Rule-of-72 doubling ladder** shows your current savings stepping up
+  **now → 2× → 4× → 8× → 16×**, one rung every *72 ÷ rate* years (so $10k at 8%
+  becomes $160k in 36 years). Open it whenever you feel poor or stuck and *see*
+  your future wealth — instant hope.
 - **📊 Expected Net Worth (PAW vs. UAW)** — a high income isn't wealth (*The
   Millionaire Next Door*). It runs the formula **age × income ÷ 10** for your
   target net worth, compares it to what you actually have on a **continuum gauge**,

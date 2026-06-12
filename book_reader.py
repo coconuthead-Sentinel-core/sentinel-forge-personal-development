@@ -5265,6 +5265,46 @@ class BookReader:
         canvas.create_text(pl + pw, pt + 2, text=self._money_fmt(final),
                            fill="#4ade80", anchor="ne", font=("Segoe UI", 12, "bold"))
 
+    def _draw_doubling_ladder(self, canvas, base, rate):
+        """Rule of 72 doubling staircase: your current savings → 2× → 4× → 8× →
+        16×, each step T = 72/rate years apart."""
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W, H = 520, 96
+        if W < 40:
+            W = 520
+        if H < 20:
+            H = 96
+        if rate <= 0 or base <= 0:
+            canvas.create_text(W // 2, H // 2, text="Enter your current savings "
+                               "(“already saved”) and a rate to see the doubling "
+                               "ladder.", fill=FG_MUTED, font=("Segoe UI", 9))
+            return
+        T = 72.0 / rate
+        n = 5
+        pad = 8; gap = 8
+        colw = (W - 2 * pad - (n - 1) * gap) / n
+        base_y = H - 22
+        maxh = H - 40
+        greens = ["#14532d", "#15803d", "#16a34a", "#22c55e", "#4ade80"]
+        for k in range(n):
+            val = base * (2 ** k); yr = k * T
+            bh = int(maxh * (k + 1) / n)
+            x0 = pad + k * (colw + gap); x1 = x0 + colw
+            y0 = base_y - bh
+            canvas.create_rectangle(x0, y0, x1, base_y, fill=greens[k], outline="")
+            canvas.create_text((x0 + x1) / 2, y0 - 2, anchor="s",
+                               text=self._money_fmt(val), fill="#e2e8f0",
+                               font=("Segoe UI", 8, "bold"))
+            lbl = "now" if k == 0 else f"yr {yr:.0f}"
+            canvas.create_text((x0 + x1) / 2, base_y + 10, text=lbl, fill=FG_MUTED,
+                               font=("Segoe UI", 8))
+        canvas.create_text(pad, 8, anchor="nw",
+                           text=f"⏳ doubles every {T:.1f} yr (72 ÷ {rate:g})",
+                           fill="#4ade80", font=("Segoe UI", 9, "bold"))
+
     def open_compound_simulator(self) -> None:
         """The Rule of 72: compound interest is the most powerful force there
         is. A few dollars a week, never touched, grows into a fortune. When you
@@ -5368,8 +5408,15 @@ class BookReader:
                  padx=14).pack(fill=tk.X, pady=(2, 4))
 
         # ---- graph ----
-        graph = tk.Canvas(win, height=250, bg="#0b1220", highlightthickness=0)
-        graph.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 12))
+        graph = tk.Canvas(win, height=210, bg="#0b1220", highlightthickness=0)
+        graph.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 4))
+
+        # ---- Rule-of-72 doubling ladder ----
+        tk.Label(win, text="💥 Rule of 72 — how your current savings double",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "bold"),
+                 anchor=tk.W, padx=14).pack(fill=tk.X)
+        ladder = tk.Canvas(win, height=104, bg="#0b1220", highlightthickness=0)
+        ladder.pack(fill=tk.X, padx=14, pady=(2, 12))
 
         def _save():
             stt = self._load_handoff_state() or {}
@@ -5398,6 +5445,7 @@ class BookReader:
             years = max(0, retire - age)
             series = self._compound_series(weekly, rate, years, start)
             self._draw_growth(graph, series, age)
+            self._draw_doubling_ladder(ladder, start, rate)
             final = series[-1]
             contributed = start + weekly * 52 * years
             growth = final - contributed
@@ -5417,6 +5465,7 @@ class BookReader:
             e.bind("<KeyRelease>", _recompute)
             e.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
         graph.bind("<Configure>", lambda _e: _recompute())
+        ladder.bind("<Configure>", lambda _e: _recompute())
 
         _recompute()
         e1.focus_set()
