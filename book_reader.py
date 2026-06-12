@@ -570,6 +570,7 @@ class BookReader:
         btn(build, "🌱 Compound", self.open_compound_simulator, ACCENT_LIME)
         btn(build, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
         btn(build, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
+        btn(build, "📊 Net Worth", self.open_net_worth, ACCENT_INDIGO)
 
         rowm2 = tk.Frame(topbar, bg=BG_PANEL); rowm2.pack(fill=tk.X, pady=(4, 0))
         spend = section(rowm2, "MONEY · SPEND")
@@ -8298,6 +8299,223 @@ class BookReader:
         self._vision_start_music()
         _show(0)
         self._vision_after = self.root.after(1000, _tick)
+
+    # ---- Expected Net Worth (PAW vs. UAW) calculator ------------------
+    @staticmethod
+    def _expected_net_worth(age, income):
+        """The Millionaire Next Door formula: age * income / 10."""
+        return float(age) * float(income) / 10.0
+
+    @staticmethod
+    def _paw_status(actual, expected):
+        """('PAW'|'AAW'|'UAW', ratio) — PAW >= 2x expected, UAW <= half."""
+        if expected <= 0:
+            return None
+        ratio = float(actual) / float(expected)
+        if ratio >= 2.0:
+            return ("PAW", ratio)
+        if ratio <= 0.5:
+            return ("UAW", ratio)
+        return ("AAW", ratio)
+
+    def _draw_wealth_gauge(self, canvas, actual, expected):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W, H = 520, 80
+        if W < 30:
+            W = 520
+        if H < 20:
+            H = 80
+        if expected <= 0:
+            canvas.create_text(W // 2, H // 2, text="Enter your age and income",
+                               fill=FG_MUTED, font=("Segoe UI", 10))
+            return
+        pl, pr = 10, 10
+        pw = W - pl - pr
+        y0, y1 = 16, H - 22
+        max_scale = max(2.5 * expected, actual * 1.05, expected * 0.01)
+
+        def xof(v):
+            return pl + int(min(v, max_scale) / max_scale * pw)
+        # zones
+        canvas.create_rectangle(pl, y0, xof(0.5 * expected), y1,
+                                fill="#7f1d1d", outline="")       # UAW
+        canvas.create_rectangle(xof(0.5 * expected), y0, xof(2 * expected), y1,
+                                fill="#78350f", outline="")       # AAW
+        canvas.create_rectangle(xof(2 * expected), y0, pl + pw, y1,
+                                fill="#064e3b", outline="")       # PAW
+        # zone labels
+        canvas.create_text((pl + xof(0.5 * expected)) // 2, (y0 + y1) // 2,
+                           text="UAW", fill="#fca5a5", font=("Segoe UI", 9, "bold"))
+        canvas.create_text((xof(0.5 * expected) + xof(2 * expected)) // 2,
+                           (y0 + y1) // 2, text="AVERAGE", fill="#fcd34d",
+                           font=("Segoe UI", 9, "bold"))
+        canvas.create_text((xof(2 * expected) + pl + pw) // 2, (y0 + y1) // 2,
+                           text="PAW", fill="#6ee7b7", font=("Segoe UI", 9, "bold"))
+        # expected (1x) marker
+        ex = xof(expected)
+        canvas.create_line(ex, y0 - 4, ex, y1 + 4, fill="#e2e8f0", width=2,
+                           dash=(3, 2))
+        canvas.create_text(ex, y0 - 8, text="expected", fill="#e2e8f0",
+                           anchor="center", font=("Segoe UI", 8))
+        # YOU pointer
+        ax = xof(actual)
+        canvas.create_polygon(ax, y1, ax - 6, y1 + 10, ax + 6, y1 + 10,
+                              fill="#facc15", outline="")
+        canvas.create_text(ax, y1 + 16, text="YOU", fill="#facc15",
+                           font=("Segoe UI", 8, "bold"))
+
+    def open_net_worth(self):
+        """The Millionaire Next Door: a high income isn't wealth. Expected net
+        worth = age × income ÷ 10. Compare it to what you actually have to see
+        if you're a Prodigious (PAW) or Under (UAW) Accumulator of Wealth."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_nw_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        st = self._load_handoff_state() or {}
+
+        def _g(k, d=0.0):
+            try:
+                return float(st.get(k, d))
+            except (TypeError, ValueError):
+                return d
+        age0 = _g("nw_age"); inc0 = _g("nw_income"); act0 = _g("nw_actual")
+
+        win = tk.Toplevel(self.root)
+        self._nw_win = win
+        win.title("📊 Expected Net Worth — PAW vs. UAW")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(700, max(540, sw - 90)); h = min(580, max(440, sh - 130))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(540, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._nw_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="📊 Expected Net Worth", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="A high income is not wealth. Where do you stand on "
+                 "the wealth continuum?  Expected net worth = age × income ÷ 10.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 6))
+
+        inp = tk.Frame(win, bg=BG_DARK, padx=12); inp.pack(fill=tk.X)
+        age_var = tk.StringVar(value=(f"{age0:g}" if age0 else ""))
+        inc_var = tk.StringVar(value=(f"{inc0:g}" if inc0 else ""))
+        act_var = tk.StringVar(value=(f"{act0:g}" if act0 else ""))
+
+        def _field(r, label, var, suffix=""):
+            tk.Label(inp, text=label, bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 11, "bold")).grid(row=r, column=0,
+                                                         sticky="w", pady=4)
+            e = tk.Entry(inp, textvariable=var, width=14, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 12, "bold"))
+            e.grid(row=r, column=1, sticky="w", padx=(8, 4), ipady=2)
+            if suffix:
+                tk.Label(inp, text=suffix, bg=BG_DARK, fg=FG_MUTED,
+                         font=("Segoe UI", 9)).grid(row=r, column=2, sticky="w")
+            return e
+        e1 = _field(0, "Your age", age_var, "years")
+        e2 = _field(1, "Pretax annual household income  $", inc_var, "")
+        e3 = _field(2, "Your actual net worth  $", act_var,
+                    "(assets − debts)")
+
+        exp_var = tk.StringVar(); cmp_var = tk.StringVar()
+        tk.Label(win, textvariable=exp_var, bg=BG_DARK, fg="#c7d2fe",
+                 font=("Segoe UI", 16, "bold"), padx=14, anchor=tk.W).pack(
+                     fill=tk.X, pady=(10, 0))
+        tk.Label(win, textvariable=cmp_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10), padx=14, anchor=tk.W).pack(fill=tk.X)
+
+        banner = tk.Label(win, text="", bg=BG_DARK, fg=FG_TEXT,
+                          font=("Segoe UI", 14, "bold"), wraplength=w - 30,
+                          justify=tk.LEFT, padx=14, pady=8)
+        banner.pack(fill=tk.X, pady=(6, 2))
+        gauge = tk.Canvas(win, height=80, bg="#0b1220", highlightthickness=0)
+        gauge.pack(fill=tk.X, padx=14, pady=(2, 12))
+
+        def _save():
+            stt = self._load_handoff_state() or {}
+            stt["nw_age"] = self._money_parse(age_var.get()) or 0.0
+            stt["nw_income"] = self._money_parse(inc_var.get()) or 0.0
+            stt["nw_actual"] = self._money_parse(act_var.get()) or 0.0
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+
+        def _recompute(*_a):
+            age = self._money_parse(age_var.get()) or 0.0
+            income = self._money_parse(inc_var.get()) or 0.0
+            actual = self._money_parse(act_var.get()) or 0.0
+            if age <= 0 or income <= 0:
+                exp_var.set("Enter your age and income to see your target.")
+                cmp_var.set(""); banner.configure(text="", bg=BG_DARK)
+                self._draw_wealth_gauge(gauge, 0, 0)
+                return
+            expected = self._expected_net_worth(age, income)
+            exp_var.set(f"🎯 Expected net worth: {self._money_fmt(expected)}")
+            status = self._paw_status(actual, expected)
+            cmp_var.set(f"You have {self._money_fmt(actual)} — "
+                        f"{(actual / expected * 100):.0f}% of the target "
+                        f"({'+' if actual >= expected else ''}"
+                        f"{self._money_fmt(actual - expected)}).")
+            self._draw_wealth_gauge(gauge, actual, expected)
+            kind = status[0] if status else "AAW"
+            if kind == "PAW":
+                banner.configure(
+                    text="🏆 PAW — Prodigious Accumulator of Wealth. You've built "
+                    "2×+ what your income predicts. This is real wealth.",
+                    bg="#064e3b", fg="#6ee7b7")
+            elif kind == "UAW":
+                banner.configure(
+                    text="⚠ UAW — Under Accumulator of Wealth. Your income "
+                    "outruns your wealth — play better defense and pay yourself "
+                    "first.", bg="#7f1d1d", fg="#fecaca")
+            else:
+                banner.configure(
+                    text="➖ AAW — Average Accumulator. You're on the continuum — "
+                    "push past 2× your expected to reach PAW.",
+                    bg="#78350f", fg="#fde68a")
+
+        for e in (e1, e2, e3):
+            e.bind("<KeyRelease>", _recompute)
+            e.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
+        gauge.bind("<Configure>", lambda _e: _recompute())
+
+        _recompute()
+        (e1 if not age0 else e3).focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

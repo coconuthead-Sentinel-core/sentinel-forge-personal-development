@@ -173,6 +173,11 @@ Beyond reading, the app is a study and focus workstation:
   *$20/week at 8% → ~$179,000 by 65, only $36k of it your own money*). Shows how
   often your money doubles (Rule of 72). Open it whenever you feel poor or stuck
   and *see* your future wealth — instant hope.
+- **📊 Expected Net Worth (PAW vs. UAW)** — a high income isn't wealth (*The
+  Millionaire Next Door*). It runs the formula **age × income ÷ 10** for your
+  target net worth, compares it to what you actually have on a **continuum gauge**,
+  and tells you whether you're a **Prodigious** (≥2×) or **Under** (≤½×)
+  Accumulator of Wealth — so you know exactly where you stand.
 - **🔍 Zero-Based Audit** — every recurring charge must re-earn its place. List
   your subscriptions (Netflix, internet, phone, apps) and **every ~90 days the
   app forces an audit** that walks each one and asks, *"Knowing what you know
