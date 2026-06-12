@@ -557,19 +557,9 @@ class BookReader:
         money = section(row1, "MONEY")
         btn(money, "💰 Money", self.open_money_panel, ACCENT_GOLD)
 
-        # --- Row 2 holds the read/capture controls (built below). ---
-        row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
-
-        # DISPLAY (font + text size) — pinned to the BOTTOM-RIGHT of the
-        # dashboard, below the reading area, out of the way of the toolbars.
-        display_bar = tk.Frame(dash, bg=BG_PANEL)
-        display_bar.pack(side=tk.BOTTOM, fill=tk.X)
-        disp_wrap = tk.Frame(display_bar, bg=BG_PANEL)
-        disp_wrap.pack(side=tk.RIGHT, padx=8, pady=4)
-        tk.Label(disp_wrap, text="DISPLAY", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(anchor="e", padx=4)
-        right_frame = tk.Frame(disp_wrap, bg=BG_DARK, padx=4, pady=3)
-        right_frame.pack()
+        # DISPLAY (font + text size) — upper-right corner, on the SAME top row
+        # as the Planning / Track / Money / Read / Capture buttons.
+        right_frame = section(row1, "DISPLAY", side=tk.RIGHT)
 
         # READ ALOUD sits on the SAME row as Planning / Track / Money, with the
         # Voice picker stacked directly underneath its buttons.
@@ -627,19 +617,16 @@ class BookReader:
         self.available_voices.append("Microsoft System")
         self.voice_var = tk.StringVar(value=self.available_voices[0])
 
-        tk.Label(right_frame, text="Font:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(0, 4))
+        # Compact so the whole DISPLAY group fits in the top row's right gap.
         self.font_var = tk.StringVar(value=self.font_family)
         font_menu = tk.OptionMenu(
             right_frame, self.font_var, *self.available_fonts,
             command=self._on_font_change,
         )
         _style_optionmenu(font_menu)
-        font_menu.configure(width=16)
-        font_menu.pack(side=tk.LEFT, padx=(0, 10))
+        font_menu.configure(width=10, font=("Segoe UI", 8))
+        font_menu.pack(side=tk.LEFT, padx=(0, 4))
 
-        tk.Label(right_frame, text="Text:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(0, 4))
         btn(right_frame, "A−", self.smaller_text, ACCENT_SLATE)
         btn(right_frame, "A+", self.bigger_text, ACCENT_SLATE)
 
