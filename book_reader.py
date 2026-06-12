@@ -546,6 +546,7 @@ class BookReader:
         btn(plan, "🧭 Why",    self.open_v2mom,       ACCENT_CYAN)
         self._ten_goals_btn = btn(plan, "✍ 10 Goals", self.open_ten_goals, ACCENT_PINK)
         btn(plan, "🪜 Systems", self.open_systems, ACCENT_TEAL)
+        btn(plan, "⚖ Roles", self.open_weekly_roles, ACCENT_GREEN)
         track = section(row1, "TRACK")
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
