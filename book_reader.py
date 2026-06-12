@@ -567,19 +567,24 @@ class BookReader:
         right_frame = tk.Frame(disp_wrap, bg=BG_DARK, padx=4, pady=3)
         right_frame.pack()
 
-        # READ ALOUD sits on the SAME row as Planning / Track / Money.
+        # READ ALOUD sits on the SAME row as Planning / Track / Money, with the
+        # Voice picker stacked directly underneath its buttons.
         read = section(row1, "READ ALOUD")
-        btn(read, "🔊 Read", self.read_aloud, ACCENT_GREEN)
-        btn(read, "■ Stop",  self.stop_reading, ACCENT_SLATE)
-        self.mic_btn = btn(read, "🎤 Voice", self.toggle_mic, ACCENT_MIC)
+        read_top = tk.Frame(read, bg=BG_DARK); read_top.pack(anchor="w")
+        btn(read_top, "🔊 Read", self.read_aloud, ACCENT_GREEN)
+        btn(read_top, "■ Stop",  self.stop_reading, ACCENT_SLATE)
+        self.mic_btn = btn(read_top, "🎤 Voice", self.toggle_mic, ACCENT_MIC)
         # Mic accuracy: Fast (base) / Accurate (small) / Best (medium).
         self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _mq = tk.OptionMenu(read, self._whisper_quality_var,
+        _mq = tk.OptionMenu(read_top, self._whisper_quality_var,
                             "Fast", "Accurate", "Best",
                             command=self._set_mic_quality)
         _style_optionmenu(_mq)
         _mq.configure(width=7, font=("Segoe UI", 9, "bold"))
         _mq.pack(side=tk.LEFT, padx=(2, 0))
+        # Voice picker row — filled in below once the voice list is known.
+        read_voice_row = tk.Frame(read, bg=BG_DARK)
+        read_voice_row.pack(anchor="w", fill=tk.X, pady=(4, 0))
 
         # CAPTURE sits beside READ ALOUD on the same top row.
         work = section(row1, "CAPTURE")
@@ -650,6 +655,15 @@ class BookReader:
         controls_row = tk.Frame(dash, bg=BG_PANEL, padx=12, pady=8)
         controls_row.pack(fill=tk.X)
 
+        # 🖍 Highlight selection — moved to the far left of this row.
+        tk.Button(
+            controls_row, text="🖍  Highlight selection",
+            command=lambda: self.highlight_selection(),
+            font=("Segoe UI", 11, "bold"),
+            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
+            relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
+        ).pack(side=tk.LEFT, padx=(0, 18))
+
         tk.Label(controls_row, text="Highlight by:", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.highlight_unit_var = tk.StringVar(value="Sentence")
@@ -671,24 +685,15 @@ class BookReader:
         color_menu.configure(width=8)
         color_menu.pack(side=tk.LEFT)
 
-        # Quick action — highlight current selection in the picked color.
-        # Persistent (saved across sessions) for any book loaded from disk.
-        tk.Button(
-            controls_row, text="🖍  Highlight selection",
-            command=lambda: self.highlight_selection(),
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
-            relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.LEFT, padx=(14, 0))
-
-        # Voice picker — moved onto row 2, directly under the READ ALOUD row.
-        voice_sec = section(row2, "VOICE")
+        # Voice picker — sits directly under the READ ALOUD buttons.
+        tk.Label(read_voice_row, text="Voice:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=(0, 4))
         voice_menu = tk.OptionMenu(
-            voice_sec, self.voice_var, *self.available_voices,
+            read_voice_row, self.voice_var, *self.available_voices,
             command=self._on_voice_change,
         )
         _style_optionmenu(voice_menu)
-        voice_menu.configure(width=16, font=("Segoe UI", 9, "bold"))
+        voice_menu.configure(width=14, font=("Segoe UI", 9, "bold"))
         voice_menu.pack(side=tk.LEFT)
 
         # ---- Reading timer REMOVED from the UI at the user's request -----
