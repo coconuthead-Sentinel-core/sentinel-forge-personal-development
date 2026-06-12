@@ -579,6 +579,7 @@ class BookReader:
         btn(spend, "⏳ Wishlist", self.open_wishlist, ACCENT_INDIGO)
         btn(spend, "⌛ Time Cost", self.open_time_money, ACCENT_PURPLE)
         btn(spend, "🔍 Audit", self.open_subscription_audit, ACCENT_RED)
+        btn(spend, "📒 Spending", self.open_expense_tracker, ACCENT_GOLD)
 
         # --- Row 2: read, capture/save, and display controls ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
@@ -8516,6 +8517,265 @@ class BookReader:
 
         _recompute()
         (e1 if not age0 else e3).focus_set()
+
+    # ---- Financial Defense / Spending Summary tracker -----------------
+    EXPENSE_CATS = ("Rent", "Utilities", "Food", "Transportation", "Insurance",
+                    "Debt", "Phone", "Health", "Entertainment", "Shopping",
+                    "Subscriptions", "Other")
+    CORE_DEFENSE = ("Rent", "Utilities", "Food", "Transportation")
+
+    @staticmethod
+    def _period_start(period, today):
+        if period == "This month":
+            return today.replace(day=1)
+        if period == "Last 30 days":
+            return today - timedelta(days=30)
+        if period == "This year":
+            return today.replace(month=1, day=1)
+        return date(1970, 1, 1)   # All time
+
+    def _expense_add(self, spend_date, amount, category, note):
+        try:
+            self._db_exec(
+                "INSERT INTO expenses (spend_date,amount,category,note,created_at) "
+                "VALUES (?,?,?,?,?)",
+                (spend_date, float(amount or 0), category, note,
+                 datetime.now().isoformat()))
+        except Exception:
+            pass
+
+    def _expense_delete(self, eid):
+        try:
+            self._db_exec("DELETE FROM expenses WHERE id=?", (eid,))
+        except Exception:
+            pass
+
+    def _expense_rows(self, start_iso):
+        try:
+            return self._db_query(
+                "SELECT id,spend_date,amount,category,note FROM expenses "
+                "WHERE spend_date>=? ORDER BY spend_date DESC, id DESC",
+                (start_iso,))
+        except Exception:
+            return []
+
+    def _expense_by_category(self, start_iso):
+        try:
+            rows = self._db_query(
+                "SELECT category, COALESCE(SUM(amount),0) FROM expenses "
+                "WHERE spend_date>=? GROUP BY category", (start_iso,))
+        except Exception:
+            rows = []
+        return {c: float(t or 0) for c, t in rows}
+
+    def _expense_cat_color(self, cat):
+        if cat in self.CORE_DEFENSE:
+            return "#16a34a"   # green: necessary defense
+        if cat in ("Entertainment", "Shopping", "Subscriptions", "Other"):
+            return "#d97706"   # amber: discretionary (watch these)
+        return "#0891b2"       # cyan: other fixed
+
+    def _draw_spending_chart(self, canvas, items):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width())
+        except tk.TclError:
+            W = 460
+        if W < 40:
+            W = 460
+        if not items:
+            canvas.create_text(W // 2, 24, text="No expenses logged in this "
+                               "period yet.", fill=FG_MUTED, font=("Segoe UI", 10))
+            return
+        mx = max(t for _, t in items) or 1.0
+        rowh = 22; labelw = 116; valw = 84
+        barmax = max(20, W - labelw - valw)
+        for i, (cat, total) in enumerate(items):
+            y = 4 + i * rowh
+            canvas.create_text(8, y + rowh // 2, anchor="w", text=cat,
+                               fill=FG_TEXT, font=("Segoe UI", 9))
+            bw = int(total / mx * barmax)
+            canvas.create_rectangle(labelw, y + 3, labelw + bw, y + rowh - 3,
+                                    fill=self._expense_cat_color(cat), outline="")
+            canvas.create_text(labelw + bw + 6, y + rowh // 2, anchor="w",
+                               text=self._money_fmt(total), fill=FG_MUTED,
+                               font=("Segoe UI", 9, "bold"))
+
+    def open_expense_tracker(self):
+        """The Millionaire Next Door: wealth comes from great financial defense.
+        Capture and categorize every expense to shine a light on where the money
+        goes — with your Core Defense numbers (Rent/Utilities/Food/Transport)
+        front and center against your Core Four targets."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_exp_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._exp_win = win
+        win.title("📒 Spending — Financial Defense")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(840, max(600, sw - 60)); h = min(720, max(500, sh - 80))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(600, 500)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._exp_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="📒 Spending — Financial Defense", bg=BG_PANEL,
+                 fg=FG_TEXT, font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        period_var = tk.StringVar(value="This month")
+        pmenu = tk.OptionMenu(head, period_var, "This month", "Last 30 days",
+                              "This year", "All", command=lambda _v: _render())
+        _style_optionmenu(pmenu); pmenu.configure(width=11, font=("Segoe UI", 10, "bold"))
+        pmenu.pack(side=tk.RIGHT, padx=(0, 8))
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        # quick entry
+        er = tk.Frame(win, bg=BG_DARK, padx=12, pady=4); er.pack(fill=tk.X)
+        tk.Label(er, text="$", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+        amt_var = tk.StringVar()
+        amt_e = tk.Entry(er, textvariable=amt_var, width=8, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 12, "bold"))
+        amt_e.pack(side=tk.LEFT, padx=(2, 6), ipady=2)
+        cat_var = tk.StringVar(value="Food")
+        cmenu = tk.OptionMenu(er, cat_var, *self.EXPENSE_CATS)
+        _style_optionmenu(cmenu); cmenu.configure(width=12, font=("Segoe UI", 10, "bold"))
+        cmenu.pack(side=tk.LEFT)
+        note_var = tk.StringVar()
+        note_e = tk.Entry(er, textvariable=note_var, width=16, bg=BG_INPUT,
+                          fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                          font=("Segoe UI", 11))
+        note_e.pack(side=tk.LEFT, padx=(6, 6), ipady=2)
+        tk.Label(er, text="(note)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8)).pack(side=tk.LEFT)
+
+        def _add():
+            a = self._money_parse(amt_var.get())
+            if a is None or a <= 0:
+                messagebox.showinfo("Spending", "Enter an amount, e.g. 42.50")
+                return
+            self._expense_add(date.today().isoformat(), a, cat_var.get(),
+                              note_var.get().strip())
+            amt_var.set(""); note_var.set(""); _render()
+        tk.Button(er, text="+ Log", command=_add,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GOLD, fg="white",
+                  activebackground=ACCENT_GOLD, relief=tk.FLAT, padx=12, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        amt_e.bind("<Return>", lambda _e: _add())
+        note_e.bind("<Return>", lambda _e: _add())
+
+        # ---- Core Defense panel ----
+        tk.Label(win, text="🛡 CORE DEFENSE — survival needs first", bg=BG_DARK,
+                 fg="#6ee7b7", font=("Segoe UI", 10, "bold"), anchor=tk.W,
+                 padx=14).pack(fill=tk.X, pady=(6, 2))
+        cd = tk.Frame(win, bg=BG_DARK, padx=12); cd.pack(fill=tk.X)
+        for c in range(4):
+            cd.columnconfigure(c, weight=1)
+        cd_cells = {}
+        for i, cat in enumerate(self.CORE_DEFENSE):
+            cell = tk.Frame(cd, bg=BG_PANEL, padx=8, pady=6)
+            cell.grid(row=0, column=i, sticky="nsew", padx=3)
+            tk.Label(cell, text=cat, bg=BG_PANEL, fg=FG_MUTED,
+                     font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            v = tk.StringVar(); sub = tk.StringVar()
+            tk.Label(cell, textvariable=v, bg=BG_PANEL, fg=FG_TEXT,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w")
+            lab2 = tk.Label(cell, textvariable=sub, bg=BG_PANEL, fg=FG_MUTED,
+                            font=("Segoe UI", 8))
+            lab2.pack(anchor="w")
+            cd_cells[cat] = (v, sub, lab2)
+
+        total_var = tk.StringVar()
+        tk.Label(win, textvariable=total_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold"), anchor=tk.W, padx=14).pack(
+                     fill=tk.X, pady=(8, 2))
+
+        # ---- chart ----
+        chart = tk.Canvas(win, height=120, bg="#0b1220", highlightthickness=0)
+        chart.pack(fill=tk.X, padx=14, pady=(0, 4))
+
+        # ---- recent list ----
+        tk.Label(win, text="Recent (click to delete)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold"), anchor=tk.W, padx=14).pack(fill=tk.X)
+        lwrap = tk.Frame(win, bg=BG_DARK, padx=12); lwrap.pack(fill=tk.BOTH,
+                                                               expand=True, pady=(2, 10))
+        lb = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT, font=("Consolas", 10),
+                        relief=tk.FLAT, bd=0, highlightthickness=0,
+                        activestyle="none", selectbackground=ACCENT_RED)
+        lsb = tk.Scrollbar(lwrap, command=lb.yview, width=16)
+        lb.configure(yscrollcommand=lsb.set)
+        lsb.pack(side=tk.RIGHT, fill=tk.Y)
+        lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _del_selected(_e=None):
+            sel = lb.curselection()
+            if not sel or sel[0] >= len(self._exp_ids):
+                return
+            if messagebox.askyesno("Delete", "Delete this expense?"):
+                self._expense_delete(self._exp_ids[sel[0]]); _render()
+        lb.bind("<Double-Button-1>", _del_selected)
+
+        def _render():
+            period = period_var.get()
+            start = self._period_start(period, date.today()).isoformat()
+            cats = self._expense_by_category(start)
+            total = sum(cats.values())
+            cf = self._core_four_load()
+            tmap = {"Rent": cf["core_rent"], "Utilities": cf["core_utilities"],
+                    "Food": cf["core_food"], "Transportation": cf["core_gas"]}
+            for cat in self.CORE_DEFENSE:
+                v, sub, lab2 = cd_cells[cat]
+                spent = cats.get(cat, 0.0)
+                v.set(self._money_fmt(spent))
+                tgt = tmap.get(cat, 0)
+                if period == "This month" and tgt:
+                    over = spent > tgt + 0.001
+                    sub.set(f"of {self._money_fmt(tgt)} target")
+                    lab2.configure(fg=("#f87171" if over else "#34d399"))
+                else:
+                    sub.set("logged"); lab2.configure(fg=FG_MUTED)
+            total_var.set(f"Total {period.lower()}: {self._money_fmt(total)}")
+            items = sorted(((c, t) for c, t in cats.items() if t > 0),
+                           key=lambda x: -x[1])
+            chart.configure(height=max(40, len(items) * 22 + 10))
+            self._draw_spending_chart(chart, items)
+            # recent list
+            lb.delete(0, tk.END)
+            rows = self._expense_rows(start)
+            self._exp_ids = [r[0] for r in rows]
+            for _id, sd, amt, cat, note in rows[:200]:
+                tag = f"  {note}" if note else ""
+                lb.insert(tk.END, f"{sd}  {self._money_fmt(amt):>10}  "
+                          f"{cat:<14}{tag}")
+
+        _render()
+        amt_e.focus_set()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

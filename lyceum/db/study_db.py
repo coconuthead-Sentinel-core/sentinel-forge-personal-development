@@ -502,6 +502,20 @@ CREATE TABLE IF NOT EXISTS vision_images (
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+
+-- Financial-defense expense ledger (The Millionaire Next Door): capture and
+-- categorize every expense over months to see where the money actually goes.
+-- The four "Core Defense" categories (Rent/Utilities/Food/Transportation) are
+-- surfaced against the Core Four targets so survival needs are clearly met.
+CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY,
+    spend_date TEXT NOT NULL,              -- YYYY-MM-DD
+    amount REAL NOT NULL DEFAULT 0,
+    category TEXT NOT NULL DEFAULT 'Other',
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(spend_date);
 """
 
 

@@ -129,6 +129,12 @@ Beyond reading, the app is a study and focus workstation:
   **green when secured, red when not covered** — and tells you if you're short
   and by how much, so your most basic needs get covered *first*. Can pull the
   spendable figure straight from your latest paycheck.
+- **📒 Spending — Financial Defense** — a low-friction expense ledger: log any
+  expense (amount + category + note) in seconds, then see where the money goes
+  over **this month / 30 days / year / all** in a colored category bar chart
+  (defense = green, discretionary = amber). Your **Core Defense** numbers (Rent /
+  Utilities / Food / Transportation) sit up top, checked against your Core Four
+  targets — wealth is won with great financial defense.
 - **☕ Latte Factor (expense auditor)** — the small daily leaks sink the ship.
   Fast-entry (one-tap chips for coffee, snacks, subscriptions, or any custom
   amount) logs every little purchase, and the weekly total projects it out to
