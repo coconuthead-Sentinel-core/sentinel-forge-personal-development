@@ -587,16 +587,12 @@ class BookReader:
         _mq.configure(width=7, font=("Segoe UI", 9, "bold"))
         _mq.pack(side=tk.LEFT, padx=(2, 0))
 
-        # CAPTURE sits beside READ ALOUD, with the Voice picker stacked under it.
+        # CAPTURE sits beside READ ALOUD on the same top row.
         work = section(row1, "CAPTURE")
-        work_top = tk.Frame(work, bg=BG_DARK); work_top.pack(anchor="w")
-        btn(work_top, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
-        btn(work_top, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
-        btn(work_top, "📓 Study",   self.open_study_workspace, ACCENT_RED)
-        btn(work_top, "⏱ Time Log", self.open_time_log,       ACCENT_CYAN)
-        # Voice picker row — filled in below once the voice list is known.
-        work_voice_row = tk.Frame(work, bg=BG_DARK)
-        work_voice_row.pack(anchor="w", fill=tk.X, pady=(4, 0))
+        btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
+        btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
+        btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED)
+        btn(work, "⏱ Time Log", self.open_time_log,       ACCENT_CYAN)
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
@@ -690,15 +686,15 @@ class BookReader:
         color_menu.configure(width=8)
         color_menu.pack(side=tk.LEFT)
 
-        # Voice picker — sits directly under the CAPTURE buttons.
-        tk.Label(work_voice_row, text="Voice:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        # Voice picker — on the highlight controls row, next to Color.
+        tk.Label(controls_row, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(18, 4))
         voice_menu = tk.OptionMenu(
-            work_voice_row, self.voice_var, *self.available_voices,
+            controls_row, self.voice_var, *self.available_voices,
             command=self._on_voice_change,
         )
         _style_optionmenu(voice_menu)
-        voice_menu.configure(width=14, font=("Segoe UI", 9, "bold"))
+        voice_menu.configure(width=16)
         voice_menu.pack(side=tk.LEFT)
 
         # ---- Reading timer REMOVED from the UI at the user's request -----
