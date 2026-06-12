@@ -138,8 +138,9 @@ Beyond reading, the app is a study and focus workstation:
 - **☕ Latte Factor (expense auditor)** — the small daily leaks sink the ship.
   Fast-entry (one-tap chips for coffee, snacks, subscriptions, or any custom
   amount) logs every little purchase, and the weekly total projects it out to
-  the **month and year** — showing what slipped through and what it could have
-  funded in a Dream Bucket instead.
+  the **month and year** — plus the **real cost**: what that daily leak would
+  become if **invested at 8% for 20 years** (a $10/day habit ≈ $166k of lost
+  compound wealth), and what it could have funded in a Dream Bucket instead.
 - **🪣 Dream Buckets (target funder)** — save cash for the big things (fridge,
   washer, dryer, car) so you never need debt. Each bucket has a **visual
   progress bar** that fills as you transfer in money you saved by skipping a

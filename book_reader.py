@@ -3571,10 +3571,14 @@ class BookReader:
         summary = tk.Frame(win, bg="#3b2f0b", padx=14, pady=8)
         summary.pack(fill=tk.X, padx=12, pady=(6, 4))
         wk_var = tk.StringVar(); yr_var = tk.StringVar(); buy_var = tk.StringVar()
+        cost_var = tk.StringVar()
         tk.Label(summary, textvariable=wk_var, bg="#3b2f0b", fg="#fcd34d",
                  font=("Segoe UI", 16, "bold")).pack(anchor="w")
         tk.Label(summary, textvariable=yr_var, bg="#3b2f0b", fg="#fde68a",
                  font=("Segoe UI", 10)).pack(anchor="w")
+        tk.Label(summary, textvariable=cost_var, bg="#3b2f0b", fg="#fca5a5",
+                 font=("Segoe UI", 12, "bold"), wraplength=w - 60,
+                 justify=tk.LEFT).pack(anchor="w", pady=(4, 0))
         tk.Label(summary, textvariable=buy_var, bg="#3b2f0b", fg="#fef3c7",
                  font=("Segoe UI", 10, "italic"), wraplength=w - 60,
                  justify=tk.LEFT).pack(anchor="w", pady=(2, 0))
@@ -3622,6 +3626,16 @@ class BookReader:
             yearly = total * 52
             yr_var.set(f"At this pace: {self._money_fmt(monthly)}/month  ·  "
                        f"{self._money_fmt(yearly)}/year")
+            # The real cost: what these leaks become if invested instead (8%, 20yr)
+            if total > 0:
+                per_day = total / 7.0
+                fv20 = self._compound_series(total, 8, 20)[-1]
+                cost_var.set(
+                    f"💸 That's {self._money_fmt(per_day)}/day. Invested at 8% "
+                    f"instead, it becomes {self._money_fmt(fv20)} in 20 years — "
+                    f"that's the real cost of the leak.")
+            else:
+                cost_var.set("")
             buckets = [b for b in self._dream_buckets() if b[2] > 0]  # target>0
             if total <= 0:
                 buy_var.set("Nothing logged yet this week — log even the $3 ones.")
