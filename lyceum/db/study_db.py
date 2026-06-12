@@ -471,6 +471,26 @@ CREATE TABLE IF NOT EXISTS habit_marks (
     created_at TEXT NOT NULL,
     PRIMARY KEY (habit_id, day)
 );
+
+-- PERT "back from the future" planner: start from the target date and schedule
+-- every milestone BACKWARD to reveal when each must begin — and what to do today.
+CREATE TABLE IF NOT EXISTS pert_plans (
+    id INTEGER PRIMARY KEY,
+    goal TEXT NOT NULL DEFAULT '',
+    target_date TEXT NOT NULL DEFAULT '',   -- YYYY-MM-DD (the ideal future result)
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pert_steps (
+    id INTEGER PRIMARY KEY,
+    plan_id INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    weeks REAL NOT NULL DEFAULT 1,          -- duration in weeks
+    sort_order INTEGER NOT NULL DEFAULT 0,  -- chronological order (first..last)
+    done INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pert_steps ON pert_steps(plan_id);
 """
 
 

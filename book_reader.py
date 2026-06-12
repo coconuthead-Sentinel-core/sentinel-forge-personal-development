@@ -548,6 +548,7 @@ class BookReader:
         btn(plan, "🪜 Systems", self.open_systems, ACCENT_TEAL)
         btn(plan, "⚖ Roles", self.open_weekly_roles, ACCENT_GREEN)
         btn(plan, "🔁 Habits", self.open_habits, ACCENT_INDIGO)
+        btn(plan, "⏪ Backplan", self.open_pert, ACCENT_GOLD)
 
         # --- Row 1b: tracking & review tools (own row) ---
         rowt = tk.Frame(topbar, bg=BG_PANEL); rowt.pack(fill=tk.X, pady=(4, 0))
@@ -7407,6 +7408,470 @@ class BookReader:
                 command=lambda: _toggle(today.isoformat(), True, done_today))
 
         _render()
+
+    # ---- PERT "Back-From-The-Future" planner (reverse scheduling) ------
+    @staticmethod
+    def _pert_schedule(target_date, steps):
+        """steps: list of (name, weeks) in chronological order (first..last).
+        Schedules BACKWARD from target_date. Returns chronological list of
+        {name, weeks, start, end}."""
+        end = target_date
+        out = []
+        for name, weeks in reversed(steps):
+            try:
+                wk = float(weeks)
+            except (TypeError, ValueError):
+                wk = 0.0
+            start = end - timedelta(weeks=wk)
+            out.append({"name": name, "weeks": wk, "start": start, "end": end})
+            end = start
+        out.reverse()
+        return out
+
+    def _pert_plans(self):
+        try:
+            return self._db_query(
+                "SELECT id,goal,target_date FROM pert_plans ORDER BY id DESC")
+        except Exception:
+            return []
+
+    def _pert_add_plan(self, goal, target_date):
+        now = datetime.now().isoformat()
+        try:
+            return self._db_exec(
+                "INSERT INTO pert_plans (goal,target_date,created_at,updated_at) "
+                "VALUES (?,?,?,?)", (goal, target_date, now, now))
+        except Exception:
+            return 0
+
+    def _pert_update_plan(self, pid, goal=None, target_date=None):
+        sets, params = [], []
+        if goal is not None:
+            sets.append("goal=?"); params.append(goal)
+        if target_date is not None:
+            sets.append("target_date=?"); params.append(target_date)
+        if not sets:
+            return
+        sets.append("updated_at=?"); params.append(datetime.now().isoformat())
+        params.append(pid)
+        try:
+            self._db_exec(f"UPDATE pert_plans SET {','.join(sets)} WHERE id=?",
+                          tuple(params))
+        except Exception:
+            pass
+
+    def _pert_delete_plan(self, pid):
+        try:
+            self._db_exec("DELETE FROM pert_steps WHERE plan_id=?", (pid,))
+            self._db_exec("DELETE FROM pert_plans WHERE id=?", (pid,))
+        except Exception:
+            pass
+
+    def _pert_steps(self, pid):
+        try:
+            return self._db_query(
+                "SELECT id,name,weeks,done,sort_order FROM pert_steps "
+                "WHERE plan_id=? ORDER BY sort_order, id", (pid,))
+        except Exception:
+            return []
+
+    def _pert_add_step(self, pid, name, weeks):
+        try:
+            mx = self._db_query(
+                "SELECT COALESCE(MAX(sort_order),0) FROM pert_steps "
+                "WHERE plan_id=?", (pid,))[0][0]
+            self._db_exec(
+                "INSERT INTO pert_steps (plan_id,name,weeks,sort_order,done,"
+                "created_at) VALUES (?,?,?,?,0,?)",
+                (pid, name, float(weeks or 1), int(mx) + 1,
+                 datetime.now().isoformat()))
+        except Exception:
+            pass
+
+    def _pert_step_toggle(self, sid):
+        try:
+            self._db_exec("UPDATE pert_steps SET done=1-done WHERE id=?", (sid,))
+        except Exception:
+            pass
+
+    def _pert_step_delete(self, sid):
+        try:
+            self._db_exec("DELETE FROM pert_steps WHERE id=?", (sid,))
+        except Exception:
+            pass
+
+    def _pert_step_move(self, pid, sid, direction):
+        steps = self._pert_steps(pid)
+        ids = [s[0] for s in steps]
+        if sid not in ids:
+            return
+        i = ids.index(sid); j = i + direction
+        if j < 0 or j >= len(steps):
+            return
+        try:
+            self._db_exec("UPDATE pert_steps SET sort_order=? WHERE id=?",
+                          (steps[j][4], steps[i][0]))
+            self._db_exec("UPDATE pert_steps SET sort_order=? WHERE id=?",
+                          (steps[i][4], steps[j][0]))
+        except Exception:
+            pass
+
+    def _draw_pert_timeline(self, canvas, sched, target):
+        canvas.delete("all")
+        try:
+            W = int(canvas.winfo_width()); H = int(canvas.winfo_height())
+        except tk.TclError:
+            W, H = 520, 80
+        if W < 30:
+            W = 520
+        if H < 20:
+            H = 80
+        if not sched:
+            canvas.create_text(W // 2, H // 2, text="Add milestones to draw the "
+                               "timeline", fill=FG_MUTED, font=("Segoe UI", 10))
+            return
+        start0 = sched[0]["start"]
+        today = date.today()
+        span_start = min(start0, today)
+        total = (target - span_start).days or 1
+        pl, pr = 8, 8
+        pw = W - pl - pr
+        y0, y1 = 16, H - 22
+
+        def xof(d):
+            return pl + int((d - span_start).days / total * pw)
+        palette = ["#0891b2", "#7c3aed", "#16a34a", "#d97706", "#db2777",
+                   "#0d9488", "#4f46e5"]
+        for i, s in enumerate(sched):
+            x0 = xof(s["start"]); x1 = max(x0 + 2, xof(s["end"]))
+            canvas.create_rectangle(x0, y0, x1, y1, fill=palette[i % len(palette)],
+                                    outline=BG_DARK, width=1)
+            nm = s["name"]
+            if x1 - x0 > 44:
+                canvas.create_text((x0 + x1) // 2, (y0 + y1) // 2,
+                                   text=(nm[:int((x1 - x0) / 7)] or ""),
+                                   fill="white", font=("Segoe UI", 8, "bold"))
+        # TODAY marker
+        if span_start <= today <= target:
+            tx = xof(today)
+            canvas.create_line(tx, y0 - 6, tx, y1 + 6, fill="#ef4444", width=2)
+            canvas.create_text(tx, y1 + 12, text="TODAY", fill="#ef4444",
+                               font=("Segoe UI", 8, "bold"))
+        # endpoints
+        canvas.create_text(pl, y0 - 8, text=span_start.strftime("%b %Y"),
+                           fill=FG_MUTED, anchor="w", font=("Segoe UI", 8))
+        canvas.create_text(W - pr, y0 - 8, text="🎯 " + target.strftime("%b %Y"),
+                           fill="#fcd34d", anchor="e", font=("Segoe UI", 8, "bold"))
+
+    def open_pert(self):
+        """'Project forward, look backward': set the date of the ideal future
+        result, list the milestones, and the planner schedules them BACKWARD to
+        show when each must begin — and whether you need to start today."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_pert_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._pert_win = win
+        self._pert_current = None
+        win.title("⏪ Back-From-The-Future Planner")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(920, max(700, sw - 60)); h = min(700, max(490, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(700, 490)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._pert_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="⏪ Back-From-The-Future", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Start from the future you want, then work backward. "
+                 "Set the target date, list the milestones, and see exactly when "
+                 "each must begin.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        paned = tk.PanedWindow(win, orient=tk.HORIZONTAL, sashwidth=6,
+                               bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
+        paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
+
+        left = tk.Frame(paned, bg=BG_DARK)
+        tk.Label(left, text="Your plans", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(fill=tk.X, pady=(0, 4))
+        lwrap = tk.Frame(left, bg=BG_DARK); lwrap.pack(fill=tk.BOTH, expand=True)
+        plist = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT, font=("Segoe UI", 10),
+                           relief=tk.FLAT, bd=0, highlightthickness=0,
+                           activestyle="none", selectbackground=ACCENT_GOLD,
+                           selectforeground="white", width=22)
+        psb = tk.Scrollbar(lwrap, command=plist.yview, width=16)
+        plist.configure(yscrollcommand=psb.set)
+        psb.pack(side=tk.RIGHT, fill=tk.Y)
+        plist.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _new_plan():
+            g = self._ask_text("New plan", "The ideal future result — e.g. "
+                               "“Graduate with my CS degree”:")
+            if not g:
+                return
+            dflt = (date.today() + timedelta(days=730)).isoformat()
+            tgt = self._ask_text("Target date", "When? (YYYY-MM-DD)", dflt)
+            if not tgt:
+                return
+            try:
+                date.fromisoformat(tgt.strip())
+            except ValueError:
+                messagebox.showinfo("Date", "Use the format YYYY-MM-DD.")
+                return
+            pid = self._pert_add_plan(g, tgt.strip())
+            _refresh_plans(select=pid)
+        tk.Button(left, text="＋ New plan", command=_new_plan,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(fill=tk.X, pady=(4, 0))
+        paned.add(left, minsize=180)
+
+        right = tk.Frame(paned, bg=BG_DARK)
+        paned.add(right)
+
+        title_var = tk.StringVar()
+        trow = tk.Frame(right, bg=BG_DARK); trow.pack(fill=tk.X)
+        tk.Label(trow, textvariable=title_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold"), anchor=tk.W, wraplength=w - 360,
+                 justify=tk.LEFT).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Label(trow, text="🎯", bg=BG_DARK, fg="#fcd34d",
+                 font=("Segoe UI", 12)).pack(side=tk.LEFT, padx=(6, 2))
+        tgt_var = tk.StringVar()
+        tgt_e = tk.Entry(trow, textvariable=tgt_var, width=11, bg=BG_INPUT,
+                         fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 11, "bold"))
+        tgt_e.pack(side=tk.LEFT, ipady=2)
+        tk.Button(trow, text="🗑", command=lambda: _del_plan(),
+                  font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=6, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        banner = tk.Label(right, text="", bg="#1e1b4b", fg="#fef9c3",
+                          font=("Segoe UI", 12, "bold"), wraplength=w - 250,
+                          justify=tk.LEFT, anchor=tk.W, padx=12, pady=8)
+        banner.pack(fill=tk.X, pady=(6, 4))
+        timeline = tk.Canvas(right, height=84, bg="#0b1220", highlightthickness=0)
+        timeline.pack(fill=tk.X, pady=(0, 4))
+
+        arow = tk.Frame(right, bg=BG_DARK); arow.pack(fill=tk.X, pady=(4, 2))
+        tk.Label(arow, text="Milestone:", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        nm_var = tk.StringVar()
+        nm_e = tk.Entry(arow, textvariable=nm_var, bg=BG_INPUT, fg=FG_TEXT,
+                        insertbackground=FG_TEXT, relief=tk.FLAT,
+                        font=("Segoe UI", 11))
+        nm_e.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 6), ipady=2)
+        nm_e.bind("<FocusIn>", lambda _e: self._set_mic_target(nm_e), add="+")
+        wk_var = tk.StringVar(value="4")
+        tk.Entry(arow, textvariable=wk_var, width=4, bg=BG_INPUT, fg=FG_TEXT,
+                 insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 11)
+                 ).pack(side=tk.LEFT, ipady=2)
+        tk.Label(arow, text="wks", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(2, 6))
+
+        def _add_step():
+            if self._pert_current is None:
+                messagebox.showinfo("Plan", "Create or pick a plan first.")
+                return
+            nm = nm_var.get().strip()
+            if not nm:
+                return
+            self._pert_add_step(self._pert_current, nm,
+                                self._money_parse(wk_var.get()) or 1)
+            nm_var.set(""); wk_var.set("4"); _render()
+        tk.Button(arow, text="+ Add", command=_add_step,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GOLD, fg="white",
+                  activebackground=ACCENT_GOLD, relief=tk.FLAT, padx=10, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        nm_e.bind("<Return>", lambda _e: _add_step())
+        tk.Label(right, text="List milestones in the order you'll do them — the "
+                 "planner schedules them backward from your target.", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 8, "italic"), anchor=tk.W).pack(
+                     fill=tk.X)
+
+        souter = tk.Frame(right, bg=BG_DARK); souter.pack(fill=tk.BOTH, expand=True,
+                                                          pady=(4, 0))
+        scan = tk.Canvas(souter, bg=BG_DARK, highlightthickness=0)
+        svsb = tk.Scrollbar(souter, command=scan.yview, width=16)
+        sinner = tk.Frame(scan, bg=BG_DARK)
+        sinner.bind("<Configure>",
+                    lambda _e: scan.configure(scrollregion=scan.bbox("all")))
+        scan.create_window((0, 0), window=sinner, anchor="nw", width=w - 290)
+        scan.configure(yscrollcommand=svsb.set)
+        svsb.pack(side=tk.RIGHT, fill=tk.Y)
+        scan.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _del_plan():
+            if self._pert_current is None:
+                return
+            if not messagebox.askyesno("Delete plan", "Delete this plan and its "
+                                       "milestones?"):
+                return
+            self._pert_delete_plan(self._pert_current)
+            self._pert_current = None
+            _refresh_plans()
+
+        def _cur_target():
+            try:
+                return date.fromisoformat(tgt_var.get().strip())
+            except ValueError:
+                return None
+
+        def _render():
+            for ch in sinner.winfo_children():
+                ch.destroy()
+            pid = self._pert_current
+            if pid is None:
+                title_var.set("← Create a plan to begin")
+                banner.configure(text=""); self._draw_pert_timeline(timeline, [], date.today())
+                return
+            target = _cur_target()
+            steps = self._pert_steps(pid)
+            if target is None:
+                banner.configure(text="Enter a valid target date (YYYY-MM-DD).",
+                                 bg="#3b0a0a", fg="#fca5a5")
+                self._draw_pert_timeline(timeline, [], date.today())
+                return
+            sched = self._pert_schedule(target, [(s[1], s[2]) for s in steps])
+            self._draw_pert_timeline(timeline, sched, target)
+            today = date.today()
+            if not steps:
+                banner.configure(text="👉 Add the milestones between today and "
+                                 "your goal.", bg="#1e1b4b", fg="#c7d2fe")
+            else:
+                start0 = sched[0]["start"]
+                if all(s[3] for s in steps):
+                    banner.configure(text="🎉 Every milestone done — you're there!",
+                                     bg="#064e3b", fg="#6ee7b7")
+                elif today < start0:
+                    banner.configure(
+                        text=f"✅ On track. You don't have to start until "
+                        f"{start0.strftime('%b %d, %Y')} "
+                        f"({(start0 - today).days} days of runway).",
+                        bg="#064e3b", fg="#6ee7b7")
+                elif today <= target:
+                    banner.configure(
+                        text=f"⚠ Start NOW. To hit "
+                        f"{target.strftime('%b %d, %Y')} you needed to begin by "
+                        f"{start0.strftime('%b %d, %Y')}. Today's job: "
+                        f"“{next((s[1] for s in steps if not s[3]), '')}.”",
+                        bg="#3b0a0a", fg="#fecaca")
+                else:
+                    banner.configure(
+                        text=f"⏰ Target date has passed. Push the date or "
+                        "compress the plan.", bg="#3b0a0a", fg="#fca5a5")
+            # step rows (chronological)
+            sid_to_sched = {s[0]: sc for s, sc in zip(steps, sched)}
+            for s in steps:
+                sid, name, weeks, done, _so = s
+                sc = sid_to_sched.get(sid)
+                rb = "#16331f" if done else BG_PANEL
+                row = tk.Frame(sinner, bg=rb, padx=8, pady=5); row.pack(fill=tk.X, pady=2)
+                tk.Button(row, text=("✓" if done else "○"),
+                          command=lambda i=sid: (self._pert_step_toggle(i), _render()),
+                          font=("Segoe UI", 11, "bold"), bg=rb,
+                          fg=("#22c55e" if done else FG_MUTED),
+                          activebackground=rb, relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.LEFT)
+                info = tk.Frame(row, bg=rb); info.pack(side=tk.LEFT, fill=tk.X,
+                                                       expand=True, padx=(6, 0))
+                tk.Label(info, text=name, bg=rb,
+                         fg=(FG_MUTED if done else FG_TEXT),
+                         font=("Segoe UI", 11, "bold"), wraplength=w - 430,
+                         justify=tk.LEFT, anchor=tk.W).pack(anchor="w")
+                if sc:
+                    tk.Label(info, text=f"{sc['start'].strftime('%b %d, %Y')} → "
+                             f"{sc['end'].strftime('%b %d, %Y')}  ·  {sc['weeks']:g} wk",
+                             bg=rb, fg="#93c5fd", font=("Segoe UI", 8)).pack(anchor="w")
+                tk.Button(row, text="🗑", command=lambda i=sid: (
+                              self._pert_step_delete(i), _render()),
+                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
+                          activebackground=ACCENT_RED, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Button(row, text="↓", command=lambda i=sid: (
+                              self._pert_step_move(pid, i, 1), _render()),
+                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Button(row, text="↑", command=lambda i=sid: (
+                              self._pert_step_move(pid, i, -1), _render()),
+                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+
+        def _load_plan(pid):
+            self._pert_current = pid
+            g, t = next(((gg, tt) for ii, gg, tt in self._pert_plans() if ii == pid),
+                        ("", ""))
+            title_var.set(g); tgt_var.set(t); _render()
+
+        def _refresh_plans(select=None):
+            plist.delete(0, tk.END)
+            self._pert_ids = []
+            for pid, goal, tgt in self._pert_plans():
+                self._pert_ids.append(pid)
+                plist.insert(tk.END, (goal[:24] or "(untitled)"))
+            pick = select if select in self._pert_ids else (
+                self._pert_ids[0] if self._pert_ids else None)
+            if pick is not None:
+                i = self._pert_ids.index(pick)
+                plist.selection_clear(0, tk.END); plist.selection_set(i)
+                _load_plan(pick)
+            else:
+                self._pert_current = None
+                title_var.set("← Create a plan to begin"); tgt_var.set("")
+                banner.configure(text="")
+                self._draw_pert_timeline(timeline, [], date.today())
+                for ch in sinner.winfo_children():
+                    ch.destroy()
+
+        def _save_target(*_a):
+            if self._pert_current is not None and _cur_target() is not None:
+                self._pert_update_plan(self._pert_current,
+                                       target_date=tgt_var.get().strip())
+            _render()
+        tgt_e.bind("<KeyRelease>", lambda _e: _render())
+        tgt_e.bind("<FocusOut>", _save_target)
+        plist.bind("<<ListboxSelect>>", lambda _e: (
+            getattr(self, "_pert_ids", None) and plist.curselection()
+            and _load_plan(self._pert_ids[plist.curselection()[0]])))
+        timeline.bind("<Configure>", lambda _e: _render())
+
+        _refresh_plans()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

@@ -60,6 +60,12 @@ Beyond reading, the app is a study and focus workstation:
   to know — with a progress bar as you check each off. A checklist makes success
   ~10× likelier (Tracy). Reorder steps, run multiple systems, watch *"Z reached"*
   light up at 100%.
+- **⏪ Back-From-The-Future planner (PERT)** — *project forward, look backward.*
+  Set the date of the result you want (*"Graduate with my CS degree, June 2027"*),
+  list the milestones, and it **schedules them backward** to a visual timeline —
+  computing **exactly when each must begin** and whether you're on track or need
+  to start today (*"you needed to begin by Nov 18, 2025"*). With a TODAY marker,
+  per-milestone date ranges, and check-off.
 - **🎯 Lead vs. Lag (4DX)** — you can't manage a **lag** measure (the result —
   pounds lost, dollars earned), only the **lead** measures (the daily activities
   that predict it). This view pairs the two: name the results you're after up
