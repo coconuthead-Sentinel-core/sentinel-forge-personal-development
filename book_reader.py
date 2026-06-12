@@ -581,7 +581,8 @@ class BookReader:
         _mq.configure(width=7, font=("Segoe UI", 9, "bold"))
         _mq.pack(side=tk.LEFT, padx=(2, 0))
 
-        work = section(row2, "CAPTURE")
+        # CAPTURE sits beside READ ALOUD on the same top row.
+        work = section(row1, "CAPTURE")
         btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
         btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
         btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED)
