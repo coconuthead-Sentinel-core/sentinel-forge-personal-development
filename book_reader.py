@@ -549,16 +549,12 @@ class BookReader:
         # now flash the Planning button (those tools live in its hub).
         self._ideas_btn = self._ten_goals_btn = self._vision_btn = self._planning_btn
 
-        # --- Row 1b: tracking & review tools (own row) ---
-        rowt = tk.Frame(topbar, bg=BG_PANEL); rowt.pack(fill=tk.X, pady=(4, 0))
-        track = section(rowt, "TRACK")
-        # The tracking tools now live inside the Track hub, opened by one button.
+        # --- Track + Money sit on the SAME row, beside Planning. ---
+        track = section(row1, "TRACK")
         self._track_btn = btn(track, "📊 Track", self.open_track_hub, ACCENT_INDIGO)
         self._review_btn = self._track_btn   # evening review nudge flashes this
 
-        # --- All money tools now live inside the Money panel, opened here. ---
-        rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
-        money = section(rowm, "MONEY")
+        money = section(row1, "MONEY")
         btn(money, "💰 Money", self.open_money_panel, ACCENT_GOLD)
 
         # --- Row 2: read, capture/save, and display controls ---
