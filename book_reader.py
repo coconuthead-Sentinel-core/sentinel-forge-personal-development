@@ -555,7 +555,6 @@ class BookReader:
         # --- Row 1b: tracking & review tools (own row) ---
         rowt = tk.Frame(topbar, bg=BG_PANEL); rowt.pack(fill=tk.X, pady=(4, 0))
         track = section(rowt, "TRACK")
-        btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
         btn(track, "🎯 Lead/Lag", self.open_lead_lag, ACCENT_GOLD)
@@ -615,6 +614,7 @@ class BookReader:
         btn(work, "🗒 Prompts", self.open_prompt_library, ACCENT_GREEN)
         btn(work, "💾 Save",    self.save_excerpt,        ACCENT_PINK)
         btn(work, "📓 Study",   self.open_study_workspace, ACCENT_RED)
+        btn(work, "⏱ Time Log", self.open_time_log,       ACCENT_CYAN)
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
@@ -19139,6 +19139,9 @@ try {
               ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, GAP))
         _tbtn(tools, "■ Stop", self._matrix_timer_stop,
               ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, GAP))
+        # --- Winner's Time Log (where the day's hours actually went) ---
+        _tbtn(tools, "⏱ Time Log", self.open_time_log,
+              ACCENT_CYAN).pack(side=tk.LEFT, padx=(GROUP, GAP))
 
         # --- Right cluster: [colour] 🔊 Read · 🎤 Voice · 💾 Save ---
         # Read sits directly to the LEFT of Voice (Read then Voice).
