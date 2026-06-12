@@ -516,6 +516,18 @@ CREATE TABLE IF NOT EXISTS expenses (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(spend_date);
+
+-- Three-Bucket asset allocation (Tony Robbins): split your money across a
+-- Security bucket (can't-afford-to-lose: cash/bonds/TIPS), a Risk/Growth
+-- bucket (stocks/equities/real estate), and a Dream bucket (strategic
+-- splurges). Each holding lives in one bucket; the mix is your allocation.
+CREATE TABLE IF NOT EXISTS asset_holdings (
+    id INTEGER PRIMARY KEY,
+    bucket TEXT NOT NULL DEFAULT 'security',   -- security | growth | dream
+    name TEXT NOT NULL DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
 """
 
 

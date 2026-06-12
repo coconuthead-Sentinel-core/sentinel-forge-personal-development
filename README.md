@@ -185,6 +185,12 @@ Beyond reading, the app is a study and focus workstation:
   target net worth, compares it to what you actually have on a **continuum gauge**,
   and tells you whether you're a **Prodigious** (≥2×) or **Under** (≤½×)
   Accumulator of Wealth — so you know exactly where you stand.
+- **🧺 Three-Bucket Asset Allocator (Tony Robbins)** — asset allocation is the
+  most important investment decision of your life. Split your holdings across
+  **🛡 Security** (cash, bonds, TIPS — can't lose), **📈 Risk/Growth** (stocks,
+  equities, real estate), and **✨ Dream** (strategic splurges). Each bucket shows
+  its total and **% of your portfolio** with a share bar; move any holding
+  between buckets with → to tune the balance of safety and growth.
 - **🔍 Zero-Based Audit** — every recurring charge must re-earn its place. List
   your subscriptions (Netflix, internet, phone, apps) and **every ~90 days the
   app forces an audit** that walks each one and asks, *"Knowing what you know

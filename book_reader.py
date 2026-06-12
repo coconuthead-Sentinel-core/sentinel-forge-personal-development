@@ -571,6 +571,7 @@ class BookReader:
         btn(build, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
         btn(build, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
         btn(build, "📊 Net Worth", self.open_net_worth, ACCENT_INDIGO)
+        btn(build, "🧺 Allocate", self.open_asset_buckets, ACCENT_PURPLE)
 
         rowm2 = tk.Frame(topbar, bg=BG_PANEL); rowm2.pack(fill=tk.X, pady=(4, 0))
         spend = section(rowm2, "MONEY · SPEND")
@@ -8789,6 +8790,225 @@ class BookReader:
 
         _render()
         amt_e.focus_set()
+
+    # ---- Three-Bucket Asset Allocator (Tony Robbins) ------------------
+    ASSET_BUCKETS = (
+        ("security", "🛡 Security", "#16a34a", "#052e16",
+         "Peace of mind — cash, bonds, TIPS. Can't afford to lose."),
+        ("growth", "📈 Risk / Growth", "#d97706", "#3b2f0b",
+         "Higher-yield, volatile — stocks, equities, real estate."),
+        ("dream", "✨ Dream", "#db2777", "#3b0a26",
+         "Strategic splurges — enjoy life along the way."),
+    )
+    _ASSET_ORDER = ("security", "growth", "dream")
+
+    def _assets_in(self, bucket):
+        try:
+            return self._db_query(
+                "SELECT id,name,amount FROM asset_holdings WHERE bucket=? "
+                "ORDER BY id", (bucket,))
+        except Exception:
+            return []
+
+    def _asset_add(self, bucket, name, amount):
+        try:
+            self._db_exec(
+                "INSERT INTO asset_holdings (bucket,name,amount,created_at) "
+                "VALUES (?,?,?,?)",
+                (bucket, name, float(amount or 0), datetime.now().isoformat()))
+        except Exception:
+            pass
+
+    def _asset_delete(self, hid):
+        try:
+            self._db_exec("DELETE FROM asset_holdings WHERE id=?", (hid,))
+        except Exception:
+            pass
+
+    def _asset_move(self, hid, bucket):
+        try:
+            self._db_exec("UPDATE asset_holdings SET bucket=? WHERE id=?",
+                          (bucket, hid))
+        except Exception:
+            pass
+
+    def _asset_bucket_total(self, bucket):
+        try:
+            return float(self._db_query(
+                "SELECT COALESCE(SUM(amount),0) FROM asset_holdings WHERE bucket=?",
+                (bucket,))[0][0] or 0)
+        except Exception:
+            return 0.0
+
+    def _asset_total(self):
+        try:
+            return float(self._db_query(
+                "SELECT COALESCE(SUM(amount),0) FROM asset_holdings")[0][0] or 0)
+        except Exception:
+            return 0.0
+
+    def open_asset_buckets(self):
+        """Tony Robbins: asset allocation is the most important investment
+        decision of your life. Split your money across three buckets — Security
+        (safe), Risk/Growth (volatile upside), and Dream (strategic splurges) —
+        to balance safety and growth."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_assets_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._assets_win = win
+        win.title("🧺 Three-Bucket Asset Allocator")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(960, max(720, sw - 50)); h = min(700, max(500, sh - 80))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(720, 500)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._assets_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🧺 Three-Bucket Asset Allocator", bg=BG_PANEL,
+                 fg=FG_TEXT, font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Asset allocation is the most important investment "
+                 "decision of your life. Move holdings between buckets with → to "
+                 "tune the balance of safety and growth.", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 2))
+
+        total_var = tk.StringVar()
+        tk.Label(win, textvariable=total_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 14, "bold"), padx=14, anchor=tk.W).pack(
+                     fill=tk.X, pady=(2, 4))
+
+        cols = tk.Frame(win, bg=BG_DARK, padx=10, pady=4)
+        cols.pack(fill=tk.BOTH, expand=True)
+        for c in range(3):
+            cols.columnconfigure(c, weight=1, uniform="bucket")
+        cols.rowconfigure(0, weight=1)
+
+        def _next_bucket(b):
+            return self._ASSET_ORDER[(self._ASSET_ORDER.index(b) + 1) % 3]
+
+        def _render():
+            for ch in cols.winfo_children():
+                ch.destroy()
+            grand = self._asset_total()
+            total_var.set(f"Portfolio: {self._money_fmt(grand)}")
+            for ci, (key, label, color, dark, desc) in enumerate(self.ASSET_BUCKETS):
+                bt = self._asset_bucket_total(key)
+                pct = (bt / grand * 100) if grand else 0
+                col = tk.Frame(cols, bg=dark, highlightthickness=2,
+                               highlightbackground=color)
+                col.grid(row=0, column=ci, sticky="nsew", padx=5, pady=2)
+                hd = tk.Frame(col, bg=color, padx=8, pady=6); hd.pack(fill=tk.X)
+                tk.Label(hd, text=label, bg=color, fg="white",
+                         font=("Segoe UI", 12, "bold")).pack(anchor="w")
+                tk.Label(hd, text=f"{self._money_fmt(bt)}   ·   {pct:.0f}%",
+                         bg=color, fg="white",
+                         font=("Segoe UI", 14, "bold")).pack(anchor="w")
+                # share bar
+                bar = tk.Canvas(col, height=8, bg=dark, highlightthickness=0)
+                bar.pack(fill=tk.X, padx=8, pady=(4, 2))
+
+                def _drawbar(cv=bar, p=pct, cl=color):
+                    cv.delete("all")
+                    try:
+                        ww = int(cv.winfo_width()) or 200
+                    except tk.TclError:
+                        ww = 200
+                    cv.create_rectangle(0, 0, ww, 8, fill="#0b1220", outline="")
+                    cv.create_rectangle(0, 0, int(ww * min(1, p / 100)), 8,
+                                        fill=cl, outline="")
+                bar.bind("<Configure>", lambda _e, f=_drawbar: f())
+                _drawbar()
+                tk.Label(col, text=desc, bg=dark, fg="#cbd5e1", wraplength=w // 3 - 60,
+                         justify=tk.LEFT, font=("Segoe UI", 8, "italic")).pack(
+                             anchor="w", padx=8, pady=(0, 4))
+
+                # holdings
+                hold = tk.Frame(col, bg=dark, padx=6); hold.pack(fill=tk.BOTH, expand=True)
+                for hid, name, amount in self._assets_in(key):
+                    r = tk.Frame(hold, bg=BG_PANEL, padx=6, pady=3); r.pack(fill=tk.X, pady=2)
+                    tk.Label(r, text=name, bg=BG_PANEL, fg=FG_TEXT,
+                             font=("Segoe UI", 10, "bold"), anchor=tk.W,
+                             wraplength=w // 3 - 130, justify=tk.LEFT).pack(
+                                 side=tk.LEFT, fill=tk.X, expand=True)
+                    tk.Label(r, text=self._money_fmt(amount), bg=BG_PANEL,
+                             fg=FG_MUTED, font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+                    tk.Button(r, text="🗑", command=lambda i=hid: (
+                                  self._asset_delete(i), _render()),
+                              font=("Segoe UI", 8), bg=BG_PANEL, fg=FG_MUTED,
+                              activebackground=ACCENT_RED, activeforeground="white",
+                              relief=tk.FLAT, padx=3, cursor="hand2",
+                              borderwidth=0).pack(side=tk.RIGHT)
+                    tk.Button(r, text="→", command=lambda i=hid, b=key: (
+                                  self._asset_move(i, _next_bucket(b)), _render()),
+                              font=("Segoe UI", 9, "bold"), bg=BG_PANEL, fg=color,
+                              activebackground=ACCENT_SLATE, activeforeground="white",
+                              relief=tk.FLAT, padx=4, cursor="hand2",
+                              borderwidth=0).pack(side=tk.RIGHT, padx=(0, 2))
+
+                # add row
+                ar = tk.Frame(col, bg=dark, padx=6, pady=6); ar.pack(fill=tk.X)
+                nm = tk.StringVar(); am = tk.StringVar()
+                ne = tk.Entry(ar, textvariable=nm, bg=BG_INPUT, fg=FG_TEXT,
+                              insertbackground=FG_TEXT, relief=tk.FLAT,
+                              font=("Segoe UI", 10))
+                ne.pack(fill=tk.X, ipady=2)
+                ar2 = tk.Frame(ar, bg=dark); ar2.pack(fill=tk.X, pady=(3, 0))
+                tk.Label(ar2, text="$", bg=dark, fg="#cbd5e1",
+                         font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+                ae = tk.Entry(ar2, textvariable=am, width=9, bg=BG_INPUT, fg=FG_TEXT,
+                              insertbackground=FG_TEXT, relief=tk.FLAT,
+                              font=("Segoe UI", 10))
+                ae.pack(side=tk.LEFT, padx=(2, 4), ipady=2)
+
+                def _add(b=key, n=nm, a=am):
+                    nme = n.get().strip()
+                    amt = self._money_parse(a.get())
+                    if not nme or amt is None or amt <= 0:
+                        return
+                    self._asset_add(b, nme, amt); _render()
+                tk.Button(ar2, text="+ Add", command=_add,
+                          font=("Segoe UI", 9, "bold"), bg=color, fg="white",
+                          activebackground=color, relief=tk.FLAT, padx=8, pady=2,
+                          cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+                ne.bind("<Return>", lambda _e, f=_add: f())
+                ae.bind("<Return>", lambda _e, f=_add: f())
+
+        tk.Label(win, text="🛡 Security is your floor · 📈 Growth is your engine · "
+                 "✨ Dream is your reward — fund it from profits so you enjoy the "
+                 "journey.", bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 8, "italic"),
+                 wraplength=w - 30, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(2, 8))
+
+        _render()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
