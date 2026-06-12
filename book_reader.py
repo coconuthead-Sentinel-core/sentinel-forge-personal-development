@@ -6235,24 +6235,15 @@ class BookReader:
         _pulse(times)
 
     def _maybe_morning_goals(self):
-        """Morning ritual: if today's 10 goals aren't written yet, nudge — and
-        open the notebook (unless the Session Start wizard is already up, to
-        avoid two windows stacking)."""
+        """Morning ritual: if today's 10 goals aren't written yet, gently nudge —
+        flash the 📋 Planning button and a status line, but DON'T pop the window
+        open on its own. The 10 Goals notebook lives inside the Planning hub."""
         try:
             if self._ten_goals_done_today():
                 return
-            self.set_status("✍ Morning ritual: write your top 10 goals from "
-                            "memory, in the present tense — it programs them deep.")
+            self.set_status("✍ Morning ritual: open 📋 Planning → 10 Goals and "
+                            "write your top 10 in the present tense.")
             self._flash_ten_goals_button()
-            sw = getattr(self, "_session_start_win", None)
-            busy = False
-            if sw is not None:
-                try:
-                    busy = bool(sw.winfo_exists())
-                except tk.TclError:
-                    busy = False
-            if not busy:
-                self.open_ten_goals()
         except Exception:
             pass
 
