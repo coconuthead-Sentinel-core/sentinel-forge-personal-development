@@ -60,6 +60,12 @@ Beyond reading, the app is a study and focus workstation:
   to know — with a progress bar as you check each off. A checklist makes success
   ~10× likelier (Tracy). Reorder steps, run multiple systems, watch *"Z reached"*
   light up at 100%.
+- **🎯 Lead vs. Lag (4DX)** — you can't manage a **lag** measure (the result —
+  pounds lost, dollars earned), only the **lead** measures (the daily activities
+  that predict it). This view pairs the two: name the results you're after up
+  top, and tap your daily levers below (shared with the 🏆 Scoreboard, with
+  streaks and a WINNING tally) — so you always act where you actually have
+  control.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
   Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊

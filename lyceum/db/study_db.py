@@ -438,6 +438,21 @@ CREATE TABLE IF NOT EXISTS system_steps (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_steps_system ON system_steps(system_id);
+
+-- Lag measures (4DX): the RESULTS you ultimately want (lose 20 lbs, earn
+-- $80k) — you can't manage these directly. They pair with the lead_measures
+-- (the daily activities you DO control) to make the lead-vs-lag link explicit.
+CREATE TABLE IF NOT EXISTS lag_measures (
+    id INTEGER PRIMARY KEY,
+    text TEXT NOT NULL DEFAULT '',
+    current REAL NOT NULL DEFAULT 0,
+    target REAL NOT NULL DEFAULT 0,
+    unit TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 

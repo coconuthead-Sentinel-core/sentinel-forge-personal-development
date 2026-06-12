@@ -551,6 +551,7 @@ class BookReader:
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
+        btn(track, "🎯 Lead/Lag", self.open_lead_lag, ACCENT_GOLD)
 
         # --- Money tools, split across two rows so nothing overflows ---
         rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
@@ -6626,6 +6627,246 @@ class BookReader:
             and _load_system(self._systems_ids[slist.curselection()[0]])))
 
         _refresh_systems()
+
+    # ---- Lead vs. Lag measures (4DX) ----------------------------------
+    def _lag_all(self):
+        try:
+            return self._db_query(
+                "SELECT id,text,current,target,unit FROM lag_measures "
+                "WHERE active=1 ORDER BY sort_order, id")
+        except Exception:
+            return []
+
+    def _lag_add(self, text, current, target, unit):
+        now = datetime.now().isoformat()
+        try:
+            mx = self._db_query(
+                "SELECT COALESCE(MAX(sort_order),0) FROM lag_measures")[0][0]
+            self._db_exec(
+                "INSERT INTO lag_measures (text,current,target,unit,sort_order,"
+                "active,created_at,updated_at) VALUES (?,?,?,?,?,1,?,?)",
+                (text, float(current or 0), float(target or 0), unit,
+                 int(mx) + 1, now, now))
+        except Exception:
+            pass
+
+    def _lag_set_current(self, lid, current):
+        try:
+            self._db_exec(
+                "UPDATE lag_measures SET current=?,updated_at=? WHERE id=?",
+                (float(current or 0), datetime.now().isoformat(), lid))
+        except Exception:
+            pass
+
+    def _lag_delete(self, lid):
+        try:
+            self._db_exec("UPDATE lag_measures SET active=0 WHERE id=?", (lid,))
+        except Exception:
+            pass
+
+    def _leads_today(self):
+        """(measures, done_ids) for today — the daily levers you control."""
+        try:
+            measures = self._db_query(
+                "SELECT id,text FROM lead_measures WHERE active=1 "
+                "ORDER BY sort_order, id")
+        except Exception:
+            measures = []
+        today = date.today().isoformat()
+        try:
+            done = {r[0] for r in self._db_query(
+                "SELECT measure_id FROM lead_measure_marks WHERE day=? AND done=1",
+                (today,))}
+        except Exception:
+            done = set()
+        return measures, done
+
+    def open_lead_lag(self):
+        """4DX: you can't manage a LAG measure (the result — pounds lost, dollars
+        earned). You manage LEAD measures (the daily activities that predict it).
+        This pairs the two so you act on the levers you actually control."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        self._seed_default_lead_measures()
+        existing = getattr(self, "_leadlag_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._leadlag_win = win
+        win.title("🎯 Lead vs. Lag Scoreboard")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(760, max(560, sw - 80)); h = min(680, max(470, sh - 100))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(560, 470)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._leadlag_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🎯 Lead vs. Lag", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="You can't manage the RESULT (a lag measure) — only "
+                 "the daily ACTIVITIES that predict it (lead measures). Play "
+                 "where you have control.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        # ===== LAG section (the results) =====
+        lagwrap = tk.Frame(win, bg="#3b0a0a", padx=12, pady=8)
+        lagwrap.pack(fill=tk.X, padx=12, pady=(2, 6))
+        tk.Label(lagwrap, text="🎯 LAG — the results you're after (can't control "
+                 "directly)", bg="#3b0a0a", fg="#fca5a5",
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        lag_rows = tk.Frame(lagwrap, bg="#3b0a0a"); lag_rows.pack(fill=tk.X, pady=(4, 4))
+        # add-lag row
+        lar = tk.Frame(lagwrap, bg="#3b0a0a"); lar.pack(fill=tk.X)
+        lt = tk.StringVar(); lcur = tk.StringVar(); ltar = tk.StringVar(); lun = tk.StringVar()
+        tk.Entry(lar, textvariable=lt, width=18, bg=BG_INPUT, fg=FG_TEXT,
+                 insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 10)
+                 ).pack(side=tk.LEFT, ipady=2)
+        for ph, v, wd in (("now", lcur, 5), ("goal", ltar, 5), ("unit", lun, 5)):
+            e = tk.Entry(lar, textvariable=v, width=wd, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 10))
+            e.pack(side=tk.LEFT, padx=(4, 0), ipady=2)
+
+        def _add_lag():
+            if not lt.get().strip():
+                return
+            self._lag_add(lt.get().strip(), self._money_parse(lcur.get()) or 0,
+                          self._money_parse(ltar.get()) or 0, lun.get().strip())
+            lt.set(""); lcur.set(""); ltar.set(""); lun.set("")
+            _render()
+        tk.Button(lar, text="+ Lag", command=_add_lag, font=("Segoe UI", 9, "bold"),
+                  bg=ACCENT_RED, fg="white", activebackground=ACCENT_RED,
+                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                  borderwidth=0).pack(side=tk.LEFT, padx=(4, 0))
+
+        # ===== LEAD section (the levers) =====
+        leadwrap = tk.Frame(win, bg="#052e1a", padx=12, pady=8)
+        leadwrap.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 6))
+        lhead = tk.Frame(leadwrap, bg="#052e1a"); lhead.pack(fill=tk.X)
+        tk.Label(lhead, text="⚡ LEAD — your daily levers (you control these)",
+                 bg="#052e1a", fg="#6ee7b7", font=("Segoe UI", 10, "bold")
+                 ).pack(side=tk.LEFT)
+        win_var = tk.StringVar()
+        tk.Label(lhead, textvariable=win_var, bg="#052e1a", fg="#34d399",
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.RIGHT)
+        tk.Button(lhead, text="⚙ Edit leads",
+                  command=lambda: (self._open_scoreboard_editor(), _render()),
+                  font=("Segoe UI", 8, "bold"), bg="#064e3b", fg="#a7f3d0",
+                  activebackground=ACCENT_GREEN, activeforeground="white",
+                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT, padx=(0, 8))
+        lead_rows = tk.Frame(leadwrap, bg="#052e1a"); lead_rows.pack(fill=tk.BOTH,
+                                                                     expand=True, pady=(6, 0))
+        tk.Label(leadwrap, text="Tap a lever each day you do it. Win the leads "
+                 "and the lag takes care of itself.", bg="#052e1a", fg="#6ee7b7",
+                 font=("Segoe UI", 8, "italic")).pack(anchor="w", pady=(4, 0))
+
+        def _render():
+            # ----- lag rows -----
+            for ch in lag_rows.winfo_children():
+                ch.destroy()
+            lags = self._lag_all()
+            if not lags:
+                tk.Label(lag_rows, text="No result set yet — name the outcome you "
+                         "want (e.g. “Lose 20 lbs”, target 20).", bg="#3b0a0a",
+                         fg="#fecaca", font=("Segoe UI", 9), wraplength=w - 80,
+                         justify=tk.LEFT).pack(anchor="w")
+            for lid, text, cur, tar, unit in lags:
+                row = tk.Frame(lag_rows, bg="#3b0a0a"); row.pack(fill=tk.X, pady=2)
+                pct = (f"  ({round(100 * cur / tar)}%)"
+                       if tar else "")
+                u = f" {unit}" if unit else ""
+                val = (f"{cur:g} / {tar:g}{u}{pct}" if tar
+                       else (f"{cur:g}{u}" if cur else "set a target"))
+                tk.Label(row, text=f"🎯 {text}", bg="#3b0a0a", fg="#fee2e2",
+                         font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+                tk.Label(row, text=val, bg="#3b0a0a", fg="#fca5a5",
+                         font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(10, 0))
+                tk.Button(row, text="🗑", command=lambda i=lid: (
+                              self._lag_delete(i), _render()),
+                          font=("Segoe UI", 8), bg="#3b0a0a", fg="#fca5a5",
+                          activebackground=ACCENT_RED, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Button(row, text="✎ reading", command=lambda i=lid: _upd(i),
+                          font=("Segoe UI", 8, "bold"), bg="#3b0a0a", fg="#fecaca",
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=6, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT, padx=(0, 4))
+            # ----- lead rows -----
+            for ch in lead_rows.winfo_children():
+                ch.destroy()
+            measures, done = self._leads_today()
+            for mid, text in measures:
+                is_done = mid in done
+                rb = "#064e3b" if is_done else BG_INPUT
+                row = tk.Frame(lead_rows, bg=rb, padx=8, pady=5); row.pack(fill=tk.X, pady=2)
+                tk.Button(row, text=("✓" if is_done else "○"),
+                          command=lambda m=mid: (self._toggle_lead_measure(m), _render()),
+                          font=("Segoe UI", 13, "bold"), bg=rb,
+                          fg=("#34d399" if is_done else FG_MUTED),
+                          activebackground=rb, relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.LEFT)
+                tk.Label(row, text=text, bg=rb,
+                         fg=("#d1fae5" if is_done else FG_TEXT),
+                         font=("Segoe UI", 11, "bold"), wraplength=w - 250,
+                         justify=tk.LEFT, anchor=tk.W).pack(side=tk.LEFT, padx=(6, 0),
+                                                            fill=tk.X, expand=True)
+                streak = self._lead_measure_streak(mid)
+                if streak:
+                    tk.Label(row, text=f"🔥 {streak}d", bg=rb, fg=ACCENT_AMBER,
+                             font=("Segoe UI", 9, "bold")).pack(side=tk.RIGHT)
+            if not measures:
+                tk.Label(lead_rows, text="No lead measures yet — ⚙ Edit leads to "
+                         "add the daily activities you control.", bg="#052e1a",
+                         fg="#a7f3d0", font=("Segoe UI", 10), wraplength=w - 80,
+                         justify=tk.LEFT).pack(anchor="w")
+            d = len(done & {m[0] for m in measures}); t = len(measures)
+            if t == 0:
+                win_var.set("")
+            elif d == t:
+                win_var.set(f"🏆 WINNING {d}/{t}")
+            elif d > 0:
+                win_var.set(f"▲ {d}/{t}")
+            else:
+                win_var.set(f"○ {d}/{t}")
+
+        def _upd(lid):
+            v = self._ask_amount("Update reading",
+                                 "Latest measurement (e.g. your current weight):")
+            if v is None:
+                return
+            self._lag_set_current(lid, v)
+            _render()
+
+        _render()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
