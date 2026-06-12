@@ -557,11 +557,15 @@ class BookReader:
         money = section(row1, "MONEY")
         btn(money, "💰 Money", self.open_money_panel, ACCENT_GOLD)
 
-        # --- Row 2: read, capture/save, and display controls ---
+        # --- Row 2 holds the read/capture controls (built below). ---
         row2 = tk.Frame(topbar, bg=BG_PANEL); row2.pack(fill=tk.X, pady=(6, 0))
 
-        # Display (font + text size) sits on the right of row 2.
-        disp_wrap = tk.Frame(row2, bg=BG_PANEL); disp_wrap.pack(side=tk.RIGHT)
+        # DISPLAY (font + text size) — pinned to the BOTTOM-RIGHT of the
+        # dashboard, below the reading area, out of the way of the toolbars.
+        display_bar = tk.Frame(dash, bg=BG_PANEL)
+        display_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        disp_wrap = tk.Frame(display_bar, bg=BG_PANEL)
+        disp_wrap.pack(side=tk.RIGHT, padx=8, pady=4)
         tk.Label(disp_wrap, text="DISPLAY", bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 8, "bold")).pack(anchor="e", padx=4)
         right_frame = tk.Frame(disp_wrap, bg=BG_DARK, padx=4, pady=3)
