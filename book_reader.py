@@ -552,10 +552,9 @@ class BookReader:
         # --- Row 1b: tracking & review tools (own row) ---
         rowt = tk.Frame(topbar, bg=BG_PANEL); rowt.pack(fill=tk.X, pady=(4, 0))
         track = section(rowt, "TRACK")
-        self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
-        btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
-        btn(track, "🎯 Lead/Lag", self.open_lead_lag, ACCENT_GOLD)
-        btn(track, "📅 Streaks", self.open_streak_tracker, ACCENT_GREEN)
+        # The tracking tools now live inside the Track hub, opened by one button.
+        self._track_btn = btn(track, "📊 Track", self.open_track_hub, ACCENT_INDIGO)
+        self._review_btn = self._track_btn   # evening review nudge flashes this
 
         # --- Money tools, split across rows so nothing overflows ---
         rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
@@ -9806,6 +9805,83 @@ class BookReader:
         cols = 2
         for c in range(cols):
             grid.columnconfigure(c, weight=1, uniform="plan")
+        for i, (label, opener, color, desc) in enumerate(tools):
+            r, c = divmod(i, cols)
+            cell = tk.Frame(grid, bg=BG_PANEL, padx=8, pady=8,
+                            highlightthickness=1, highlightbackground="#334155")
+            cell.grid(row=r, column=c, sticky="nsew", padx=6, pady=6)
+            grid.rowconfigure(r, weight=1)
+            tk.Button(cell, text=label, command=opener,
+                      font=("Segoe UI", 12, "bold"), bg=color, fg="white",
+                      activebackground=color, relief=tk.FLAT, pady=8,
+                      cursor="hand2", borderwidth=0).pack(fill=tk.X)
+            tk.Label(cell, text=desc, bg=BG_PANEL, fg=FG_MUTED,
+                     font=("Segoe UI", 8), wraplength=w // 2 - 50,
+                     justify=tk.CENTER).pack(pady=(4, 0))
+
+    # ---- Track hub (all the tracking tools in one panel) --------------
+    def open_track_hub(self):
+        """One panel for the tracking tools — Review, Not-To-Do, Lead/Lag,
+        Streaks — isolated from the main dashboard. Push a tool to open it."""
+        existing = getattr(self, "_track_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._track_win = win
+        win.title("📊 Track")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(640, max(480, sw - 110)); h = min(500, max(360, sh - 160))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(480, 360)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._track_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="📊 Track", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Your tracking tools in one place — pick one to open "
+                 "it.", bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 padx=14).pack(fill=tk.X, pady=(6, 6))
+
+        tools = [
+            ("🪞 Review", self.open_after_action_review, ACCENT_INDIGO,
+             "Daily after-action review"),
+            ("🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED,
+             "Stop-doing list + site blocker"),
+            ("🎯 Lead/Lag", self.open_lead_lag, ACCENT_GOLD,
+             "4DX lead vs lag measures"),
+            ("📅 Streaks", self.open_streak_tracker, ACCENT_GREEN,
+             "Never-miss-twice tracker"),
+        ]
+
+        grid = tk.Frame(win, bg=BG_DARK, padx=12, pady=4)
+        grid.pack(fill=tk.BOTH, expand=True)
+        cols = 2
+        for c in range(cols):
+            grid.columnconfigure(c, weight=1, uniform="track")
         for i, (label, opener, color, desc) in enumerate(tools):
             r, c = divmod(i, cols)
             cell = tk.Frame(grid, bg=BG_PANEL, padx=8, pady=8,
