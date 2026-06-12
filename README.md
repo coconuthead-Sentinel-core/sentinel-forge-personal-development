@@ -43,6 +43,11 @@ Beyond reading, the app is a study and focus workstation:
   Science Degree by 2028"*) stares back at you whatever you're doing — schedule,
   bills, reading — because Hill and Tracy found that one organizing goal is what
   separates the achievers. Click it to edit; it persists across sessions.
+- **🧭 V2MOM "Why" Engine** — knowing *why* beats knowing *how* (Sinek, Robbins).
+  Every major goal is captured through the V2MOM intake — **Vision, Values
+  (your Why), Methods, Obstacles, Measurement** — and the app **won't let you
+  save** until you've written your **Why** and named the **Obstacles** in the
+  way. Goals you can't justify don't get made.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
   Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊

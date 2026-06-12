@@ -543,6 +543,7 @@ class BookReader:
         self._ideas_btn = btn(plan, "🧠 Ideas",  self.open_idea_warehouse, ACCENT_AMBER)
         btn(plan, "🚀 Launch", self.launch_momentum, ACCENT_ORANGE)
         btn(plan, "🎯 Focus",  self.open_focus_mode,  ACCENT_PURPLE)
+        btn(plan, "🧭 Why",    self.open_v2mom,       ACCENT_CYAN)
         track = section(row1, "TRACK")
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
@@ -5809,6 +5810,235 @@ class BookReader:
         self._mdp_refresh()
         if val.strip():
             self.set_status("⭐ North Star set. Let it pull every day forward.")
+
+    # ---- V2MOM "Why" engine (Sinek / Robbins goal intake) -------------
+    @staticmethod
+    def _v2mom_valid(why, obstacles):
+        """A major goal needs a WHY and named obstacles before it can be saved."""
+        return bool((why or "").strip()) and bool((obstacles or "").strip())
+
+    def _v2mom_all(self):
+        try:
+            return self._db_query(
+                "SELECT id,vision,values_why,methods,obstacles,measurement,status "
+                "FROM v2mom_goals ORDER BY (status='done'), id DESC")
+        except Exception:
+            return []
+
+    def _v2mom_load(self, gid):
+        try:
+            r = self._db_query(
+                "SELECT vision,values_why,methods,obstacles,measurement,status "
+                "FROM v2mom_goals WHERE id=?", (gid,))
+        except Exception:
+            r = []
+        return r[0] if r else None
+
+    def _v2mom_save(self, gid, vision, why, methods, obstacles, measurement):
+        now = datetime.now().isoformat()
+        if gid:
+            try:
+                self._db_exec(
+                    "UPDATE v2mom_goals SET vision=?,values_why=?,methods=?,"
+                    "obstacles=?,measurement=?,updated_at=? WHERE id=?",
+                    (vision, why, methods, obstacles, measurement, now, gid))
+            except Exception:
+                pass
+            return gid
+        try:
+            return self._db_exec(
+                "INSERT INTO v2mom_goals (vision,values_why,methods,obstacles,"
+                "measurement,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
+                (vision, why, methods, obstacles, measurement, now, now))
+        except Exception:
+            return 0
+
+    def _v2mom_delete(self, gid):
+        try:
+            self._db_exec("DELETE FROM v2mom_goals WHERE id=?", (gid,))
+        except Exception:
+            pass
+
+    def open_v2mom(self):
+        """The 'Why' engine: a goal isn't real until you can say WHY it matters
+        and name what's stopping you. Robbins' V2MOM — Vision, Values, Methods,
+        Obstacles, Measurement — won't let you save until the Why and Obstacles
+        are filled in. Knowing why beats knowing how."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_v2mom_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._v2mom_win = win
+        self._v2mom_current_id = None
+        win.title("🧭 V2MOM — the Why Engine")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(900, max(680, sw - 70)); h = min(700, max(480, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(680, 480)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._v2mom_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🧭 V2MOM — the Why Engine", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Knowing WHY you want something is far more powerful "
+                 "than knowing how. A goal can't be saved until you've written "
+                 "your Why and named the obstacles in the way.", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        paned = tk.PanedWindow(win, orient=tk.HORIZONTAL, sashwidth=6,
+                               bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
+        paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
+
+        left = tk.Frame(paned, bg=BG_DARK)
+        tk.Label(left, text="Your goals", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(fill=tk.X, pady=(0, 4))
+        lwrap = tk.Frame(left, bg=BG_DARK); lwrap.pack(fill=tk.BOTH, expand=True)
+        listbox = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT, font=("Segoe UI", 10),
+                             relief=tk.FLAT, bd=0, highlightthickness=0,
+                             activestyle="none", selectbackground=ACCENT_CYAN,
+                             selectforeground="white", width=24)
+        lsb = tk.Scrollbar(lwrap, command=listbox.yview, width=16)
+        listbox.configure(yscrollcommand=lsb.set)
+        lsb.pack(side=tk.RIGHT, fill=tk.Y)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tk.Button(left, text="＋ New goal", command=lambda: _new(),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(fill=tk.X, pady=(4, 0))
+        paned.add(left, minsize=180)
+
+        right = tk.Frame(paned, bg=BG_DARK)
+        # Save row reserved at the bottom.
+        srow = tk.Frame(right, bg=BG_DARK); srow.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
+
+        boxes = {}
+
+        def _field(key, label, required=False, height=2):
+            star = "★ " if required else ""
+            tk.Label(right, text=star + label, bg=BG_DARK,
+                     fg=("#fca5a5" if required else FG_TEXT),
+                     font=("Segoe UI", 10, "bold"), anchor=tk.W).pack(
+                         fill=tk.X, padx=2, pady=(6, 0))
+            t = scrolledtext.ScrolledText(right, height=height, wrap=tk.WORD,
+                                          font=("Segoe UI", 11), bg=BG_INPUT,
+                                          fg=FG_TEXT, insertbackground=FG_TEXT,
+                                          relief=tk.FLAT, padx=8, pady=6, undo=True)
+            t.pack(fill=tk.BOTH, expand=True, padx=2)
+            t.bind("<FocusIn>", lambda _e, b=t: self._set_mic_target(b), add="+")
+            boxes[key] = t
+            return t
+        _field("vision", "Vision — what do you want? (the goal)", height=2)
+        _field("why", "Values — WHY does it matter to you? (required)", required=True, height=3)
+        _field("methods", "Methods — how will you get there?", height=2)
+        _field("obstacles", "Obstacles — what's stopping you right now? (required)",
+               required=True, height=2)
+        _field("measurement", "Measurement — how will you know you've arrived?",
+               height=2)
+
+        def _get(k):
+            return boxes[k].get("1.0", tk.END).strip()
+
+        def _set(k, v):
+            boxes[k].delete("1.0", tk.END)
+            boxes[k].insert("1.0", v or "")
+
+        def _refresh_list(select_id=None):
+            listbox.delete(0, tk.END)
+            self._v2mom_ids = []
+            for gid, vision, why, methods, obstacles, meas, status in self._v2mom_all():
+                self._v2mom_ids.append(gid)
+                title = (vision.strip().splitlines()[0] if vision.strip()
+                         else "(untitled goal)")
+                mark = "✓ " if status == "done" else "🧭 "
+                listbox.insert(tk.END, mark + title[:30])
+            if select_id and select_id in self._v2mom_ids:
+                i = self._v2mom_ids.index(select_id)
+                listbox.selection_clear(0, tk.END); listbox.selection_set(i)
+
+        def _load(gid):
+            row = self._v2mom_load(gid)
+            if not row:
+                return
+            self._v2mom_current_id = gid
+            _set("vision", row[0]); _set("why", row[1]); _set("methods", row[2])
+            _set("obstacles", row[3]); _set("measurement", row[4])
+
+        def _new():
+            self._v2mom_current_id = None
+            for k in boxes:
+                _set(k, "")
+            listbox.selection_clear(0, tk.END)
+            boxes["vision"].focus_set()
+
+        def _save():
+            why = _get("why"); obstacles = _get("obstacles")
+            if not self._v2mom_valid(why, obstacles):
+                messagebox.showwarning(
+                    "Your Why comes first",
+                    "A goal without a Why rarely survives the first obstacle.\n\n"
+                    "Fill in your ★ Values (WHY it matters) and the ★ Obstacles "
+                    "in the way before saving.")
+                boxes["why" if not why else "obstacles"].focus_set()
+                return
+            gid = self._v2mom_save(self._v2mom_current_id, _get("vision"), why,
+                                   _get("methods"), obstacles, _get("measurement"))
+            self._v2mom_current_id = gid
+            self.set_status("🧭 Goal saved — anchored to your Why.")
+            _refresh_list(select_id=gid)
+
+        def _delete():
+            gid = self._v2mom_current_id
+            if gid is None:
+                return
+            if not messagebox.askyesno("Delete goal", "Delete this goal?"):
+                return
+            self._v2mom_delete(gid)
+            _new(); _refresh_list()
+        tk.Button(srow, text="💾 Save goal", command=_save,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_CYAN, fg="white",
+                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=14, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(srow, text="🗑 Delete", command=_delete,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=10, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        paned.add(right)
+
+        listbox.bind("<<ListboxSelect>>", lambda _e: (
+            getattr(self, "_v2mom_ids", None) and listbox.curselection()
+            and _load(self._v2mom_ids[listbox.curselection()[0]])))
+
+        _refresh_list()
+        _new()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:

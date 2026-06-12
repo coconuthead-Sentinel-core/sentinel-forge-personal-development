@@ -392,6 +392,21 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- V2MOM "Why" engine (Sinek's Why + Robbins' V2MOM): a major goal can't be
+-- saved until you've written your WHY (values) and named the OBSTACLES in the
+-- way. Vision/Values/Methods/Obstacles/Measurement — knowing why beats how.
+CREATE TABLE IF NOT EXISTS v2mom_goals (
+    id INTEGER PRIMARY KEY,
+    vision TEXT NOT NULL DEFAULT '',
+    values_why TEXT NOT NULL DEFAULT '',     -- the WHY (required to save)
+    methods TEXT NOT NULL DEFAULT '',
+    obstacles TEXT NOT NULL DEFAULT '',      -- required to save
+    measurement TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',    -- active | done | parked
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
