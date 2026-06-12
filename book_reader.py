@@ -550,7 +550,6 @@ class BookReader:
             ("🔊 Read",     self.read_aloud,            ACCENT_GREEN),
             ("■ Stop",      self.stop_reading,          ACCENT_SLATE),
             ("🎤 Voice",    self.toggle_mic,            ACCENT_MIC),
-            ("🗒 Prompts",  self.open_prompt_library,   ACCENT_GREEN),
             ("💾 Save",     self.save_excerpt,          ACCENT_PINK),
             ("📓 Study",    self.open_study_workspace,  ACCENT_RED),
         ]
@@ -14040,6 +14039,12 @@ try {
         tk.Button(tabbar, text="📚 Library", command=self.open_library,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_PURPLE, fg="white",
                   activebackground=ACCENT_PURPLE, relief=tk.FLAT, padx=6, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
+        # Prompts library — moved here from the top action bar so it lives
+        # with the rest of the Study tools, at the same compact button size.
+        tk.Button(tabbar, text="🗒 Prompts", command=self.open_prompt_library,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
 
         # Minimize button — sends the Study window to the taskbar.
