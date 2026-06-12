@@ -419,6 +419,25 @@ CREATE TABLE IF NOT EXISTS goal_journal (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- A→B→Z systems / checklists (James Clear: systems beat goals; Brian Tracy:
+-- a checklist makes success 10x likelier). A 'system' is the big goal (Z); its
+-- ordered steps are the process. You only ever need to know the next step (B).
+CREATE TABLE IF NOT EXISTS systems (
+    id INTEGER PRIMARY KEY,
+    goal TEXT NOT NULL DEFAULT '',      -- the destination (Z)
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS system_steps (
+    id INTEGER PRIMARY KEY,
+    system_id INTEGER NOT NULL,
+    step TEXT NOT NULL DEFAULT '',
+    done INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_steps_system ON system_steps(system_id);
 """
 
 

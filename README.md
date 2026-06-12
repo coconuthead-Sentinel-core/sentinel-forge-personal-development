@@ -54,6 +54,12 @@ Beyond reading, the app is a study and focus workstation:
   engineer."*). Writing them daily programs them into the subconscious; a
   🔥 **day-streak** rewards the habit, and it nudges you each morning until it's
   done. (Blank each day on purpose — recalling them is the point.)
+- **🪜 Systems & Checklists (A→B→Z)** — goals set the direction; *systems* get
+  you there (James Clear). Break a big goal (**Z**) into an ordered checklist,
+  and the tool always highlights **your next step (B)** — the only one you need
+  to know — with a progress bar as you check each off. A checklist makes success
+  ~10× likelier (Tracy). Reorder steps, run multiple systems, watch *"Z reached"*
+  light up at 100%.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
   Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊

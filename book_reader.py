@@ -545,6 +545,7 @@ class BookReader:
         btn(plan, "🎯 Focus",  self.open_focus_mode,  ACCENT_PURPLE)
         btn(plan, "🧭 Why",    self.open_v2mom,       ACCENT_CYAN)
         self._ten_goals_btn = btn(plan, "✍ 10 Goals", self.open_ten_goals, ACCENT_PINK)
+        btn(plan, "🪜 Systems", self.open_systems, ACCENT_TEAL)
         track = section(row1, "TRACK")
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
@@ -6252,6 +6253,378 @@ class BookReader:
 
         _refresh_streak()
         entries[0][1].focus_set()
+
+    # ---- ABZ Systems & Checklist Builder (Clear / Tracy) --------------
+    def _systems_all(self):
+        try:
+            return self._db_query(
+                "SELECT id,goal FROM systems ORDER BY id DESC")
+        except Exception:
+            return []
+
+    def _system_add(self, goal):
+        now = datetime.now().isoformat()
+        try:
+            return self._db_exec(
+                "INSERT INTO systems (goal,created_at,updated_at) VALUES (?,?,?)",
+                (goal, now, now))
+        except Exception:
+            return 0
+
+    def _system_rename(self, sid, goal):
+        try:
+            self._db_exec("UPDATE systems SET goal=?,updated_at=? WHERE id=?",
+                          (goal, datetime.now().isoformat(), sid))
+        except Exception:
+            pass
+
+    def _system_delete(self, sid):
+        try:
+            self._db_exec("DELETE FROM system_steps WHERE system_id=?", (sid,))
+            self._db_exec("DELETE FROM systems WHERE id=?", (sid,))
+        except Exception:
+            pass
+
+    def _system_steps(self, sid):
+        try:
+            return self._db_query(
+                "SELECT id,step,done,sort_order FROM system_steps "
+                "WHERE system_id=? ORDER BY sort_order, id", (sid,))
+        except Exception:
+            return []
+
+    def _step_add(self, sid, text):
+        try:
+            mx = self._db_query(
+                "SELECT COALESCE(MAX(sort_order),0) FROM system_steps "
+                "WHERE system_id=?", (sid,))[0][0]
+            self._db_exec(
+                "INSERT INTO system_steps (system_id,step,done,sort_order,"
+                "created_at) VALUES (?,?,0,?,?)",
+                (sid, text, int(mx) + 1, datetime.now().isoformat()))
+        except Exception:
+            pass
+
+    def _step_toggle(self, step_id):
+        try:
+            self._db_exec(
+                "UPDATE system_steps SET done = 1 - done WHERE id=?", (step_id,))
+        except Exception:
+            pass
+
+    def _step_delete(self, step_id):
+        try:
+            self._db_exec("DELETE FROM system_steps WHERE id=?", (step_id,))
+        except Exception:
+            pass
+
+    def _step_move(self, sid, step_id, direction):
+        steps = self._system_steps(sid)
+        ids = [s[0] for s in steps]
+        if step_id not in ids:
+            return
+        i = ids.index(step_id)
+        j = i + direction
+        if j < 0 or j >= len(steps):
+            return
+        try:
+            self._db_exec("UPDATE system_steps SET sort_order=? WHERE id=?",
+                          (steps[j][3], steps[i][0]))
+            self._db_exec("UPDATE system_steps SET sort_order=? WHERE id=?",
+                          (steps[i][3], steps[j][0]))
+        except Exception:
+            pass
+
+    def _system_progress(self, sid):
+        steps = self._system_steps(sid)
+        total = len(steps)
+        done = sum(1 for s in steps if s[2])
+        return done, total
+
+    def _system_next_step(self, sid):
+        for _id, step, done, _so in self._system_steps(sid):
+            if not done:
+                return step
+        return None
+
+    def open_systems(self):
+        """James Clear: you don't rise to your goals, you fall to your systems.
+        Break a big goal (Z) into an ordered checklist; you only ever need to
+        know the next step (B). A checklist makes success ~10x likelier (Tracy)."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_systems_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._systems_win = win
+        self._system_current = None
+        win.title("🪜 Systems & Checklists")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(900, max(680, sw - 70)); h = min(700, max(480, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(680, 480)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._systems_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🪜 Systems & Checklists", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Goals set the direction; systems get you there. Break "
+                 "the big goal (Z) into a checklist — you only ever need to know "
+                 "the next step (B).", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        paned = tk.PanedWindow(win, orient=tk.HORIZONTAL, sashwidth=6,
+                               bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
+        paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=8)
+
+        left = tk.Frame(paned, bg=BG_DARK)
+        tk.Label(left, text="Your systems (Z)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11, "bold"), anchor=tk.W).pack(fill=tk.X, pady=(0, 4))
+        lwrap = tk.Frame(left, bg=BG_DARK); lwrap.pack(fill=tk.BOTH, expand=True)
+        slist = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT, font=("Segoe UI", 10),
+                           relief=tk.FLAT, bd=0, highlightthickness=0,
+                           activestyle="none", selectbackground=ACCENT_TEAL,
+                           selectforeground="white", width=26)
+        ssb = tk.Scrollbar(lwrap, command=slist.yview, width=16)
+        slist.configure(yscrollcommand=ssb.set)
+        ssb.pack(side=tk.RIGHT, fill=tk.Y)
+        slist.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _new_system():
+            g = self._ask_text("New system",
+                               "What's the big goal (Z)? e.g. “Ship my app to the "
+                               "Microsoft Store.”")
+            if not g:
+                return
+            sid = self._system_add(g)
+            _refresh_systems(select=sid)
+        tk.Button(left, text="＋ New system", command=_new_system,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(fill=tk.X, pady=(4, 0))
+        paned.add(left, minsize=200)
+
+        right = tk.Frame(paned, bg=BG_DARK)
+        paned.add(right)
+
+        # right-side widgets (rebuilt by _render)
+        title_var = tk.StringVar(); next_var = tk.StringVar(); prog_var = tk.StringVar()
+        title_row = tk.Frame(right, bg=BG_DARK); title_row.pack(fill=tk.X)
+        tk.Label(title_row, textvariable=title_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 14, "bold"), anchor=tk.W, wraplength=w - 300,
+                 justify=tk.LEFT).pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def _rename():
+            if self._system_current is None:
+                return
+            g = self._ask_text("Rename system", "The big goal (Z):",
+                               title_var.get())
+            if g:
+                self._system_rename(self._system_current, g)
+                _refresh_systems(select=self._system_current)
+        tk.Button(title_row, text="✎", command=_rename, font=("Segoe UI", 9, "bold"),
+                  bg=BG_PANEL, fg=FG_MUTED, activebackground=ACCENT_SLATE,
+                  activeforeground="white", relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(title_row, text="🗑", command=lambda: _del_system(),
+                  font=("Segoe UI", 9, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT, padx=(0, 4))
+
+        nextbar = tk.Label(right, textvariable=next_var, bg="#042f2e", fg="#6ee7b7",
+                           font=("Segoe UI", 13, "bold"), anchor=tk.W, padx=12,
+                           pady=8, wraplength=w - 240, justify=tk.LEFT)
+        nextbar.pack(fill=tk.X, pady=(6, 2))
+        bar = tk.Canvas(right, height=16, bg=BG_INPUT, highlightthickness=0)
+        bar.pack(fill=tk.X, pady=(2, 2))
+        tk.Label(right, textvariable=prog_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold"), anchor=tk.W).pack(fill=tk.X)
+
+        # add-step row
+        arow = tk.Frame(right, bg=BG_DARK); arow.pack(fill=tk.X, pady=(6, 2))
+        tk.Label(arow, text="Next action:", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        step_var = tk.StringVar()
+        step_ent = tk.Entry(arow, textvariable=step_var, bg=BG_INPUT, fg=FG_TEXT,
+                            insertbackground=FG_TEXT, relief=tk.FLAT,
+                            font=("Segoe UI", 11))
+        step_ent.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(6, 6), ipady=2)
+        step_ent.bind("<FocusIn>", lambda _e: self._set_mic_target(step_ent), add="+")
+
+        def _add_step():
+            if self._system_current is None:
+                messagebox.showinfo("Systems", "Create or pick a system first.")
+                return
+            t = step_var.get().strip()
+            if not t:
+                return
+            self._step_add(self._system_current, t)
+            step_var.set(""); _render_steps()
+        tk.Button(arow, text="+ Add step", command=_add_step,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_TEAL, fg="white",
+                  activebackground=ACCENT_TEAL, relief=tk.FLAT, padx=10, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        step_ent.bind("<Return>", lambda _e: _add_step())
+
+        # scrollable steps
+        souter = tk.Frame(right, bg=BG_DARK); souter.pack(fill=tk.BOTH, expand=True,
+                                                          pady=(4, 0))
+        scan = tk.Canvas(souter, bg=BG_DARK, highlightthickness=0)
+        svsb = tk.Scrollbar(souter, command=scan.yview, width=16)
+        sinner = tk.Frame(scan, bg=BG_DARK)
+        sinner.bind("<Configure>",
+                    lambda _e: scan.configure(scrollregion=scan.bbox("all")))
+        scan.create_window((0, 0), window=sinner, anchor="nw", width=w - 290)
+        scan.configure(yscrollcommand=svsb.set)
+        svsb.pack(side=tk.RIGHT, fill=tk.Y)
+        scan.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        def _del_system():
+            if self._system_current is None:
+                return
+            if not messagebox.askyesno("Delete system",
+                                       "Delete this system and all its steps?"):
+                return
+            self._system_delete(self._system_current)
+            self._system_current = None
+            _refresh_systems()
+
+        def _draw_bar(pct):
+            bar.delete("all")
+            try:
+                W = int(bar.winfo_width()) or 400
+            except tk.TclError:
+                W = 400
+            if W < 10:
+                W = 400
+            bar.create_rectangle(0, 0, W, 16, fill=BG_INPUT, outline="#334155")
+            if pct > 0:
+                bar.create_rectangle(0, 0, int(W * pct), 16,
+                                     fill=("#22c55e" if pct >= 1 else ACCENT_TEAL),
+                                     outline="")
+
+        def _render_steps():
+            for ch in sinner.winfo_children():
+                ch.destroy()
+            sid = self._system_current
+            if sid is None:
+                return
+            steps = self._system_steps(sid)
+            nxt = self._system_next_step(sid)
+            done, total = self._system_progress(sid)
+            pct = (done / total) if total else 0.0
+            _draw_bar(pct)
+            prog_var.set(f"{done} / {total} steps  ·  {round(pct * 100)}%")
+            if total == 0:
+                next_var.set("👉 Add the first step (B) that moves you toward Z.")
+            elif nxt is None:
+                next_var.set("🎉 Z reached — every step complete!")
+            else:
+                next_var.set(f"👉 Your next step (B):  {nxt}")
+            first_open_marked = False
+            for stp_id, step, sdone, _so in steps:
+                is_next = (not sdone and not first_open_marked)
+                if is_next:
+                    first_open_marked = True
+                rb = "#16331f" if sdone else ("#0e2a28" if is_next else BG_PANEL)
+                row = tk.Frame(sinner, bg=rb, padx=8, pady=5); row.pack(fill=tk.X, pady=2)
+                tk.Button(row, text=("✓" if sdone else "○"),
+                          command=lambda s=stp_id: (self._step_toggle(s), _render_steps()),
+                          font=("Segoe UI", 12, "bold"),
+                          bg=rb, fg=("#22c55e" if sdone else FG_MUTED),
+                          activebackground=rb, relief=tk.FLAT, padx=4, pady=0,
+                          cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+                txt = step
+                lab = tk.Label(row, text=txt, bg=rb,
+                               fg=(FG_MUTED if sdone else FG_TEXT),
+                               font=("Segoe UI", 11,
+                                     "overstrike" if sdone else "normal"),
+                               wraplength=w - 430, justify=tk.LEFT, anchor=tk.W)
+                lab.pack(side=tk.LEFT, padx=(6, 0), fill=tk.X, expand=True)
+                if is_next:
+                    tk.Label(row, text="NEXT", bg=rb, fg="#5eead4",
+                             font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=(6, 0))
+                tk.Button(row, text="🗑", command=lambda s=stp_id: (
+                              self._step_delete(s), _render_steps()),
+                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
+                          activebackground=ACCENT_RED, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Button(row, text="↓", command=lambda s=stp_id: (
+                              self._step_move(sid, s, 1), _render_steps()),
+                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+                tk.Button(row, text="↑", command=lambda s=stp_id: (
+                              self._step_move(sid, s, -1), _render_steps()),
+                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=4, cursor="hand2",
+                          borderwidth=0).pack(side=tk.RIGHT)
+
+        def _load_system(sid):
+            self._system_current = sid
+            g = next((gg for ii, gg in self._systems_all() if ii == sid), "")
+            title_var.set("🎯 " + g)
+            _render_steps()
+
+        def _refresh_systems(select=None):
+            slist.delete(0, tk.END)
+            self._systems_ids = []
+            rows = self._systems_all()
+            for sid, goal in rows:
+                d, t = self._system_progress(sid)
+                self._systems_ids.append(sid)
+                tag = f"  ({d}/{t})" if t else ""
+                slist.insert(tk.END, (goal[:28] or "(untitled)") + tag)
+            pick = select if select in self._systems_ids else (
+                self._systems_ids[0] if self._systems_ids else None)
+            if pick is not None:
+                i = self._systems_ids.index(pick)
+                slist.selection_clear(0, tk.END); slist.selection_set(i)
+                _load_system(pick)
+            else:
+                self._system_current = None
+                title_var.set("← Create a system to begin")
+                next_var.set(""); prog_var.set(""); _draw_bar(0)
+                for ch in sinner.winfo_children():
+                    ch.destroy()
+
+        slist.bind("<<ListboxSelect>>", lambda _e: (
+            getattr(self, "_systems_ids", None) and slist.curselection()
+            and _load_system(self._systems_ids[slist.curselection()[0]])))
+
+        _refresh_systems()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
