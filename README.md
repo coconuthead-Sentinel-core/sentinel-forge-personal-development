@@ -71,6 +71,12 @@ Beyond reading, the app is a study and focus workstation:
   one to something you already do, and shrink it to a **2-minute gateway version**
   (*"read one page"*, *"put on my running shoes"*) so starting is effortless.
   Tap ✓ each day; 🔥 streaks build the chain.
+- **📅 Never Miss Twice (dopamine streak tracker)** — a gamified **calendar** for
+  any habit: a bright **green dot** for every day you show up (with a 🎆 fireworks
+  burst + chime — visible progress releases dopamine, per Sinek), a **red dot**
+  for a miss, and a hard rule — *never miss twice*: miss yesterday and the whole
+  thing turns red and dares you to save the chain today. Tracks current streak,
+  best streak, and month navigation.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
   Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊

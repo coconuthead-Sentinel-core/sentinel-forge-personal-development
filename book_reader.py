@@ -556,6 +556,7 @@ class BookReader:
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
         btn(track, "🎯 Lead/Lag", self.open_lead_lag, ACCENT_GOLD)
+        btn(track, "📅 Streaks", self.open_streak_tracker, ACCENT_GREEN)
 
         # --- Money tools, split across two rows so nothing overflows ---
         rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
@@ -7112,6 +7113,300 @@ class BookReader:
         _preview()
         _render()
         cue_e.focus_set()
+
+    # ---- "Never Miss Twice" dopamine streak tracker (Clear / Sinek) ---
+    def _habit_created_date(self, hid):
+        try:
+            r = self._db_query("SELECT created_at FROM habits WHERE id=?", (hid,))
+            if r and r[0][0]:
+                return datetime.fromisoformat(r[0][0]).date()
+        except Exception:
+            pass
+        return date.today()
+
+    def _habit_best_streak(self, hid):
+        ds = sorted(self._habit_dates(hid))
+        if not ds:
+            return 0
+        best = cur = 1
+        prev = None
+        for s in ds:
+            try:
+                d = date.fromisoformat(s)
+            except ValueError:
+                continue
+            if prev is not None and (d - prev).days == 1:
+                cur += 1
+            else:
+                cur = 1
+            best = max(best, cur)
+            prev = d
+        return best
+
+    def _habit_set_day(self, hid, day_iso, done):
+        try:
+            if done:
+                self._db_exec(
+                    "INSERT OR IGNORE INTO habit_marks (habit_id,day,created_at) "
+                    "VALUES (?,?,?)", (hid, day_iso, datetime.now().isoformat()))
+            else:
+                self._db_exec(
+                    "DELETE FROM habit_marks WHERE habit_id=? AND day=?",
+                    (hid, day_iso))
+        except Exception:
+            pass
+
+    def _tracker_day_state(self, hid, d, created, dates):
+        """green=done, red=a past miss, pending=today-not-yet, none=blank."""
+        today = date.today()
+        if d > today or d < created:
+            return "none"
+        if d.isoformat() in dates:
+            return "green"
+        if d == today:
+            return "pending"
+        return "red"
+
+    def _fireworks(self, canvas, frames=11):
+        import math
+        try:
+            if not canvas.winfo_exists():
+                return
+            W = int(canvas.winfo_width()) or 320; H = int(canvas.winfo_height()) or 70
+        except tk.TclError:
+            return
+        if W < 20:
+            W = 320
+        cx, cy = W // 2, H // 2
+        colors = ["#22c55e", "#fbbf24", "#60a5fa", "#f472b6", "#f87171", "#a78bfa"]
+
+        def _frame(i):
+            try:
+                if not canvas.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            canvas.delete("fw")
+            if i > frames:
+                return
+            r = 6 + i * 7
+            for k in range(12):
+                ang = math.radians(k * 30 + i * 4)
+                xx = cx + math.cos(ang) * r
+                yy = cy + math.sin(ang) * r
+                sz = max(1, 4 - i // 4)
+                canvas.create_oval(xx - sz, yy - sz, xx + sz, yy + sz,
+                                   fill=colors[k % len(colors)], outline="",
+                                   tags="fw")
+            self.root.after(45, lambda: _frame(i + 1))
+        _frame(0)
+
+    def open_streak_tracker(self):
+        """James Clear's visual tracker + 'Never Miss Twice', wired to Sinek's
+        point that visible progress releases dopamine. Green dot = done (with
+        fireworks); red = a miss; the rule: never let two reds sit in a row."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_tracker_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._tracker_win = win
+        win.title("📅 Never Miss Twice")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(640, max(500, sw - 110)); h = min(700, max(520, sh - 80))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(500, 520)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+        self._tracker_month = date.today().replace(day=1)
+        self._tracker_hid = None
+
+        def _close():
+            self._tracker_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="📅 Never Miss Twice", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        habits = self._habits_all()
+        if not habits:
+            tk.Label(win, text="No habits to track yet.\n\nCreate one in "
+                     "🔁 Habits, then come back to watch the chain grow.",
+                     bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 12),
+                     justify=tk.CENTER).pack(expand=True, pady=20)
+            tk.Button(win, text="🔁 Open Habit Stacker",
+                      command=lambda: (_close(), self.open_habits()),
+                      font=("Segoe UI", 11, "bold"), bg=ACCENT_INDIGO, fg="white",
+                      activebackground=ACCENT_INDIGO, relief=tk.FLAT, padx=14,
+                      pady=6, cursor="hand2", borderwidth=0).pack(pady=(0, 20))
+            return
+
+        # habit selector
+        sel = tk.Frame(win, bg=BG_DARK, padx=12, pady=4); sel.pack(fill=tk.X)
+        tk.Label(sel, text="Tracking:", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        names = {}
+        for hid, cue, new, two in habits:
+            label = (new.strip() or self._habit_formula(cue, new))[:40]
+            names[label] = hid
+        self._tracker_hid = habits[0][0]
+        sel_var = tk.StringVar(value=list(names)[0])
+        smenu = tk.OptionMenu(sel, sel_var, *names.keys(),
+                              command=lambda _v: _pick())
+        _style_optionmenu(smenu); smenu.configure(font=("Segoe UI", 10, "bold"))
+        smenu.pack(side=tk.LEFT, padx=(6, 0))
+
+        # fireworks + reward
+        fw = tk.Canvas(win, height=64, bg=BG_DARK, highlightthickness=0)
+        fw.pack(fill=tk.X, padx=12)
+        banner = tk.Label(win, text="", bg=BG_DARK, fg=FG_TEXT,
+                          font=("Segoe UI", 12, "bold"), wraplength=w - 30,
+                          justify=tk.CENTER, pady=2)
+        banner.pack(fill=tk.X)
+        stat_var = tk.StringVar()
+        tk.Label(win, textvariable=stat_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10, "bold")).pack()
+
+        btn_today = tk.Button(win, text="✅ I did it today!",
+                              font=("Segoe UI", 13, "bold"), bg=ACCENT_GREEN,
+                              fg="white", activebackground=ACCENT_GREEN,
+                              relief=tk.FLAT, padx=16, pady=8, cursor="hand2",
+                              borderwidth=0)
+        btn_today.pack(pady=(6, 6))
+
+        # month nav
+        nav = tk.Frame(win, bg=BG_DARK); nav.pack(fill=tk.X, padx=12)
+        month_var = tk.StringVar()
+        tk.Button(nav, text="◀", command=lambda: _shift(-1),
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_TEXT,
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Label(nav, textvariable=month_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, expand=True)
+        tk.Button(nav, text="▶", command=lambda: _shift(1),
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_TEXT,
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        grid = tk.Frame(win, bg=BG_DARK, padx=12, pady=8); grid.pack(fill=tk.BOTH,
+                                                                     expand=True)
+
+        def _pick():
+            self._tracker_hid = names.get(sel_var.get(), habits[0][0])
+            _render()
+
+        def _shift(n):
+            m = self._tracker_month
+            y2, mo2 = (m.year + (m.month - 1 + n) // 12,
+                       (m.month - 1 + n) % 12 + 1)
+            self._tracker_month = date(y2, mo2, 1)
+            _render()
+
+        def _toggle(d_iso, is_today, was_done):
+            self._habit_set_day(self._tracker_hid, d_iso, not was_done)
+            if not was_done and is_today:
+                try:
+                    import winsound
+                    winsound.MessageBeep(winsound.MB_OK)
+                except Exception:
+                    pass
+                self._fireworks(fw)
+                self.set_status("🎉 Done! Dopamine delivered — keep the chain "
+                                "alive.")
+            _render()
+
+        def _render():
+            import calendar
+            hid = self._tracker_hid
+            created = self._habit_created_date(hid)
+            dates = self._habit_dates(hid)
+            today = date.today()
+            for ch in grid.winfo_children():
+                ch.destroy()
+            m = self._tracker_month
+            month_var.set(m.strftime("%B %Y"))
+            for c in range(7):
+                grid.columnconfigure(c, weight=1)
+            for c, wd in enumerate(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]):
+                tk.Label(grid, text=wd, bg=BG_DARK, fg=FG_MUTED,
+                         font=("Segoe UI", 8, "bold")).grid(row=0, column=c, pady=(0, 2))
+            weeks = calendar.Calendar(firstweekday=0).monthdayscalendar(m.year, m.month)
+            colormap = {"green": "#22c55e", "red": "#ef4444",
+                        "pending": "#fbbf24", "none": "#1e293b"}
+            for ri, week in enumerate(weeks, start=1):
+                for ci, dnum in enumerate(week):
+                    if dnum == 0:
+                        continue
+                    d = date(m.year, m.month, dnum)
+                    state = self._tracker_day_state(hid, d, created, dates)
+                    is_today = (d == today)
+                    cell = tk.Frame(grid, bg=BG_PANEL,
+                                    highlightthickness=(2 if is_today else 0),
+                                    highlightbackground="#facc15")
+                    cell.grid(row=ri, column=ci, padx=2, pady=2, sticky="nsew")
+                    tk.Label(cell, text=str(dnum), bg=BG_PANEL, fg=FG_MUTED,
+                             font=("Segoe UI", 8)).pack(anchor="ne", padx=2)
+                    dot = tk.Label(cell, text="●", bg=BG_PANEL,
+                                   fg=colormap[state],
+                                   font=("Segoe UI", 16, "bold"))
+                    dot.pack(pady=(0, 4))
+                    if state != "none":
+                        wd_done = (state == "green")
+                        for wdg in (cell, dot):
+                            wdg.bind("<Button-1>",
+                                     lambda _e, di=d.isoformat(), it=is_today,
+                                     wdn=wd_done: _toggle(di, it, wdn))
+                            wdg.configure(cursor="hand2")
+            # stats + never-miss-twice banner
+            cur = self._habit_streak(hid)
+            best = self._habit_best_streak(hid)
+            month_done = sum(1 for s in dates
+                             if s.startswith(m.strftime("%Y-%m")))
+            stat_var.set(f"🔥 {cur}-day streak   ·   🏆 best {best}   ·   "
+                         f"{month_done} this month")
+            done_today = today.isoformat() in dates
+            yest = (today - timedelta(days=1))
+            yest_miss = (yest >= created and yest.isoformat() not in dates)
+            if done_today:
+                banner.configure(text="✅ Done today. The chain grows.", fg="#22c55e")
+                btn_today.configure(text="✓ Done — undo today",
+                                    bg=ACCENT_SLATE, activebackground=ACCENT_SLATE)
+            elif yest_miss:
+                banner.configure(text="⚠ You missed yesterday — NEVER MISS TWICE. "
+                                 "Do it today and save the chain.", fg="#f87171")
+                btn_today.configure(text="✅ Don't miss twice — do it!",
+                                    bg=ACCENT_RED, activebackground=ACCENT_RED)
+            else:
+                banner.configure(text="Keep the chain alive — green dot today.",
+                                 fg=FG_MUTED)
+                btn_today.configure(text="✅ I did it today!",
+                                    bg=ACCENT_GREEN, activebackground=ACCENT_GREEN)
+            btn_today.configure(
+                command=lambda: _toggle(today.isoformat(), True, done_today))
+
+        _render()
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
