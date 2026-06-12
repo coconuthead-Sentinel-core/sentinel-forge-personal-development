@@ -561,7 +561,7 @@ class BookReader:
         btn(track, "🎯 Lead/Lag", self.open_lead_lag, ACCENT_GOLD)
         btn(track, "📅 Streaks", self.open_streak_tracker, ACCENT_GREEN)
 
-        # --- Money tools, split across two rows so nothing overflows ---
+        # --- Money tools, split across rows so nothing overflows ---
         rowm = tk.Frame(topbar, bg=BG_PANEL); rowm.pack(fill=tk.X, pady=(6, 0))
         build = section(rowm, "MONEY · BUILD")
         btn(build, "💵 Money Hub", self.open_money_hub, ACCENT_GOLD)
@@ -570,9 +570,13 @@ class BookReader:
         btn(build, "🌱 Compound", self.open_compound_simulator, ACCENT_LIME)
         btn(build, "🔋 Run Rate", self.open_run_rate, ACCENT_CYAN)
         btn(build, "🪣 Dream Bucket", self.open_dream_buckets, ACCENT_PINK)
-        btn(build, "📊 Net Worth", self.open_net_worth, ACCENT_INDIGO)
-        btn(build, "🧺 Allocate", self.open_asset_buckets, ACCENT_PURPLE)
-        btn(build, "🌦 All Seasons", self.open_all_seasons, ACCENT_SKY)
+
+        rowmi = tk.Frame(topbar, bg=BG_PANEL); rowmi.pack(fill=tk.X, pady=(4, 0))
+        invest = section(rowmi, "MONEY · INVEST")
+        btn(invest, "📊 Net Worth", self.open_net_worth, ACCENT_INDIGO)
+        btn(invest, "🧺 Allocate", self.open_asset_buckets, ACCENT_PURPLE)
+        btn(invest, "🌦 All Seasons", self.open_all_seasons, ACCENT_SKY)
+        btn(invest, "🏁 Critical Mass", self.open_critical_mass, ACCENT_GOLD)
 
         rowm2 = tk.Frame(topbar, bg=BG_PANEL); rowm2.pack(fill=tk.X, pady=(4, 0))
         spend = section(rowm2, "MONEY · SPEND")
@@ -9458,6 +9462,234 @@ class BookReader:
             e.bind("<KeyRelease>", _recompute)
             e.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
         bars.bind("<Configure>", lambda _e: _recompute())
+
+        _recompute()
+        e1.focus_set()
+
+    # ---- Critical Mass / decumulation longevity simulator -------------
+    @staticmethod
+    def _critical_mass(income, wd_rate):
+        """Nest egg whose safe withdrawals replace your income. income / rate."""
+        if wd_rate <= 0:
+            return None
+        return float(income) / (float(wd_rate) / 100.0)
+
+    @staticmethod
+    def _years_until_depleted(nest, annual_withdrawal, return_pct, cap=70):
+        """Years a nest egg lasts under annual withdrawals + growth. None = it
+        sustains itself indefinitely (growth covers the withdrawals)."""
+        if annual_withdrawal <= 0:
+            return None
+        r = float(return_pct) / 100.0
+        bal = float(nest)
+        for yr in range(1, cap + 1):
+            bal = bal * (1 + r) - annual_withdrawal
+            if bal <= 0:
+                return yr
+        return None
+
+    def open_critical_mass(self):
+        """Decumulation: accumulating is only half the climb — you must not
+        outlive your money coming down. Calculates your Critical Mass (when
+        investments replace your salary), how long your money lasts, and what a
+        Fixed Indexed Annuity could guarantee for life."""
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_cm_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        st = self._load_handoff_state() or {}
+
+        def _g(k, d):
+            try:
+                return float(st.get(k, d))
+            except (TypeError, ValueError):
+                return d
+        inc0 = _g("cm_income", 0); nest0 = _g("cm_nest", 0)
+        wd0 = _g("cm_wd", 4); ret0 = _g("cm_ret", 5)
+        fia0 = _g("cm_fia", 5.5); age0 = _g("cm_age", 0)
+
+        win = tk.Toplevel(self.root)
+        self._cm_win = win
+        win.title("🏁 Critical Mass — Lifetime Income")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(780, max(600, sw - 70)); h = min(720, max(540, sh - 80))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(600, 540)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._cm_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🏁 Critical Mass", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Accumulating is only half the mountain — you must not "
+                 "outlive your money on the way down. Find the point where your "
+                 "money earns your salary.", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "italic"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(6, 4))
+
+        inp = tk.Frame(win, bg=BG_DARK, padx=12); inp.pack(fill=tk.X)
+        inc_v = tk.StringVar(value=(f"{inc0:g}" if inc0 else ""))
+        nest_v = tk.StringVar(value=(f"{nest0:g}" if nest0 else ""))
+        wd_v = tk.StringVar(value=f"{wd0:g}")
+        ret_v = tk.StringVar(value=f"{ret0:g}")
+        age_v = tk.StringVar(value=(f"{age0:g}" if age0 else ""))
+        fia_v = tk.StringVar(value=f"{fia0:g}")
+
+        def _field(r, c, label, var, width, suffix=""):
+            cell = tk.Frame(inp, bg=BG_DARK); cell.grid(row=r, column=c,
+                                                        sticky="w", padx=(0, 14), pady=3)
+            tk.Label(cell, text=label, bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w")
+            rr = tk.Frame(cell, bg=BG_DARK); rr.pack(anchor="w")
+            e = tk.Entry(rr, textvariable=var, width=width, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 11, "bold"))
+            e.pack(side=tk.LEFT, ipady=2)
+            if suffix:
+                tk.Label(rr, text=suffix, bg=BG_DARK, fg=FG_MUTED,
+                         font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(2, 0))
+            return e
+        e1 = _field(0, 0, "INCOME TO REPLACE  $/yr", inc_v, 10)
+        e2 = _field(0, 1, "CURRENT NEST EGG  $", nest_v, 11)
+        e3 = _field(0, 2, "MY AGE", age_v, 4)
+        e4 = _field(1, 0, "SAFE WITHDRAWAL", wd_v, 4, "%")
+        e5 = _field(1, 1, "RETIREMENT RETURN", ret_v, 4, "%")
+        e6 = _field(1, 2, "FIA PAYOUT RATE", fia_v, 4, "%")
+
+        cm_var = tk.StringVar()
+        tk.Label(win, textvariable=cm_var, bg=BG_DARK, fg="#fcd34d",
+                 font=("Segoe UI", 17, "bold"), wraplength=w - 30, justify=tk.LEFT,
+                 padx=14).pack(fill=tk.X, pady=(10, 0))
+        prog = tk.Canvas(win, height=22, bg=BG_INPUT, highlightthickness=0)
+        prog.pack(fill=tk.X, padx=14, pady=(4, 2))
+        prog_var = tk.StringVar()
+        tk.Label(win, textvariable=prog_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10, "bold"), anchor=tk.W, padx=14).pack(fill=tk.X)
+
+        decum = tk.Label(win, text="", bg="#0b2942", fg="#bae6fd",
+                         font=("Segoe UI", 11, "bold"), wraplength=w - 30,
+                         justify=tk.LEFT, anchor=tk.W, padx=12, pady=8)
+        decum.pack(fill=tk.X, padx=14, pady=(8, 4))
+        fia = tk.Label(win, text="", bg="#052e1a", fg="#a7f3d0",
+                       font=("Segoe UI", 11), wraplength=w - 30, justify=tk.LEFT,
+                       anchor=tk.W, padx=12, pady=8)
+        fia.pack(fill=tk.X, padx=14, pady=(0, 6))
+
+        tk.Label(win, text="A Fixed Indexed Annuity (FIA) converts a lump sum into "
+                 "a guaranteed paycheck for life — you share the market's upside "
+                 "but are 100% protected from its losses. (Illustrative payout, "
+                 "not a quote.)", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 8, "italic"), wraplength=w - 30,
+                 justify=tk.LEFT, padx=14).pack(fill=tk.X, pady=(0, 8))
+
+        def _save():
+            stt = self._load_handoff_state() or {}
+            stt["cm_income"] = self._money_parse(inc_v.get()) or 0.0
+            stt["cm_nest"] = self._money_parse(nest_v.get()) or 0.0
+            for k, v in (("cm_wd", wd_v), ("cm_ret", ret_v), ("cm_fia", fia_v),
+                         ("cm_age", age_v)):
+                try:
+                    stt[k] = float(v.get() or 0)
+                except ValueError:
+                    pass
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+
+        def _draw_prog(frac):
+            prog.delete("all")
+            try:
+                W = int(prog.winfo_width()) or 400
+            except tk.TclError:
+                W = 400
+            prog.create_rectangle(0, 0, W, 22, fill=BG_INPUT, outline="#334155")
+            if frac > 0:
+                prog.create_rectangle(0, 0, int(W * min(1, frac)), 22,
+                                      fill=("#22c55e" if frac >= 1 else ACCENT_GOLD),
+                                      outline="")
+
+        def _recompute(*_a):
+            income = self._money_parse(inc_v.get()) or 0.0
+            nest = self._money_parse(nest_v.get()) or 0.0
+            try:
+                wd = float(wd_v.get() or 0); ret = float(ret_v.get() or 0)
+                fiap = float(fia_v.get() or 0); age = int(float(age_v.get() or 0))
+            except ValueError:
+                wd = ret = fiap = 0; age = 0
+            if income <= 0 or wd <= 0:
+                cm_var.set("Enter the income you want to replace and a withdrawal "
+                           "rate.")
+                prog_var.set(""); _draw_prog(0); decum.configure(text="")
+                fia.configure(text=""); return
+            crit = self._critical_mass(income, wd)
+            cm_var.set(f"🏁 Your Critical Mass: {self._money_fmt(crit)}")
+            frac = (nest / crit) if crit else 0
+            _draw_prog(frac)
+            if nest >= crit:
+                prog_var.set(f"🎉 You've reached Critical Mass — work is optional! "
+                             f"({self._money_fmt(nest)} ≥ {self._money_fmt(crit)})")
+            else:
+                prog_var.set(f"{frac * 100:.0f}% there — "
+                             f"{self._money_fmt(crit - nest)} to go.")
+            # decumulation
+            yrs = self._years_until_depleted(nest, income, ret)
+            if nest <= 0:
+                decum.configure(text="Enter your current nest egg to model how long "
+                                "it lasts.")
+            elif yrs is None:
+                decum.configure(
+                    text=f"✅ Self-sustaining: drawing {self._money_fmt(income)}/yr "
+                    f"at {ret:g}% growth, your {self._money_fmt(nest)} never runs "
+                    "out. You won't outlive your money.")
+            else:
+                to_age = f" — to age {age + yrs}" if age else ""
+                decum.configure(
+                    text=f"⚠ Drawing {self._money_fmt(income)}/yr, your "
+                    f"{self._money_fmt(nest)} lasts about {yrs} years{to_age}. "
+                    "Build more, spend less, or add guaranteed income.")
+            # FIA
+            if nest > 0 and fiap > 0:
+                gtd = nest * fiap / 100.0
+                cover = (gtd / income * 100) if income else 0
+                fia.configure(
+                    text=f"🔒 A Fixed Indexed Annuity on {self._money_fmt(nest)} "
+                    f"could guarantee ≈ {self._money_fmt(gtd)}/yr for life "
+                    f"({fiap:g}% payout) — covering {cover:.0f}% of your target "
+                    "income, with market upside and zero downside.")
+            else:
+                fia.configure(text="")
+
+        for e in (e1, e2, e3, e4, e5, e6):
+            e.bind("<KeyRelease>", _recompute)
+            e.bind("<FocusOut>", lambda _e: (_save(), _recompute()))
+        prog.bind("<Configure>", lambda _e: _recompute())
 
         _recompute()
         e1.focus_set()

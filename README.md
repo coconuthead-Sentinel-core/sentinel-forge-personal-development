@@ -206,6 +206,13 @@ Beyond reading, the app is a study and focus workstation:
   Enter an amount and it splits it across the mix in a pie chart with dollar
   figures — a portfolio built to make money in any economic season (historically
   positive ~85% of years; only −3.93% in the 2008 crash).
+- **🏁 Critical Mass (decumulation simulator)** — accumulating is only half the
+  climb; you must not outlive your money. It finds your **Critical Mass** (income
+  to replace ÷ safe-withdrawal rate — e.g. $40k ÷ 4% = **$1M**, the point where
+  your money earns your salary), tracks your **progress** to it, models how many
+  **years your nest egg lasts** under withdrawals (or whether it's self-sustaining),
+  and shows what a **Fixed Indexed Annuity** could guarantee for life — upside
+  participation, zero downside.
 - **🔍 Zero-Based Audit** — every recurring charge must re-earn its place. List
   your subscriptions (Netflix, internet, phone, apps) and **every ~90 days the
   app forces an audit** that walks each one and asks, *"Knowing what you know
