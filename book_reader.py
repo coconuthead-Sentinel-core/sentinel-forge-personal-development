@@ -681,15 +681,15 @@ class BookReader:
             relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
         ).pack(side=tk.LEFT, padx=(14, 0))
 
-        # Voice picker
-        tk.Label(controls_row, text="Voice:", bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(14, 4))
+        # Voice picker — moved onto row 2, directly under the READ ALOUD row.
+        voice_sec = section(row2, "VOICE")
         voice_menu = tk.OptionMenu(
-            controls_row, self.voice_var, *self.available_voices,
+            voice_sec, self.voice_var, *self.available_voices,
             command=self._on_voice_change,
         )
         _style_optionmenu(voice_menu)
-        voice_menu.configure(width=16)
-        voice_menu.pack(side=tk.LEFT, padx=(0, 12))
+        voice_menu.configure(width=16, font=("Segoe UI", 9, "bold"))
+        voice_menu.pack(side=tk.LEFT)
 
         # ---- Reading timer REMOVED from the UI at the user's request -----
         # The preset map, variables, and methods are kept (dormant and
