@@ -537,7 +537,7 @@ class BookReader:
             return inner
 
         # (📂 Open and 📚 Library live in the Study workspace.)
-        # --- Row 1: plan & focus tools ---
+        # --- Row 1: plan & focus tools (own row) ---
         row1 = tk.Frame(topbar, bg=BG_PANEL); row1.pack(fill=tk.X)
         plan = section(row1, "PLAN")
         self._ideas_btn = btn(plan, "🧠 Ideas",  self.open_idea_warehouse, ACCENT_AMBER)
@@ -548,7 +548,10 @@ class BookReader:
         btn(plan, "🪜 Systems", self.open_systems, ACCENT_TEAL)
         btn(plan, "⚖ Roles", self.open_weekly_roles, ACCENT_GREEN)
         btn(plan, "🔁 Habits", self.open_habits, ACCENT_INDIGO)
-        track = section(row1, "TRACK")
+
+        # --- Row 1b: tracking & review tools (own row) ---
+        rowt = tk.Frame(topbar, bg=BG_PANEL); rowt.pack(fill=tk.X, pady=(4, 0))
+        track = section(rowt, "TRACK")
         btn(track, "⏱ Time Log", self.open_time_log, ACCENT_CYAN)
         self._review_btn = btn(track, "🪞 Review", self.open_after_action_review, ACCENT_INDIGO)
         btn(track, "🚫 Not-To-Do", self.open_not_to_do, ACCENT_RED)
