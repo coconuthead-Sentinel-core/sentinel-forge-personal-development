@@ -18451,6 +18451,17 @@ try {
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
+        # Mic accuracy mode (Fast / Accurate / Best) — shared app-wide setting.
+        if self._whisper_quality_var is None:
+            self._whisper_quality_var = tk.StringVar(value="Accurate")
+        tk.Label(head, text="mode:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(8, 2))
+        _gmq = tk.OptionMenu(head, self._whisper_quality_var,
+                             "Fast", "Accurate", "Best",
+                             command=self._set_mic_quality)
+        _style_optionmenu(_gmq)
+        _gmq.configure(width=9, font=("Segoe UI", 9))
+        _gmq.pack(side=tk.LEFT)
 
         # Calendar tie-in (pinned bottom).
         tk.Label(tie, text="📅 Add next step to calendar on:", bg=BG_PANEL,
