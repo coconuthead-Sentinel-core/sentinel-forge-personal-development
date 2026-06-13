@@ -19,7 +19,10 @@ from __future__ import annotations
 import argparse
 import os
 import sqlite3
+import struct
 import sys
+import tempfile
+import wave
 
 # ----- gentle palette (light teal, never red/green — this is a reminder) -----
 TEAL_LIGHT = "#6FD0C9"   # primary background
@@ -73,10 +76,80 @@ def _wake_screen() -> None:
         pass
 
 
-def _chime() -> None:
+_ALARM_WAV = None         # cached generated siren path
+_VOL = {"prev": None}     # saved waveform-output volume, to restore on stop
+
+
+def _make_alarm_wav() -> str | None:
+    """Generate (once) a loud, harsh two-tone square-wave siren WAV and cache
+    it in the temp dir. Square waves are perceptually far louder/more piercing
+    than a sine beep, which is exactly what an alarm wants."""
+    global _ALARM_WAV
+    if _ALARM_WAV and os.path.exists(_ALARM_WAV):
+        return _ALARM_WAV
+    path = os.path.join(tempfile.gettempdir(), "sentinel_forge_alarm.wav")
+    try:
+        rate = 44100
+        amp = 32000              # near full-scale 16-bit = maximum loudness
+        buf = bytearray()
+
+        def _tone(freq: int, ms: int) -> None:
+            period = rate / float(freq)
+            for i in range(int(rate * ms / 1000.0)):
+                v = amp if (i % period) < period / 2 else -amp
+                buf.extend(struct.pack("<h", v))
+
+        for _ in range(2):       # ~1.2s loop unit: nee-naw nee-naw
+            _tone(1000, 300)
+            _tone(720, 300)
+        with wave.open(path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(bytes(buf))
+        _ALARM_WAV = path
+    except Exception:
+        _ALARM_WAV = None
+    return _ALARM_WAV
+
+
+def _alarm_start() -> None:
+    """Crank the waveform-output volume to maximum (saving the old level so we
+    can put it back) and loop the siren until stopped — REALLY loud."""
+    try:
+        import ctypes
+        winmm = ctypes.WinDLL("winmm")
+        cur = ctypes.c_uint()
+        if winmm.waveOutGetVolume(0, ctypes.byref(cur)) == 0:
+            _VOL["prev"] = cur.value
+        winmm.waveOutSetVolume(0, 0xFFFFFFFF)   # both channels to max
+    except Exception:
+        pass
     try:
         import winsound
-        winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        wav = _make_alarm_wav()
+        if wav:
+            winsound.PlaySound(
+                wav, winsound.SND_FILENAME | winsound.SND_ASYNC
+                | winsound.SND_LOOP)
+        else:
+            winsound.MessageBeep(winsound.MB_ICONHAND)
+    except Exception:
+        pass
+
+
+def _alarm_stop() -> None:
+    """Silence the siren and restore the previous playback volume."""
+    try:
+        import winsound
+        winsound.PlaySound(None, winsound.SND_PURGE)
+    except Exception:
+        pass
+    try:
+        import ctypes
+        if _VOL["prev"] is not None:
+            ctypes.WinDLL("winmm").waveOutSetVolume(0, _VOL["prev"])
+            _VOL["prev"] = None
     except Exception:
         pass
 
@@ -181,7 +254,7 @@ def main() -> int:
              bg=TEAL_LIGHT, fg=INK_SOFT, font=(fam, tiny, "italic")
              ).pack(pady=(28, 0))
 
-    _chime()
+    _alarm_start()
 
     # ---- gentle pulse: breathe the background between two close teals ----
     pulse = {"on": True}
@@ -201,6 +274,7 @@ def main() -> int:
         root.after(900, _breathe)
 
     def _dismiss(*_):
+        _alarm_stop()
         try:
             # release the display-keep-awake request on the way out
             import ctypes
@@ -216,7 +290,8 @@ def main() -> int:
     root.bind("<Escape>", _dismiss)
     root.bind("<Key>", _dismiss)
     root.after(900, _breathe)
-    root.after(120_000, _dismiss)   # auto-close after 2 minutes
+    root.after(30_000, _alarm_stop)   # cap the siren at 30s (visual stays up)
+    root.after(120_000, _dismiss)     # auto-close after 2 minutes
     try:
         root.focus_force()
     except tk.TclError:
