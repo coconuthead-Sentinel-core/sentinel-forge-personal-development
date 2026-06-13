@@ -607,34 +607,13 @@ class BookReader:
         self.available_voices.append("Microsoft System")
         self.voice_var = tk.StringVar(value=self.available_voices[0])
 
-        # --- Settings line: font face, text size, and mic accuracy on their
-        # own uncrowded row directly under the action buttons. Kept off the
-        # button row so that row stays a clean, uniform line. ----------------
-        row1b = tk.Frame(topbar, bg=BG_PANEL); row1b.pack(fill=tk.X, pady=(6, 0))
-
-        tk.Label(row1b, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(2, 4))
+        # --- Reading controls (font face, text size, mic accuracy, highlight,
+        # color, voice) now live ON the 📖 Reader tab itself — see
+        # _build_reader_controls() — so they sit right where the reading
+        # happens instead of on this launcher dashboard. Only the shared state
+        # vars/data are defined here so every menu + method stays valid. ------
         self.font_var = tk.StringVar(value=self.font_family)
-        font_menu = tk.OptionMenu(
-            row1b, self.font_var, *self.available_fonts,
-            command=self._on_font_change,
-        )
-        _style_optionmenu(font_menu)
-        font_menu.configure(width=14, font=("Segoe UI", 9))
-        font_menu.pack(side=tk.LEFT, padx=(0, 6))
-        btn(row1b, "A−", self.smaller_text, ACCENT_SLATE)
-        btn(row1b, "A+", self.bigger_text, ACCENT_SLATE)
 
-        tk.Label(row1b, text="Mic accuracy:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        _mq = tk.OptionMenu(row1b, self._whisper_quality_var,
-                            "Fast", "Accurate", "Best",
-                            command=self._set_mic_quality)
-        _style_optionmenu(_mq)
-        _mq.configure(width=10, font=("Segoe UI", 9))
-        _mq.pack(side=tk.LEFT)
-
-        # ---- Highlight controls (color + unit) -------------------------
         # Three reading-friendly highlight colors. Indigo is muted so the
         # text underneath stays readable on the dark theme.
         self.HIGHLIGHT_COLORS = {
@@ -643,50 +622,8 @@ class BookReader:
             "Indigo": "#a5b4fc",
         }
         self.HIGHLIGHT_UNITS = ["Word", "Sentence", "Paragraph"]
-
-        controls_row = tk.Frame(dash, bg=BG_PANEL, padx=12, pady=8)
-        controls_row.pack(fill=tk.X)
-
-        # 🖍 Highlight selection — moved to the far left of this row.
-        tk.Button(
-            controls_row, text="🖍  Highlight selection",
-            command=lambda: self.highlight_selection(),
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
-            relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.LEFT, padx=(0, 18))
-
-        tk.Label(controls_row, text="Highlight by:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.highlight_unit_var = tk.StringVar(value="Sentence")
-        unit_menu = tk.OptionMenu(
-            controls_row, self.highlight_unit_var, *self.HIGHLIGHT_UNITS,
-        )
-        _style_optionmenu(unit_menu)
-        unit_menu.configure(width=11)
-        unit_menu.pack(side=tk.LEFT, padx=(0, 18))
-
-        tk.Label(controls_row, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.highlight_color_var = tk.StringVar(value="Yellow")
-        color_menu = tk.OptionMenu(
-            controls_row, self.highlight_color_var, *list(self.HIGHLIGHT_COLORS.keys()),
-            command=self._on_highlight_color_change,
-        )
-        _style_optionmenu(color_menu)
-        color_menu.configure(width=8)
-        color_menu.pack(side=tk.LEFT)
-
-        # Voice picker — on the highlight controls row, next to Color.
-        tk.Label(controls_row, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        voice_menu = tk.OptionMenu(
-            controls_row, self.voice_var, *self.available_voices,
-            command=self._on_voice_change,
-        )
-        _style_optionmenu(voice_menu)
-        voice_menu.configure(width=16)
-        voice_menu.pack(side=tk.LEFT)
 
         # ---- Reading timer REMOVED from the UI at the user's request -----
         # The preset map, variables, and methods are kept (dormant and
@@ -16284,12 +16221,96 @@ try {
     # working notes); Study Notes is for collected excerpts, summaries,
     # and dictation done from the Study workspace itself. Highlights can
     # be sent here directly via the right-click menu in the Highlights tab.
+    def _build_reader_controls(self, parent: tk.Frame) -> None:
+        """The reading toolbar for the 📖 Reader tab — moved here from the main
+        dashboard so font, size, mic accuracy, highlight, color, voice, and
+        Read-aloud all sit right where the reading happens. Every control is
+        bound to the same shared state vars/methods used app-wide, so changing
+        one here is identical to the old dashboard control."""
+        bar = tk.Frame(parent, bg=BG_PANEL, padx=10, pady=6)
+        bar.pack(side=tk.TOP, fill=tk.X)
+
+        # ---- Row A: Read / Stop · font · size · mic accuracy ----
+        row_a = tk.Frame(bar, bg=BG_PANEL)
+        row_a.pack(fill=tk.X)
+        tk.Button(row_a, text="🔊  Read aloud", command=self.read_aloud,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(row_a, text="■  Stop", command=self.stop_reading,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
+
+        tk.Label(row_a, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        font_menu = tk.OptionMenu(row_a, self.font_var, *self.available_fonts,
+                                  command=self._on_font_change)
+        _style_optionmenu(font_menu)
+        font_menu.configure(width=14, font=("Segoe UI", 9))
+        font_menu.pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(row_a, text="A−", command=self.smaller_text, bg=ACCENT_SLATE,
+                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
+                  padx=10, pady=4, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.LEFT, padx=2)
+        tk.Button(row_a, text="A+", command=self.bigger_text, bg=ACCENT_SLATE,
+                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
+                  padx=10, pady=4, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.LEFT, padx=2)
+        tk.Label(row_a, text="Mic accuracy:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(18, 4))
+        # The state block resets this to None after the early StringVar, and
+        # this tab builds at the end of __init__ — so guard like the Planner does.
+        if self._whisper_quality_var is None:
+            self._whisper_quality_var = tk.StringVar(value="Accurate")
+        mic_menu = tk.OptionMenu(row_a, self._whisper_quality_var,
+                                 "Fast", "Accurate", "Best",
+                                 command=self._set_mic_quality)
+        _style_optionmenu(mic_menu)
+        mic_menu.configure(width=10, font=("Segoe UI", 9))
+        mic_menu.pack(side=tk.LEFT)
+
+        # ---- Row B: highlight selection · highlight unit · color · voice ----
+        row_b = tk.Frame(bar, bg=BG_PANEL)
+        row_b.pack(fill=tk.X, pady=(6, 0))
+        tk.Button(row_b, text="🖍  Highlight selection",
+                  command=lambda: self.highlight_selection(),
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_AMBER, fg="white",
+                  activebackground=ACCENT_AMBER, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
+        tk.Label(row_b, text="Highlight by:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        unit_menu = tk.OptionMenu(row_b, self.highlight_unit_var,
+                                  *self.HIGHLIGHT_UNITS)
+        _style_optionmenu(unit_menu)
+        unit_menu.configure(width=11)
+        unit_menu.pack(side=tk.LEFT, padx=(0, 18))
+        tk.Label(row_b, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        color_menu = tk.OptionMenu(
+            row_b, self.highlight_color_var, *list(self.HIGHLIGHT_COLORS.keys()),
+            command=self._on_highlight_color_change)
+        _style_optionmenu(color_menu)
+        color_menu.configure(width=8)
+        color_menu.pack(side=tk.LEFT)
+        tk.Label(row_b, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(18, 4))
+        voice_menu = tk.OptionMenu(row_b, self.voice_var, *self.available_voices,
+                                   command=self._on_voice_change)
+        _style_optionmenu(voice_menu)
+        voice_menu.configure(width=16)
+        voice_menu.pack(side=tk.LEFT)
+
     def _build_tab_reader(self, parent: tk.Frame) -> None:
         """📖 Reader — the book itself: full text on the left, a chapter
         navigator and a quick Notes panel on the right. Moved here from the
         main dashboard so all reading happens inside the Study workspace.
         Built once (the Study window is persistent), so every reader-widget
         reference elsewhere in the app stays valid."""
+        # Reading controls (font, size, mic accuracy, highlight, color, voice,
+        # Read-aloud) sit at the top of this tab — right where you read.
+        self._build_reader_controls(parent)
+
         body = tk.PanedWindow(
             parent, orient=tk.HORIZONTAL, sashwidth=6,
             bg=BG_DARK, bd=0, sashrelief=tk.FLAT, height=580,
