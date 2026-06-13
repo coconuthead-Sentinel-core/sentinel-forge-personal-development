@@ -493,14 +493,9 @@ class BookReader:
             relief=tk.FLAT, padx=10, pady=4,
             cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=2)
-        tk.Button(
-            session_bar, text="▶ Start",
-            command=self.open_session_start_wizard,
-            bg=ACCENT_GREEN, fg="white",
-            font=("Segoe UI", 9, "bold"),
-            relief=tk.FLAT, padx=10, pady=4,
-            cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=2)
+        # ▶ Start button removed — the Session Start panel is now embedded at
+        # the bottom of the dashboard (built at the end of __init__), so it's
+        # always visible and needs no launcher button.
 
         # ---- Compelling Scoreboard (daily lead measures) ---------------
         # A glance-in-5-seconds strip of today's 2-3 lead measures: click a
@@ -827,6 +822,17 @@ class BookReader:
                 self._study_win.withdraw()
         except Exception as e:
             print(f"[init] study window build: {e}", file=sys.stderr)
+
+        # ---- Session Start panel, embedded at the BOTTOM of the dashboard.
+        # Replaces the old ▶ Start popup — it's always visible here now. Built
+        # last so the DB, handoff state, and panel helpers are all ready. -----
+        try:
+            ss_inline = tk.Frame(dash, bg=BG_DARK,
+                                 highlightbackground=BG_PANEL, highlightthickness=1)
+            ss_inline.pack(fill=tk.X, pady=(10, 0))
+            self._build_session_start_panel(ss_inline)
+        except Exception as e:
+            print(f"[init] session-start inline panel: {e}", file=sys.stderr)
 
     # ---- Helpers --------------------------------------------------------
     def set_status(self, msg: str) -> None:
@@ -1856,18 +1862,11 @@ class BookReader:
         return f"Last session: {last}\nNext task: {nxt}\nBlocker: {blk}"
 
     def _maybe_auto_start_wizard(self) -> None:
-        """Auto-launch the Session Start wizard on the first launch of
-        the day. Determines "first launch" by comparing the handoff's
-        recorded session_start_date to today."""
-        state = self._load_handoff_state()
-        if state:
-            start_date = state.get("session_start_date") or (state.get("date") or "")
-            if start_date == date.today().isoformat():
-                return  # already started today
-        try:
-            self.open_session_start_wizard()
-        except tk.TclError:
-            pass
+        """No-op now. The Session Start panel is embedded at the bottom of the
+        dashboard (always visible), so there's no first-launch popup to fire.
+        Kept (still called from main via root.after) so the launch sequence is
+        unchanged; the old modal-popup behavior is intentionally gone."""
+        return
 
     def _maybe_evening_planning_nudge(self) -> None:
         """Ziglar's night-before rule: 'every minute spent planning saves ten
@@ -9733,10 +9732,10 @@ class BookReader:
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
-        """One-screen modal: shows last session's handoff message,
-        prefills the primary-task field from last session's "next task",
-        captures current energy. On Begin, applies the energy to the
-        topbar slider and records the session start in HANDOFF_STATE."""
+        """Popup form of the Session Start panel. The panel is normally
+        embedded at the bottom of the dashboard (see _build_session_start_panel,
+        built once in __init__); this modal popup is kept for completeness and
+        manual reopen. Single-instance."""
         if self._session_start_win is not None:
             try:
                 if self._session_start_win.winfo_exists():
@@ -9747,7 +9746,6 @@ class BookReader:
                 pass
             self._session_start_win = None
 
-        state = self._load_handoff_state()
         win = tk.Toplevel(self.root)
         self._session_start_win = win
         win.title("🎯  Session Start")
@@ -9769,7 +9767,31 @@ class BookReader:
         except tk.TclError:
             pass
 
-        header = tk.Frame(win, bg=BG_PANEL, padx=14, pady=12)
+        def _close():
+            self._session_start_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+        self._build_session_start_panel(win, dismiss=_close)
+
+    def _build_session_start_panel(self, parent, dismiss=None) -> None:
+        """Build the tabbed Session Start UI (Start / Wheel of Life / Goals)
+        into `parent`. Shows last session's handoff message, prefills the
+        primary-task field from last session's "next task", and on Begin
+        records the session start in HANDOFF_STATE.
+
+        `dismiss` distinguishes the two homes for this panel:
+        - popup mode (dismiss=a close callback): adds a "Skip for now" button
+          and closes the window on Begin.
+        - inline mode (dismiss=None): the panel is embedded at the bottom of
+          the dashboard and is always visible — no Skip, and Begin just saves
+          (the panel stays put)."""
+        inline = dismiss is None
+        state = self._load_handoff_state()
+
+        header = tk.Frame(parent, bg=BG_PANEL, padx=14, pady=12)
         header.pack(fill=tk.X)
         tk.Label(header, text="🎯  Session Start", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT)
@@ -9777,11 +9799,11 @@ class BookReader:
                  bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
                  ).pack(side=tk.RIGHT)
 
-        # ---- Tabs: Start / Wheel of Life / Goals. The Ziglar Performance
-        # Planner now lives here, each piece in its own panel. ------------
-        tabbar = tk.Frame(win, bg=BG_PANEL, padx=10)
+        # ---- Tabs: Start / Wheel of Life / Goals (the Ziglar Performance
+        # Planner pieces), each in its own panel. ------------------------
+        tabbar = tk.Frame(parent, bg=BG_PANEL, padx=10)
         tabbar.pack(fill=tk.X, pady=(0, 8))
-        content = tk.Frame(win, bg=BG_DARK)
+        content = tk.Frame(parent, bg=BG_DARK)
         content.pack(fill=tk.BOTH, expand=True)
         ss_frames: dict = {}
         ss_buttons: dict = {}
@@ -9828,10 +9850,30 @@ class BookReader:
                      font=("Segoe UI", 10, "italic")
                      ).pack(anchor=tk.W, pady=(0, 14))
 
+        # 🎤 Voice dictation: clicking a field makes it the mic target
+        # (FocusIn), and its 🎤 button focuses it and starts/stops listening —
+        # same pattern as Study Notes.
+        def _ss_mic(widget):
+            if self.is_listening:
+                self.toggle_mic()
+                return
+            try:
+                widget.focus_set()
+            except tk.TclError:
+                pass
+            self._set_mic_target(widget)
+            self.toggle_mic()
+
         # ---- Primary task -----
-        tk.Label(body, text="One primary task for this session",
+        pt_head = tk.Frame(body, bg=BG_DARK)
+        pt_head.pack(fill=tk.X)
+        tk.Label(pt_head, text="One primary task for this session",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
-                 ).pack(anchor=tk.W)
+                 ).pack(side=tk.LEFT)
+        tk.Button(pt_head, text="🎤", command=lambda: _ss_mic(task_entry),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
         tk.Label(body,
                  text="(The Sentinel spec is strict — pick ONE focus.)",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic")
@@ -9845,11 +9887,19 @@ class BookReader:
             font=("Segoe UI", 11), relief=tk.FLAT, bd=0,
         )
         task_entry.pack(fill=tk.X, ipady=6, pady=(4, 14))
+        task_entry.bind("<FocusIn>",
+                        lambda _e: self._set_mic_target(task_entry), add="+")
 
         # ---- Session notes -----
-        tk.Label(body, text="Session notes",
+        sn_head = tk.Frame(body, bg=BG_DARK)
+        sn_head.pack(fill=tk.X)
+        tk.Label(sn_head, text="Session notes",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
-                 ).pack(anchor=tk.W)
+                 ).pack(side=tk.LEFT)
+        tk.Button(sn_head, text="🎤", command=lambda: _ss_mic(notes_text),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
         tk.Label(body,
                  text="(Anything you want to remember for this session — "
                       "saved with your handoff.)",
@@ -9861,19 +9911,14 @@ class BookReader:
             font=("Segoe UI", 10), relief=tk.FLAT, bd=0, wrap=tk.WORD,
         )
         notes_text.pack(fill=tk.BOTH, expand=True, pady=(4, 14))
+        notes_text.bind("<FocusIn>",
+                        lambda _e: self._set_mic_target(notes_text), add="+")
         if state and state.get("session_notes"):
             notes_text.insert("1.0", state["session_notes"])
 
         # ---- Buttons -----
         btn_row = tk.Frame(body, bg=BG_DARK)
         btn_row.pack(fill=tk.X, pady=(12, 0))
-
-        def _close():
-            self._session_start_win = None
-            try:
-                win.destroy()
-            except tk.TclError:
-                pass
 
         def _begin():
             cur = self._load_handoff_state() or {}
@@ -9884,7 +9929,8 @@ class BookReader:
             self._save_handoff_state(cur)
             task = primary_task_var.get().strip() or "(none)"
             self.set_status(f"🎯 Session started — primary task: {task}")
-            _close()
+            if dismiss is not None:
+                dismiss()
 
         tk.Button(btn_row, text="Begin Session  ▶", command=_begin,
                   bg=ACCENT_GREEN, fg="white",
@@ -9892,12 +9938,13 @@ class BookReader:
                   relief=tk.FLAT, padx=18, pady=8,
                   cursor="hand2", borderwidth=0
                   ).pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(btn_row, text="Skip for now", command=_close,
-                  bg=ACCENT_SLATE, fg="white",
-                  font=("Segoe UI", 10),
-                  relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT)
+        if dismiss is not None:
+            tk.Button(btn_row, text="Skip for now", command=dismiss,
+                      bg=ACCENT_SLATE, fg="white",
+                      font=("Segoe UI", 10),
+                      relief=tk.FLAT, padx=12, pady=6,
+                      cursor="hand2", borderwidth=0
+                      ).pack(side=tk.LEFT)
 
         # Build the two Ziglar panels, then reveal the Start panel first.
         self._build_wheel_panel(ss_frames["wheel"],
@@ -9905,8 +9952,8 @@ class BookReader:
         self._build_goals_panel(ss_frames["goals"])
         _show_ss("start")
 
-        win.protocol("WM_DELETE_WINDOW", _close)
-        task_entry.focus_set()
+        if not inline:
+            task_entry.focus_set()
 
     # ---- Session End wizard --------------------------------------------
     def open_session_end_wizard(self) -> None:
