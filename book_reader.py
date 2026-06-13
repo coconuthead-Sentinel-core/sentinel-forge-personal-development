@@ -12454,7 +12454,7 @@ try {
         self.mic_btn.configure(text="■  Stop mic", bg=ACCENT_RED,
                                activebackground=ACCENT_RED)
         for _attr in ("_matrix_mic_btn", "_study_notes_mic_btn",
-                      "_journal_mic_btn", "_planner_mic_btn"):
+                      "_journal_mic_btn", "_planner_mic_btn", "_goals_mic_btn"):
             _mmb = getattr(self, _attr, None)
             if _mmb is not None:
                 try:
@@ -13260,7 +13260,7 @@ try {
         except Exception:
             pass
         for _attr in ("_matrix_mic_btn", "_study_notes_mic_btn",
-                      "_journal_mic_btn", "_planner_mic_btn"):
+                      "_journal_mic_btn", "_planner_mic_btn", "_goals_mic_btn"):
             _mmb = getattr(self, _attr, None)
             if _mmb is not None:
                 try:
@@ -18413,6 +18413,44 @@ try {
         skills_t = _ftext("Skills / knowledge needed", 2)
         people_t = _ftext("People or groups to work with", 2)
         action_t = _ftext("Plan of action (one step per line)", 4)
+
+        # 🎤 dictate + 🔊 read for the worksheet fields. Click into a field,
+        # then 🎤 Voice to dictate into it or 🔊 Read to hear it back (proofread).
+        _goal_text_fields = [why_t, obstacles_t, skills_t, people_t, action_t]
+        gfocus = {"w": why_t}
+        for _w in [title_e] + _goal_text_fields:
+            _w.bind("<FocusIn>",
+                    lambda _e, w=_w: (gfocus.__setitem__("w", w),
+                                      self._set_mic_target(w)), add="+")
+
+        def _goal_mic():
+            if self.is_listening:
+                self.toggle_mic(); return
+            w = gfocus["w"]
+            try:
+                w.focus_set()
+            except tk.TclError:
+                pass
+            self._set_mic_target(w)
+            self.toggle_mic()
+
+        def _goal_read():
+            w = gfocus["w"]
+            if not isinstance(w, tk.Text):     # title is an Entry — read a field
+                w = next((t for t in _goal_text_fields
+                          if t.get("1.0", tk.END).strip()), why_t)
+            self._review_read_widget(w)
+
+        self._goals_mic_btn = tk.Button(
+            head, text="🎤 Voice", command=_goal_mic,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=10, pady=4,
+            cursor="hand2", borderwidth=0)
+        self._goals_mic_btn.pack(side=tk.RIGHT, padx=4)
+        tk.Button(head, text="🔊 Read", command=_goal_read,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=4)
 
         # Calendar tie-in (pinned bottom).
         tk.Label(tie, text="📅 Add next step to calendar on:", bg=BG_PANEL,
