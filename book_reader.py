@@ -18254,6 +18254,40 @@ try {
                       relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
                       borderwidth=0).pack(side=tk.RIGHT)
 
+    def _goal_accountability(self, created_at, target_date, progress, status):
+        """Cold, honest status for a goal — no encouragement, just where the
+        numbers land. Returns (badge, colour, is_behind).
+
+        Pace = your actual progress vs the share of time that has elapsed toward
+        the target date. Fall behind that pace and it goes RED (BEHIND), then
+        OVERDUE once the date passes — so slacking stands out instead of hiding.
+        On track / done are green; parked or no-target-date are muted."""
+        prog = int(progress or 0)
+        st = (status or "active").lower()
+        if st == "done" or prog >= 100:
+            return ("✅ DONE", ACCENT_GREEN, False)
+        if st == "parked":
+            return ("⏸ PARKED", FG_MUTED, False)
+
+        def _d(s):
+            try:
+                return datetime.strptime((s or "")[:10], "%Y-%m-%d").date()
+            except Exception:
+                return None
+        today = date.today()
+        tgt = _d(target_date)
+        started = _d(created_at) or today
+        if tgt is None:
+            return ("• SET A DATE", FG_MUTED, False)
+        if tgt < today:
+            return (f"⛔ OVERDUE {(today - tgt).days}d", ACCENT_RED, True)
+        span = max(1, (tgt - started).days)
+        elapsed = max(0, (today - started).days)
+        expected = min(100, int(100 * elapsed / span))
+        if prog < expected - 10:
+            return (f"🔻 BEHIND {prog}/{expected}%", ACCENT_RED, True)
+        return (f"🟢 ON TRACK {(tgt - today).days}d", ACCENT_GREEN, False)
+
     def _build_goals_panel(self, parent: tk.Frame) -> None:
         """Ziglar's goal-setting worksheet, with a tie-in that drops a goal's
         next action step straight onto a day in the planner calendar. Builds
@@ -18277,6 +18311,10 @@ try {
         left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 12))
         tk.Label(left, text="Your goals", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        goals_score_var = tk.StringVar(value="")
+        tk.Label(left, textvariable=goals_score_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 9, "bold"), justify="left", anchor="w",
+                 wraplength=200).pack(anchor="w", pady=(2, 2))
         lbwrap = tk.Frame(left, bg=BG_DARK)
         lbwrap.pack(fill=tk.Y, expand=True, pady=(4, 6))
         lb = tk.Listbox(lbwrap, width=26, bg=BG_INPUT, fg=FG_TEXT,
@@ -18432,14 +18470,28 @@ try {
             lb.delete(0, tk.END)
             try:
                 rows = self._db_query(
-                    "SELECT id,title,progress,status FROM goals "
-                    "ORDER BY (status='done'), id DESC")
+                    "SELECT id,title,progress,status,target_date,created_at "
+                    "FROM goals ORDER BY (status='done'), id DESC")
             except Exception:
                 rows = []
-            for gid, gtitle, prog, status in rows:
+            n_bad = n_ok = n_done = 0
+            for idx, (gid, gtitle, prog, status, target, created) in enumerate(rows):
                 records.append(gid)
-                mark = "✅ " if status == "done" else ""
-                lb.insert(tk.END, f"{mark}{gtitle or '(untitled)'}  ·{prog}%")
+                badge, color, behind = self._goal_accountability(
+                    created, target, prog, status)
+                lb.insert(tk.END, f"{badge} · {gtitle or '(untitled)'} ({prog}%)")
+                try:
+                    lb.itemconfig(idx, foreground=color)
+                except tk.TclError:
+                    pass
+                if behind:
+                    n_bad += 1
+                elif (status or "") == "done" or int(prog or 0) >= 100:
+                    n_done += 1
+                else:
+                    n_ok += 1
+            goals_score_var.set(
+                f"🔴 {n_bad} behind    🟢 {n_ok} on track    ✅ {n_done} done")
             if select_id in records:
                 i = records.index(select_id)
                 lb.selection_clear(0, tk.END)
