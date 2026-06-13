@@ -9833,6 +9833,23 @@ class BookReader:
         body = tk.Frame(ss_frames["start"], bg=BG_DARK, padx=18, pady=12)
         body.pack(fill=tk.BOTH, expand=True)
 
+        # ---- Mic accuracy (Fast / Accurate / Best) — sets the dictation
+        # quality for the 🎤 buttons below (and app-wide; it's a shared
+        # setting). Guard the var: the state block resets it to None and this
+        # panel builds at the end of __init__. -----------------------------
+        acc_row = tk.Frame(body, bg=BG_DARK)
+        acc_row.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(acc_row, text="🎤 Mic accuracy:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
+        if self._whisper_quality_var is None:
+            self._whisper_quality_var = tk.StringVar(value="Accurate")
+        _ss_acc = tk.OptionMenu(acc_row, self._whisper_quality_var,
+                                "Fast", "Accurate", "Best",
+                                command=self._set_mic_quality)
+        _style_optionmenu(_ss_acc)
+        _ss_acc.configure(width=10, font=("Segoe UI", 9))
+        _ss_acc.pack(side=tk.LEFT, padx=(6, 0))
+
         # ---- Last session summary -----
         if state:
             tk.Label(body, text="Last session", bg=BG_DARK, fg=FG_MUTED,
