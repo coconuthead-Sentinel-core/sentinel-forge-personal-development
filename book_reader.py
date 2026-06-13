@@ -18422,6 +18422,9 @@ try {
             _w.bind("<FocusIn>",
                     lambda _e, w=_w: (gfocus.__setitem__("w", w),
                                       self._set_mic_target(w)), add="+")
+            self._attach_clipboard_menu(
+                _w, clear_cmd=(lambda w=_w: self._clear_input(w)),
+                clear_label="Clear", track_for_mic=False)
 
         def _goal_mic():
             if self.is_listening:
