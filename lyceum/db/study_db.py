@@ -567,6 +567,19 @@ CREATE TABLE IF NOT EXISTS voice_corrections (
     updated_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_heard ON voice_corrections(heard);
+
+-- Goal check-ins: a timestamped 1-10 self-rating logged repeatedly over the
+-- life of a goal. Combined with the goal's baseline + target_level (added to
+-- the goals table), this turns the vague Progress % into a measured journey —
+-- progress = (latest - baseline) / (target - baseline) — and gives a real
+-- series to graph. Honest descriptive tracking, no estimation.
+CREATE TABLE IF NOT EXISTS goal_checkins (
+    id INTEGER PRIMARY KEY,
+    goal_id INTEGER NOT NULL,
+    value INTEGER NOT NULL,        -- 1-10 self-rating at logged_at
+    logged_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_goal_checkins ON goal_checkins(goal_id, logged_at);
 """
 
 
@@ -580,6 +593,18 @@ def init_study_db() -> None:
     try:
         con = connect()
         con.executescript(STUDY_SCHEMA)
+        # Lightweight migration: add baseline/target columns to an older goals
+        # table (CREATE IF NOT EXISTS won't add columns to an existing table).
+        try:
+            have = {r[1] for r in con.execute(
+                "PRAGMA table_info(goals)").fetchall()}
+            for col in ("baseline", "target_level"):
+                if col not in have:
+                    con.execute(
+                        f"ALTER TABLE goals ADD COLUMN {col} "
+                        "INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.Error:
+            pass
         con.commit()
         con.close()
     except sqlite3.Error as e:
