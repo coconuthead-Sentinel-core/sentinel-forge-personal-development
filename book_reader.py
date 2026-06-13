@@ -18083,83 +18083,195 @@ try {
             for _id, _t, pri, bt, sd, stt in rows:
                 _row(_id, _t, pri, bt, sd, stt, big_open)
 
+        def _parse_time(s):
+            """Lenient clock-time parser → 'HH:MM' (24h), or None.
+            Accepts '14:30', '2:30 PM', '2:30pm', '2 PM', '2pm', '14'."""
+            s = (s or "").strip().upper().replace(".", "")
+            for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H"):
+                try:
+                    return datetime.strptime(s, fmt).strftime("%H:%M")
+                except ValueError:
+                    continue
+            return None
+
         def _intention():
-            """Implementation-intention builder (James Clear): stating exactly
-            WHEN and WHERE you'll act makes follow-through far more likely.
-            Composes 'I will [behavior] at [time] in [location].' and drops it
-            into the warehouse as a task."""
+            """Appointment / implementation-intention builder (James Clear):
+            naming WHO, WHERE and an exact TIME makes follow-through far more
+            likely. Saves an appointment, mirrors it onto the 🗓 Planner for
+            that day, and schedules T-60/-30/-15 min light-teal reminders that
+            fire even when the app is closed."""
             d = tk.Toplevel(win)
-            d.title("🎯 Implementation intention")
+            d.title("🎯 New appointment / intention")
             d.configure(bg=BG_DARK)
             d.transient(win)
             try:
                 sw = d.winfo_screenwidth(); sh = d.winfo_screenheight()
             except tk.TclError:
                 sw, sh = 1280, 800
-            dw, dh = 460, 320
+            # Screen-relative size (Shannon's usable height is ~617) and a
+            # bottom-pinned button bar below — so Save is ALWAYS visible.
+            dw = min(540, max(440, sw - 80))
+            dh = min(600, max(440, sh - 120))
             d.geometry(f"{dw}x{dh}+{max(0,(sw-dw)//2)}+{max(0,(sh-dh)//2-24)}")
+            d.minsize(440, 430)
+            d.resizable(True, True)
             try:
                 d.grab_set()
             except tk.TclError:
                 pass
-            tk.Label(d, text="🎯 Implementation intention", bg=BG_DARK, fg=FG_TEXT,
-                     font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=14, pady=(12, 0))
-            tk.Label(d, text="Naming WHEN and WHERE makes you far more likely to "
-                     "follow through.", bg=BG_DARK, fg=FG_MUTED, wraplength=420,
-                     justify=tk.LEFT, font=("Segoe UI", 9)).pack(anchor="w", padx=14)
-            bvar = tk.StringVar(); tvar = tk.StringVar(); lvar = tk.StringVar()
 
-            def _field(label, var):
-                tk.Label(d, text=label, bg=BG_DARK, fg=FG_TEXT,
+            # ---- header (top) ----
+            hd = tk.Frame(d, bg=BG_DARK)
+            hd.pack(side=tk.TOP, fill=tk.X)
+            tk.Label(hd, text="🎯 New appointment", bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 13, "bold")).pack(anchor="w", padx=14, pady=(12, 0))
+            tk.Label(hd, text="Naming WHO, WHERE and an exact time makes you far "
+                     "more likely to follow through — and lets us remind you.",
+                     bg=BG_DARK, fg=FG_MUTED, wraplength=dw - 40, justify=tk.LEFT,
+                     font=("Segoe UI", 9)).pack(anchor="w", padx=14)
+
+            # ---- button bar (pinned to the BOTTOM, packed before the body) ----
+            br_ = tk.Frame(d, bg=BG_DARK)
+            br_.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=12)
+
+            # ---- body (fills the middle) ----
+            body = tk.Frame(d, bg=BG_DARK)
+            body.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            bvar = tk.StringVar()       # behavior / what
+            date_var = tk.StringVar(value=(day_var.get().strip()
+                                           or date.today().strftime("%Y-%m-%d")))
+            time_var = tk.StringVar(value="09:00")
+            who_var = tk.StringVar()
+            loc_var = tk.StringVar()
+
+            def _field(label, var, parent=None):
+                p = parent if parent is not None else body
+                tk.Label(p, text=label, bg=BG_DARK, fg=FG_TEXT,
                          font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=14, pady=(8, 1))
-                e = tk.Entry(d, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                e = tk.Entry(p, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
                              insertbackground=FG_TEXT, relief=tk.FLAT,
                              font=("Segoe UI", 11))
                 e.pack(fill=tk.X, padx=14, ipady=3)
                 return e
-            first = _field("I will (behavior)", bvar)
-            _field("at (time)", tvar)
-            _field("in (location)", lvar)
+
+            first = _field("What will you do?", bvar)
+
+            # date + time on one row
+            dt_row = tk.Frame(body, bg=BG_DARK)
+            dt_row.pack(fill=tk.X, padx=14, pady=(8, 1))
+            dcol = tk.Frame(dt_row, bg=BG_DARK); dcol.pack(side=tk.LEFT)
+            tk.Label(dcol, text="Date (YYYY-MM-DD)", bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 10, "bold")).pack(anchor="w")
+            tk.Entry(dcol, textvariable=date_var, width=14, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 11)
+                     ).pack(anchor="w", ipady=3)
+            tcol = tk.Frame(dt_row, bg=BG_DARK); tcol.pack(side=tk.LEFT, padx=(16, 0))
+            tk.Label(tcol, text="Time (e.g. 2:30 PM)", bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 10, "bold")).pack(anchor="w")
+            tk.Entry(tcol, textvariable=time_var, width=12, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 11)
+                     ).pack(anchor="w", ipady=3)
+
+            _field("Who? (optional)", who_var)
+            _field("Where? (optional)", loc_var)
 
             preview = tk.StringVar()
-            tk.Label(d, textvariable=preview, bg=BG_DARK, fg=ACCENT_CYAN,
-                     wraplength=420, justify=tk.LEFT, font=("Segoe UI", 10, "italic")
-                     ).pack(anchor="w", padx=14, pady=(10, 0))
+            tk.Label(body, textvariable=preview, bg=BG_DARK, fg=ACCENT_CYAN,
+                     wraplength=dw - 40, justify=tk.LEFT,
+                     font=("Segoe UI", 10, "italic")).pack(anchor="w", padx=14, pady=(12, 0))
 
             def _upd(*_):
-                preview.set(f"“I will {bvar.get().strip() or '___'} at "
-                            f"{tvar.get().strip() or '___'} in "
-                            f"{lvar.get().strip() or '___'}.”")
-            for v in (bvar, tvar, lvar):
+                hhmm = _parse_time(time_var.get())
+                when_txt = (f"{date_var.get().strip()} at "
+                            f"{hhmm or time_var.get().strip() or '___'}")
+                who = who_var.get().strip(); where = loc_var.get().strip()
+                tail = ""
+                if where:
+                    tail += f" in {where}"
+                if who:
+                    tail += f" (with {who})"
+                preview.set(f"“I will {bvar.get().strip() or '___'}{tail}, "
+                            f"on {when_txt}.”")
+            for v in (bvar, time_var, date_var, who_var, loc_var):
                 v.trace_add("write", _upd)
             _upd()
 
             def _save_intention():
-                b = bvar.get().strip()
-                if not b:
-                    self.set_status("Describe the behavior first.")
+                what = bvar.get().strip()
+                if not what:
+                    self.set_status("Describe what you'll do first.")
+                    first.focus_set()
                     return
-                sentence = (f"I will {b} at {tvar.get().strip() or '(time)'} "
-                            f"in {lvar.get().strip() or '(place)'}.")
-                now = datetime.now().isoformat()
+                dstr = date_var.get().strip()
                 try:
-                    self._db_exec(
-                        "INSERT INTO master_tasks (text,priority,big_three,"
-                        "scheduled_day,status,created_at,updated_at) "
-                        "VALUES (?,'',0,'','open',?,?)", (sentence, now, now))
-                except Exception as e:
-                    messagebox.showerror("Could not add", str(e))
+                    datetime.strptime(dstr, "%Y-%m-%d")
+                except ValueError:
+                    messagebox.showerror(
+                        "Check the date",
+                        "Use the format YYYY-MM-DD, e.g. 2026-06-15.")
                     return
+                hhmm = _parse_time(time_var.get())
+                if hhmm is None:
+                    messagebox.showerror(
+                        "Check the time",
+                        "Enter a time like 2:30 PM or 14:30.")
+                    return
+                when_dt = f"{dstr} {hhmm}"
+                who = who_var.get().strip(); where = loc_var.get().strip()
+                now = datetime.now().isoformat()
+
+                # Mirror onto the day-level Planner so it shows on the calendar.
+                label = f"⏰ {hhmm} · {what}"
+                if who:
+                    label += f" — {who}"
+                if where:
+                    label += f" @ {where}"
+                try:
+                    nxt = self._db_query(
+                        "SELECT COALESCE(MAX(sort_order),-1)+1 FROM "
+                        "planner_tasks WHERE day=?", (dstr,))[0][0]
+                    pid = self._db_exec(
+                        "INSERT INTO planner_tasks (day,title,minutes,done,"
+                        "sort_order,created_at,updated_at) "
+                        "VALUES (?,?,0,0,?,?,?)", (dstr, label, nxt, now, now))
+                    aid = self._db_exec(
+                        "INSERT INTO appointments (title,who,location,when_dt,"
+                        "notes,planner_id,status,created_at,updated_at) "
+                        "VALUES (?,?,?,?,'',?,'open',?,?)",
+                        (what, who, where, when_dt, pid, now, now))
+                except Exception as e:
+                    messagebox.showerror("Could not save", str(e))
+                    return
+
+                # Schedule the T-60/-30/-15 reminders (fail-soft: a scheduling
+                # hiccup must never lose the saved appointment).
+                rmsg = ""
+                try:
+                    from lyceum import reminders as _rem
+                    sched, err = _rem.schedule_appointment(aid, when_dt)
+                    if err:
+                        rmsg = f" (reminders not set: {err})"
+                    elif sched:
+                        rmsg = (" Reminders set for "
+                                + ", ".join(f"{m}m" for m in sched) + " before.")
+                    else:
+                        rmsg = " (no reminders — that time is already within 15 min.)"
+                except Exception as e:
+                    rmsg = f" (reminders unavailable: {e})"
+
+                try:
+                    self._refresh_tab_planner()
+                except Exception:
+                    pass
                 _render()
-                self.set_status("🎯 Intention added to the warehouse.")
+                self.set_status(f"📅 Saved to {dstr} {hhmm}.{rmsg}")
                 try:
                     d.destroy()
                 except tk.TclError:
                     pass
 
-            br_ = tk.Frame(d, bg=BG_DARK)
-            br_.pack(fill=tk.X, padx=14, pady=12)
-            tk.Button(br_, text="➕ Add to warehouse", command=_save_intention,
+            tk.Button(br_, text="📅 Save to calendar", command=_save_intention,
                       font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
                       activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=5,
                       cursor="hand2", borderwidth=0).pack(side=tk.LEFT)

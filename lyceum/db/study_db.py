@@ -528,6 +528,27 @@ CREATE TABLE IF NOT EXISTS asset_holdings (
     amount REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+
+-- Appointments / implementation-intentions with a real clock time. Built from
+-- the Idea Warehouse "Intention" builder: stating WHO/WHERE and an exact time
+-- makes follow-through far more likely (James Clear). Each appointment is
+-- mirrored onto the day-level Planner (planner_id links the row) AND drives up
+-- to three Windows-scheduled reminders (T-60/-30/-15 min) that flash a
+-- light-teal OpenDyslexic alert — so the reminder fires even with the app
+-- closed. when_dt is local wall-clock 'YYYY-MM-DD HH:MM'.
+CREATE TABLE IF NOT EXISTS appointments (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',         -- the behavior / what ("get a haircut")
+    who TEXT NOT NULL DEFAULT '',           -- who you're meeting
+    location TEXT NOT NULL DEFAULT '',      -- where you're supposed to be
+    when_dt TEXT NOT NULL,                  -- 'YYYY-MM-DD HH:MM' (local)
+    notes TEXT NOT NULL DEFAULT '',
+    planner_id INTEGER,                     -- linked planner_tasks row, if mirrored
+    status TEXT NOT NULL DEFAULT 'open',    -- open | done | cancelled
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_appt_when ON appointments(when_dt);
 """
 
 
