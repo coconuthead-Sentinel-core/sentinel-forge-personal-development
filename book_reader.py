@@ -1550,6 +1550,16 @@ class BookReader:
                         add="+")
         return m
 
+    def _clear_input(self, widget) -> None:
+        """Empty an Entry or Text widget (used by the right-click 'Clear')."""
+        try:
+            if isinstance(widget, (tk.Entry, ttk.Entry)):
+                widget.delete(0, tk.END)
+            else:
+                widget.delete("1.0", tk.END)
+        except tk.TclError:
+            pass
+
     def _mic_target_label(self, widget) -> str:
         """Friendly name for the status bar — used when the mic starts
         listening so the user knows where dictation will land."""
@@ -10047,6 +10057,9 @@ class BookReader:
         task_entry.pack(fill=tk.X, ipady=6, pady=(4, 14))
         task_entry.bind("<FocusIn>",
                         lambda _e: self._set_mic_target(task_entry), add="+")
+        self._attach_clipboard_menu(
+            task_entry, clear_cmd=lambda: self._clear_input(task_entry),
+            clear_label="Clear", track_for_mic=False)
 
         # ---- Session notes -----
         sn_head = tk.Frame(body, bg=BG_DARK)
@@ -10073,6 +10086,9 @@ class BookReader:
         notes_text.pack(fill=tk.BOTH, expand=True, pady=(4, 14))
         notes_text.bind("<FocusIn>",
                         lambda _e: self._set_mic_target(notes_text), add="+")
+        self._attach_clipboard_menu(
+            notes_text, clear_cmd=lambda: self._clear_input(notes_text),
+            clear_label="Clear", track_for_mic=False)
         if state and state.get("session_notes"):
             notes_text.insert("1.0", state["session_notes"])
 
@@ -12903,6 +12919,10 @@ try {
         me = tk.Entry(r2, textvariable=meant_var, bg=BG_INPUT, fg=FG_TEXT,
                       insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 11))
         me.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+        for _e in (he, me):
+            self._attach_clipboard_menu(
+                _e, clear_cmd=(lambda w=_e: self._clear_input(w)),
+                clear_label="Clear", track_for_mic=False)
 
         # ---- list of corrections ----
         listwrap = tk.Frame(win, bg=BG_DARK, padx=14)
@@ -13015,6 +13035,9 @@ try {
                          insertbackground=FG_TEXT, relief=tk.FLAT,
                          font=("Segoe UI", 11))
         sh_in.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 6), ipady=3)
+        self._attach_clipboard_menu(
+            sh_in, clear_cmd=lambda: self._clear_input(sh_in),
+            clear_label="Clear", track_for_mic=False)
         say_letters = tk.BooleanVar(value=False)
 
         # Picture-dictionary display — a big symbol + the word for depictable
