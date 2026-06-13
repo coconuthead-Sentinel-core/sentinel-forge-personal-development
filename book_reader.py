@@ -17838,7 +17838,14 @@ try {
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(520, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # NOTE: do NOT call win.transient(self.root) here. On Windows a
+        # transient toplevel loses its minimize/maximize buttons (only the
+        # ✕ remains) and gets no taskbar entry. The Idea Warehouse is a full
+        # working window, so it deserves a proper top-level identity: its own
+        # taskbar button plus the standard minimize / maximize / restore
+        # controls (so it can be made full size). Same reasoning as the
+        # Study window above.
+        win.resizable(True, True)
 
         def _close():
             self._idea_win = None
