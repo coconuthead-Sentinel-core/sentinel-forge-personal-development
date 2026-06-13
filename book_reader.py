@@ -283,6 +283,47 @@ def _style_optionmenu(om: tk.OptionMenu) -> None:
     )
 
 
+def _phonetic_key(word: str) -> str:
+    """A pragmatic 'sounds-like' key so phonetic misspellings match real words
+    (e.g. 'fone' -> 'phone', 'recieve' -> 'receive', 'definately' ->
+    'definitely'). Not canonical Metaphone, but it handles the digraph and
+    letter confusions dyslexic spellers hit, and is verified against those
+    cases. Two spellings that sound alike collapse to the same key."""
+    w = re.sub(r"[^a-z]", "", (word or "").lower())
+    if not w:
+        return ""
+    for pre, rep in (("kn", "n"), ("gn", "n"), ("pn", "n"),
+                     ("wr", "r"), ("ps", "s"), ("wh", "w")):
+        if w.startswith(pre):
+            w = rep + w[len(pre):]
+            break
+    w = (w.replace("sch", "sk").replace("ph", "f").replace("gh", "")
+          .replace("ck", "k").replace("sh", "x").replace("ch", "x")
+          .replace("th", "0"))
+    out = []
+    for i, ch in enumerate(w):
+        if ch == "c":
+            nxt = w[i + 1] if i + 1 < len(w) else ""
+            out.append("s" if nxt in "eiy" else "k")
+        elif ch == "q":
+            out.append("k")
+        elif ch == "z":
+            out.append("s")
+        elif ch == "v":
+            out.append("f")
+        else:
+            out.append(ch)
+    w = "".join(out)
+    collapsed = []
+    for ch in w:                       # squeeze doubled letters
+        if not collapsed or collapsed[-1] != ch:
+            collapsed.append(ch)
+    w = "".join(collapsed)
+    if not w:
+        return ""
+    return w[0] + "".join(c for c in w[1:] if c not in "aeiou")
+
+
 class BookReader:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -718,6 +759,11 @@ class BookReader:
         self._voice_corrections: dict = {}      # heard(lower) -> meant
         self._voice_corr_re = None              # compiled matcher
         self._last_dictation = ""               # raw heard text (for "Fix last")
+        # Spelling Helper (offline pyspellchecker + phonetic index), all lazy.
+        self._spellchecker = None               # SpellChecker instance
+        self._spell_tried = False               # have we attempted the import?
+        self._phonetic_index = None             # {phonetic_key: [words]}
+        self._word_speak_proc = None            # fire-and-forget word TTS
         # Noise-suppress mic audio before transcription (cleaner = more
         # accurate). Toggle-able; on by default when the library is present.
         self._mic_denoise = HAS_DENOISE
@@ -12612,6 +12658,107 @@ try {
             return ""
         return (", ".join(vals))[:220]
 
+    # ---- Spelling Helper (offline suggestions + phonetic match) ---------
+    def _get_spellchecker(self):
+        """Lazily load pyspellchecker (offline). Returns the instance or None
+        if the package isn't installed."""
+        if self._spell_tried:
+            return self._spellchecker
+        self._spell_tried = True
+        try:
+            from spellchecker import SpellChecker
+            self._spellchecker = SpellChecker()
+        except Exception:
+            self._spellchecker = None
+        return self._spellchecker
+
+    def _get_phonetic_index(self, sp) -> dict:
+        """Build (once) a {phonetic_key: [words]} index over the most common
+        words, so 'sounds-like' spellings find the real word."""
+        if self._phonetic_index is not None:
+            return self._phonetic_index
+        idx: dict = {}
+        try:
+            items = sp.word_frequency.dictionary.items()
+            top = sorted(items, key=lambda kv: kv[1], reverse=True)[:80000]
+            for word, _cnt in top:
+                k = _phonetic_key(word)
+                if k:
+                    idx.setdefault(k, []).append(word)
+        except Exception:
+            idx = {}
+        self._phonetic_index = idx
+        return idx
+
+    def _spell_suggestions(self, query: str, limit: int = 8) -> list:
+        """Correct-spelling candidates for a typed (mis)spelling — combining
+        edit-distance (pyspellchecker) and phonetic ('sounds-like') matches,
+        ranked by how common the word is."""
+        sp = self._get_spellchecker()
+        if sp is None:
+            return []
+        q = re.sub(r"[^a-z]", "", (query or "").lower())
+        if not q:
+            return []
+        cands: set = set()
+        try:
+            cands |= (sp.candidates(q) or set())
+        except Exception:
+            pass
+        try:
+            best = sp.correction(q)
+            if best:
+                cands.add(best)
+        except Exception:
+            pass
+        try:
+            idx = self._get_phonetic_index(sp)
+            cands |= set(idx.get(_phonetic_key(q), [])[:40])
+        except Exception:
+            pass
+        try:
+            if q in sp:                 # the typed word is itself valid
+                cands.add(q)
+        except Exception:
+            pass
+
+        def _freq(w):
+            try:
+                return sp.word_frequency[w]
+            except Exception:
+                return 0
+        qk = _phonetic_key(q)
+        # Rank exact sound-alikes first (what a phonetic speller actually
+        # wants), then by how common the word is.
+        def _rank(w):
+            return (1 if _phonetic_key(w) == qk else 0, _freq(w))
+        return sorted({c for c in cands if c}, key=_rank, reverse=True)[:limit]
+
+    def _speak_word(self, text: str) -> None:
+        """Speak a single word/phrase aloud (Windows System.Speech, fire-and-
+        forget) so the user can confirm a spelling by ear. Independent of the
+        main read-aloud so it never disturbs a reading session."""
+        text = (text or "").strip()
+        if not text or getattr(self, "is_reading", False):
+            return
+        safe = text.replace("'", "''")
+        ps = ("Add-Type -AssemblyName System.Speech; "
+              "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+              f"$s.Speak('{safe}')")
+        try:
+            prev = getattr(self, "_word_speak_proc", None)
+            if prev is not None and prev.poll() is None:
+                try:
+                    prev.terminate()
+                except Exception:
+                    pass
+            self._word_speak_proc = subprocess.Popen(
+                ["powershell", "-NoProfile", "-Command", ps],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except Exception:
+            pass
+
     def open_voice_memory(self) -> None:
         """🗣 Voice Memory editor — the personal dictation correction
         dictionary. Add 'when it hears X, write Y' fixes (auto-applied to ALL
@@ -12773,6 +12920,63 @@ try {
                   font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        # ---- Spelling Helper: type how a word SOUNDS, get correct spellings
+        # you can hear and click into the "Write instead" box above. ---------
+        spellf = tk.Frame(win, bg=BG_DARK, padx=14)
+        spellf.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 2))
+        sh_head = tk.Frame(spellf, bg=BG_DARK)
+        sh_head.pack(fill=tk.X, pady=(6, 0))
+        tk.Label(sh_head, text="✏️ Spell it — type how it sounds:", bg=BG_DARK,
+                 fg=FG_TEXT, font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        sound_var = tk.StringVar()
+        sh_in = tk.Entry(sh_head, textvariable=sound_var, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, relief=tk.FLAT,
+                         font=("Segoe UI", 11))
+        sh_in.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 6), ipady=3)
+        sugg_wrap = tk.Frame(spellf, bg=BG_DARK)
+        sugg_wrap.pack(fill=tk.X, pady=(4, 2))
+
+        def _find_spellings(*_):
+            for c in sugg_wrap.winfo_children():
+                c.destroy()
+            q = sound_var.get().strip()
+            if not q:
+                return
+            if self._get_spellchecker() is None:
+                tk.Label(sugg_wrap, text="(Spelling suggestions need the "
+                         "pyspellchecker add-on installed.)", bg=BG_DARK,
+                         fg=FG_MUTED, font=("Segoe UI", 9, "italic")
+                         ).pack(anchor="w")
+                return
+            self.set_status("✏️ Finding spellings…")
+            sugg = self._spell_suggestions(q)
+            if not sugg:
+                tk.Label(sugg_wrap, text="No close matches — try spelling it a "
+                         "little differently.", bg=BG_DARK, fg=FG_MUTED,
+                         font=("Segoe UI", 9, "italic")).pack(anchor="w")
+                self.set_status("No close spelling matches.")
+                return
+            self.set_status(f"✏️ {len(sugg)} suggestion(s) — click to use, 🔊 to hear.")
+            for word in sugg:
+                chip = tk.Frame(sugg_wrap, bg=BG_PANEL)
+                chip.pack(side=tk.LEFT, padx=(0, 6), pady=2)
+                tk.Button(chip, text=word,
+                          command=lambda w=word: (meant_var.set(w), me.focus_set()),
+                          font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_TEXT,
+                          activebackground=ACCENT_SLATE, activeforeground="white",
+                          relief=tk.FLAT, padx=6, pady=2, cursor="hand2",
+                          borderwidth=0).pack(side=tk.LEFT)
+                tk.Button(chip, text="🔊", command=lambda w=word: self._speak_word(w),
+                          font=("Segoe UI", 9), bg=BG_PANEL, fg=ACCENT_GREEN,
+                          activebackground=BG_PANEL, relief=tk.FLAT, padx=3, pady=2,
+                          cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        tk.Button(sh_head, text="🔎 Find", command=_find_spellings,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
+                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        sh_in.bind("<Return>", lambda _e: (_find_spellings(), "break")[1])
 
         _refresh()
         he.focus_set()
