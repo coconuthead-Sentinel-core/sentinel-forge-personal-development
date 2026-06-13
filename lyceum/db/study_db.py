@@ -549,6 +549,24 @@ CREATE TABLE IF NOT EXISTS appointments (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_appt_when ON appointments(when_dt);
+
+-- Voice Memory: a personal dictation correction dictionary. Whisper can't be
+-- retrained locally, so instead we learn at the TEXT layer — each row maps a
+-- phrase the recognizer kept producing (`heard`, stored lowercased as the
+-- match key) to what the user actually meant (`meant`). _append_dictation
+-- applies these to every dictated phrase, and the distinct `meant` terms also
+-- bias Whisper via initial_prompt. `hits` counts how often it's been applied
+-- (so the list can surface the most valuable fixes). Accent/pronunciation
+-- adaptation, the practical way.
+CREATE TABLE IF NOT EXISTS voice_corrections (
+    id INTEGER PRIMARY KEY,
+    heard TEXT NOT NULL,                 -- lowercased key (what Whisper produced)
+    meant TEXT NOT NULL,                 -- the replacement the user wants
+    hits INTEGER NOT NULL DEFAULT 0,     -- times auto-applied
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_voice_heard ON voice_corrections(heard);
 """
 
 

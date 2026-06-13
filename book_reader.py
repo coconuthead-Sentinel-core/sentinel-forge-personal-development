@@ -713,6 +713,11 @@ class BookReader:
         self._whisper_stop: threading.Event | None = None
         self._whisper_lock = threading.Lock()
         self._whisper_quality_var = None        # toolbar Fast/Accurate/Best
+        # Voice Memory — a personal dictation correction dictionary that learns
+        # the words/mis-hearings specific to the user's speech over time.
+        self._voice_corrections: dict = {}      # heard(lower) -> meant
+        self._voice_corr_re = None              # compiled matcher
+        self._last_dictation = ""               # raw heard text (for "Fix last")
         # Noise-suppress mic audio before transcription (cleaner = more
         # accurate). Toggle-able; on by default when the library is present.
         self._mic_denoise = HAS_DENOISE
@@ -833,6 +838,12 @@ class BookReader:
             self._build_session_start_panel(ss_inline)
         except Exception as e:
             print(f"[init] session-start inline panel: {e}", file=sys.stderr)
+
+        # Load the Voice Memory dictation corrections into memory (DB is ready).
+        try:
+            self._load_voice_corrections()
+        except Exception as e:
+            print(f"[init] voice corrections load: {e}", file=sys.stderr)
 
     # ---- Helpers --------------------------------------------------------
     def set_status(self, msg: str) -> None:
@@ -9849,6 +9860,10 @@ class BookReader:
         _style_optionmenu(_ss_acc)
         _ss_acc.configure(width=10, font=("Segoe UI", 9))
         _ss_acc.pack(side=tk.LEFT, padx=(6, 0))
+        tk.Button(acc_row, text="🗣 Voice Memory", command=self.open_voice_memory,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
 
         # ---- Last session summary -----
         if state:
@@ -12501,8 +12516,13 @@ try {
         """Transcribe one audio phrase to text. Beam search (beam_size=5) for
         better accuracy — affordable now that capture is continuous."""
         try:
-            segments, _ = self._whisper_model.transcribe(
-                audio, language="en", beam_size=5, vad_filter=True)
+            kwargs = dict(language="en", beam_size=5, vad_filter=True)
+            # Bias toward the user's learned vocabulary (names/jargon) so they
+            # come out spelled their way — the Voice Memory feeding STT.
+            prompt = self._voice_vocab_prompt()
+            if prompt:
+                kwargs["initial_prompt"] = prompt
+            segments, _ = self._whisper_model.transcribe(audio, **kwargs)
             return " ".join(s.text.strip() for s in segments).strip()
         except Exception:
             return ""
@@ -12533,15 +12553,242 @@ try {
             pass
         self._mic_poll_after_id = self.root.after(50, self._mic_poll_queue)
 
+    # ---- Voice Memory: personal dictation corrections -------------------
+    def _load_voice_corrections(self) -> None:
+        """Load the Voice Memory dictionary and compile a single matcher.
+        Keys are lowercased; the regex is word-bounded and case-insensitive,
+        longest phrases first so multi-word fixes beat single-word ones."""
+        pairs: dict = {}
+        try:
+            for heard, meant in self._db_query(
+                    "SELECT heard, meant FROM voice_corrections"):
+                if heard:
+                    pairs[heard.lower()] = meant
+        except Exception:
+            pairs = {}
+        self._voice_corrections = pairs
+        self._voice_corr_re = None
+        if pairs:
+            keys = sorted(pairs.keys(), key=len, reverse=True)
+            alt = "|".join(re.escape(k) for k in keys)
+            try:
+                self._voice_corr_re = re.compile(
+                    r"(?<!\w)(" + alt + r")(?!\w)", re.IGNORECASE)
+            except re.error:
+                self._voice_corr_re = None
+
+    def _apply_voice_corrections(self, text: str) -> str:
+        """Replace learned mis-hearings in a dictated phrase, then bump the
+        hit count of each correction that fired."""
+        rex = getattr(self, "_voice_corr_re", None)
+        if not rex or not text:
+            return text
+        applied: set = set()
+
+        def _sub(m):
+            key = m.group(1).lower()
+            repl = self._voice_corrections.get(key)
+            if repl is None:
+                return m.group(0)
+            applied.add(key)
+            return repl
+
+        out = rex.sub(_sub, text)
+        for key in applied:
+            try:
+                self._db_exec(
+                    "UPDATE voice_corrections SET hits = hits + 1, updated_at=? "
+                    "WHERE heard=?", (datetime.now().isoformat(), key))
+            except Exception:
+                pass
+        return out
+
+    def _voice_vocab_prompt(self) -> str:
+        """A short prompt of the user's vocabulary (the distinct 'meant'
+        terms) to bias Whisper toward their words/names. Capped so it stays a
+        gentle nudge, not a context dump."""
+        vals = list(dict.fromkeys(self._voice_corrections.values()))
+        if not vals:
+            return ""
+        return (", ".join(vals))[:220]
+
+    def open_voice_memory(self) -> None:
+        """🗣 Voice Memory editor — the personal dictation correction
+        dictionary. Add 'when it hears X, write Y' fixes (auto-applied to ALL
+        dictation), teach the last mis-heard phrase in one click, and remove
+        fixes. Offline; stored in the voice_corrections table."""
+        existing = getattr(self, "_voice_memory_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._voice_memory_win = win
+        win.title("🗣 Voice Memory")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(640, max(480, sw - 80)); h = min(620, max(440, sh - 120))
+        win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//2-24)}")
+        win.minsize(480, 440)
+        win.configure(bg=BG_DARK)
+        win.transient(self.root)
+
+        def _close():
+            self._voice_memory_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        head.pack(fill=tk.X)
+        tk.Label(head, text="🗣 Voice Memory", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT)
+        tk.Label(win, text="When the mic keeps hearing a word wrong, teach it the "
+                 "fix here. It's applied to everything you dictate and improves "
+                 "as you add more — like a voice profile that learns your words.",
+                 bg=BG_DARK, fg=FG_MUTED, wraplength=w - 36, justify=tk.LEFT,
+                 font=("Segoe UI", 9)).pack(anchor="w", padx=14, pady=(8, 4))
+
+        # ---- bottom button bar (pinned) ----
+        foot = tk.Frame(win, bg=BG_DARK)
+        foot.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=10)
+
+        # ---- add / teach row (just above the footer) ----
+        addf = tk.Frame(win, bg=BG_DARK, padx=14)
+        addf.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 2))
+        heard_var = tk.StringVar(); meant_var = tk.StringVar()
+        r1 = tk.Frame(addf, bg=BG_DARK); r1.pack(fill=tk.X, pady=(6, 2))
+        tk.Label(r1, text="When it hears:", width=13, anchor="w", bg=BG_DARK,
+                 fg=FG_TEXT, font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        he = tk.Entry(r1, textvariable=heard_var, bg=BG_INPUT, fg=FG_TEXT,
+                      insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 11))
+        he.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+        r2 = tk.Frame(addf, bg=BG_DARK); r2.pack(fill=tk.X, pady=2)
+        tk.Label(r2, text="Write instead:", width=13, anchor="w", bg=BG_DARK,
+                 fg=FG_TEXT, font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        me = tk.Entry(r2, textvariable=meant_var, bg=BG_INPUT, fg=FG_TEXT,
+                      insertbackground=FG_TEXT, relief=tk.FLAT, font=("Segoe UI", 11))
+        me.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+
+        # ---- list of corrections ----
+        listwrap = tk.Frame(win, bg=BG_DARK, padx=14)
+        listwrap.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(4, 0))
+        lb = tk.Listbox(listwrap, bg=BG_INPUT, fg=FG_TEXT, relief=tk.FLAT, bd=0,
+                        font=("Segoe UI", 11), selectbackground=ACCENT_SLATE,
+                        selectforeground="white", activestyle="none",
+                        highlightthickness=0)
+        sb = tk.Scrollbar(listwrap, command=lb.yview, width=14)
+        lb.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        ids: list = []
+
+        def _refresh():
+            lb.delete(0, tk.END); ids.clear()
+            try:
+                rows = self._db_query(
+                    "SELECT id, heard, meant, hits FROM voice_corrections "
+                    "ORDER BY hits DESC, meant ASC")
+            except Exception:
+                rows = []
+            if not rows:
+                lb.insert(tk.END, "  (no corrections yet — add one below)")
+                ids.append(None)
+                return
+            for rid, heard, meant, hits in rows:
+                lb.insert(tk.END, f"  “{heard}”   →   {meant}    ({hits}×)")
+                ids.append((rid, heard, meant))
+
+        def _add():
+            h = heard_var.get().strip(); m = meant_var.get().strip()
+            if not h or not m:
+                self.set_status("Fill in both: what it hears, and what to write.")
+                return
+            now = datetime.now().isoformat()
+            try:
+                if self._db_query("SELECT id FROM voice_corrections WHERE heard=?",
+                                  (h.lower(),)):
+                    self._db_exec("UPDATE voice_corrections SET meant=?, "
+                                  "updated_at=? WHERE heard=?", (m, now, h.lower()))
+                else:
+                    self._db_exec("INSERT INTO voice_corrections "
+                                  "(heard,meant,hits,created_at,updated_at) "
+                                  "VALUES (?,?,0,?,?)", (h.lower(), m, now, now))
+            except Exception as e:
+                messagebox.showerror("Could not save", str(e))
+                return
+            heard_var.set(""); meant_var.set("")
+            self._load_voice_corrections(); _refresh()
+            self.set_status(f"🗣 Voice Memory: it will now write “{m}”.")
+            he.focus_set()
+
+        def _fix_last():
+            last = (getattr(self, "_last_dictation", "") or "").strip()
+            if not last:
+                self.set_status("Dictate something first, then click Fix last.")
+                return
+            heard_var.set(last); meant_var.set("")
+            me.focus_set()
+
+        def _delete():
+            sel = lb.curselection()
+            if not sel:
+                self.set_status("Pick a correction in the list to delete.")
+                return
+            item = ids[sel[0]] if sel[0] < len(ids) else None
+            if not item:
+                return
+            try:
+                self._db_exec("DELETE FROM voice_corrections WHERE id=?", (item[0],))
+            except Exception as e:
+                messagebox.showerror("Could not delete", str(e))
+                return
+            self._load_voice_corrections(); _refresh()
+
+        he.bind("<Return>", lambda _e: (me.focus_set(), "break")[1])
+        me.bind("<Return>", lambda _e: (_add(), "break")[1])
+
+        tk.Button(addf, text="➕ Add / update", command=_add,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, pady=(6, 0))
+        tk.Button(addf, text="🎤 Fix last heard", command=_fix_last,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(8, 0),
+                                                      pady=(6, 0))
+
+        tk.Button(foot, text="🗑 Delete selected", command=_delete,
+                  font=("Segoe UI", 10), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=12, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(foot, text="Close", command=_close,
+                  font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        _refresh()
+        he.focus_set()
+
     def _append_dictation(self, text: str) -> None:
         """Insert a recognized phrase at the active target's cursor with
         smart spacing (don't double-space; trailing space so the next
         phrase flows on). The target is whichever text widget had focus
         when the user clicked 🎤 — Notes by default, Reader if they
-        clicked into the reader first."""
+        clicked into the reader first. Learned Voice Memory corrections are
+        applied first, and the raw phrase is remembered for 'Fix last'."""
         text = text.strip()
         if not text:
             return
+        self._last_dictation = text                      # raw heard
+        text = self._apply_voice_corrections(text)
         target = getattr(self, "_mic_active_target", None) or self.notes_area
         # Entry widgets (e.g. the Planner day boxes) take plain end-insertion.
         if isinstance(target, (tk.Entry, ttk.Entry)):
@@ -16353,6 +16600,10 @@ try {
         _style_optionmenu(mic_menu)
         mic_menu.configure(width=10, font=("Segoe UI", 9))
         mic_menu.pack(side=tk.LEFT)
+        tk.Button(row_a, text="🗣 Voice Memory", command=self.open_voice_memory,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
 
         # ---- Row B: highlight selection · highlight unit · color · voice ----
         row_b = tk.Frame(bar, bg=BG_PANEL)
