@@ -9852,7 +9852,11 @@ class BookReader:
 
         # 🎤 Voice dictation: clicking a field makes it the mic target
         # (FocusIn), and its 🎤 button focuses it and starts/stops listening —
-        # same pattern as Study Notes.
+        # same pattern as Study Notes. The buttons are registered in
+        # self._session_start_mic_btns so _start_mic/_stop_mic flip them to a
+        # red "■ Stop" while listening (the feedback every other mic gives).
+        self._session_start_mic_btns = []
+
         def _ss_mic(widget):
             if self.is_listening:
                 self.toggle_mic()
@@ -9870,10 +9874,12 @@ class BookReader:
         tk.Label(pt_head, text="One primary task for this session",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
                  ).pack(side=tk.LEFT)
-        tk.Button(pt_head, text="🎤", command=lambda: _ss_mic(task_entry),
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        _pt_mic = tk.Button(pt_head, text="🎤", command=lambda: _ss_mic(task_entry),
+                            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
+                            cursor="hand2", borderwidth=0)
+        _pt_mic.pack(side=tk.RIGHT)
+        self._session_start_mic_btns.append(_pt_mic)
         tk.Label(body,
                  text="(The Sentinel spec is strict — pick ONE focus.)",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic")
@@ -9896,10 +9902,12 @@ class BookReader:
         tk.Label(sn_head, text="Session notes",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
                  ).pack(side=tk.LEFT)
-        tk.Button(sn_head, text="🎤", command=lambda: _ss_mic(notes_text),
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        _sn_mic = tk.Button(sn_head, text="🎤", command=lambda: _ss_mic(notes_text),
+                            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
+                            cursor="hand2", borderwidth=0)
+        _sn_mic.pack(side=tk.RIGHT)
+        self._session_start_mic_btns.append(_sn_mic)
         tk.Label(body,
                  text="(Anything you want to remember for this session — "
                       "saved with your handoff.)",
@@ -12234,6 +12242,12 @@ try {
                                    activebackground=ACCENT_RED)
                 except tk.TclError:
                     pass
+        for _ssb in getattr(self, "_session_start_mic_btns", []):
+            try:
+                _ssb.configure(text="■ Stop", bg=ACCENT_RED,
+                               activebackground=ACCENT_RED)
+            except tk.TclError:
+                pass
 
         # Lock the dictation target for this listening session. We use
         # whichever text widget the user last clicked into — falls back
@@ -12594,6 +12608,12 @@ try {
                                    activebackground=ACCENT_MIC)
                 except tk.TclError:
                     pass
+        for _ssb in getattr(self, "_session_start_mic_btns", []):
+            try:
+                _ssb.configure(text="🎤", bg=ACCENT_MIC,
+                               activebackground=ACCENT_MIC)
+            except tk.TclError:
+                pass
         # Reset the per-day Planner mic (short label).
         _pam = getattr(self, "_planner_active_mic", None)
         if _pam is not None:
