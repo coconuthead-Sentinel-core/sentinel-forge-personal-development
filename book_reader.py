@@ -18400,6 +18400,118 @@ try {
                               font=("Segoe UI", 9), activebackground=ACCENT_GREEN)
         progress_s.pack(side=tk.LEFT, padx=(8, 0), fill=tk.X, expand=True)
 
+        # ---- Baseline → Target scale (1-10) + check-ins + trend graph ------
+        def _scale(parent, lo, hi, init):
+            s = tk.Scale(parent, from_=lo, to=hi, orient=tk.HORIZONTAL,
+                         bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
+                         highlightthickness=0, length=110, font=("Segoe UI", 9),
+                         activebackground=ACCENT_CYAN)
+            s.set(init)
+            return s
+
+        scale_row = tk.Frame(form, bg=BG_DARK)
+        scale_row.pack(fill=tk.X, pady=(8, 0))
+        tk.Label(scale_row, text="Baseline (1–10)", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        baseline_s = _scale(scale_row, 1, 10, 1)
+        baseline_s.pack(side=tk.LEFT, padx=(6, 16))
+        tk.Label(scale_row, text="Target (1–10)", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        target_s = _scale(scale_row, 1, 10, 10)
+        target_s.pack(side=tk.LEFT, padx=(6, 0))
+
+        checkin_row = tk.Frame(form, bg=BG_DARK)
+        checkin_row.pack(fill=tk.X, pady=(6, 0))
+        tk.Label(checkin_row, text="Where are you now? (1–10)", bg=BG_DARK,
+                 fg=FG_TEXT, font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        now_s = _scale(checkin_row, 1, 10, 1)
+        now_s.pack(side=tk.LEFT, padx=(6, 10))
+        tk.Button(checkin_row, text="✔ Log check-in", command=lambda: _log_checkin(),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        tk.Label(form, text="Progress over time (your check-ins)", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "bold")).pack(anchor="w",
+                                                                 pady=(8, 1))
+        graph_canvas = tk.Canvas(form, bg=BG_INPUT, height=120,
+                                 highlightthickness=0)
+        graph_canvas.pack(fill=tk.X)
+
+        def _draw_goal_graph():
+            c = graph_canvas
+            c.delete("all")
+            W = c.winfo_width() or 360
+            H = c.winfo_height() or 120
+            if W < 20:
+                W = 360
+            if H < 20:
+                H = 120
+            pad = 20
+            x0, y0, x1, y1 = pad, 10, W - pad, H - 16
+            b = int(baseline_s.get()); t = int(target_s.get())
+
+            def _yv(v):
+                v = max(1, min(10, v))
+                return y1 - (v - 1) / 9.0 * (y1 - y0)
+            c.create_line(x0, _yv(b), x1, _yv(b), fill="#64748b", dash=(4, 3))
+            c.create_text(x1, _yv(b), text=f"base {b}", fill="#94a3b8",
+                          anchor="se", font=("Segoe UI", 7))
+            c.create_line(x0, _yv(t), x1, _yv(t), fill=ACCENT_GREEN, dash=(4, 3))
+            c.create_text(x1, _yv(t), text=f"target {t}", fill=ACCENT_GREEN,
+                          anchor="ne", font=("Segoe UI", 7))
+            rows = []
+            if state["id"] is not None:
+                try:
+                    rows = self._db_query(
+                        "SELECT value FROM goal_checkins WHERE goal_id=? "
+                        "ORDER BY logged_at", (state["id"],))
+                except Exception:
+                    rows = []
+            if not rows:
+                c.create_text(W // 2, H // 2,
+                              text="No check-ins yet — log one to start the graph.",
+                              fill=FG_MUTED, font=("Segoe UI", 8, "italic"))
+                return
+            n = len(rows)
+            pts = []
+            for i, (v,) in enumerate(rows):
+                x = x0 if n == 1 else x0 + i / (n - 1) * (x1 - x0)
+                pts.append((x, _yv(v)))
+            if len(pts) >= 2:
+                c.create_line(*[k for p in pts for k in p],
+                              fill=ACCENT_CYAN, width=2)
+            for (x, y) in pts:
+                c.create_oval(x - 3, y - 3, x + 3, y + 3, fill=ACCENT_CYAN,
+                              outline="")
+        graph_canvas.bind("<Configure>", lambda _e: _draw_goal_graph())
+
+        def _log_checkin():
+            if state["id"] is None:        # need a saved goal to attach to
+                _save_goal()
+            if state["id"] is None:
+                return                      # no title — _save_goal warned
+            now_val = int(now_s.get())
+            b = int(baseline_s.get()); t = int(target_s.get())
+            try:
+                self._db_exec(
+                    "INSERT INTO goal_checkins (goal_id,value,logged_at) "
+                    "VALUES (?,?,?)",
+                    (state["id"], now_val, datetime.now().isoformat()))
+            except Exception as e:
+                messagebox.showerror("Could not log check-in", str(e))
+                return
+            if t > b:
+                pct = max(0, min(100, round(100 * (now_val - b) / (t - b))))
+            else:
+                pct = 100 if now_val >= t else 0
+            progress_s.set(pct)
+            _save_goal()                    # persist progress + baseline/target
+            _draw_goal_graph()
+            self.set_status(
+                f"✔ Check-in {now_val}/10 logged — {pct}% of the way "
+                f"(baseline {b} → target {t}).")
+
         def _ftext(label, h):
             _flabel(label)
             t = tk.Text(form, height=h, wrap=tk.WORD, bg=BG_INPUT, fg=FG_TEXT,
@@ -18566,23 +18678,26 @@ try {
             try:
                 r = self._db_query(
                     "SELECT title,life_area,why,obstacles,skills_needed,"
-                    "people_needed,action_plan,target_date,progress,status "
-                    "FROM goals WHERE id=?", (gid,))
+                    "people_needed,action_plan,target_date,progress,status,"
+                    "baseline,target_level FROM goals WHERE id=?", (gid,))
             except Exception:
                 r = []
             if not r:
                 return
             (gtitle, area, why, obst, skills, people, action, target,
-             prog, status) = r[0]
+             prog, status, baseline, target_level) = r[0]
             state["id"] = gid
             title_e.delete(0, tk.END); title_e.insert(0, gtitle or "")
             area_var.set(self._zz_area_label(area))
             target_e.delete(0, tk.END); target_e.insert(0, target or "")
             status_var.set(status or "active")
             progress_s.set(int(prog or 0))
+            baseline_s.set(int(baseline) if baseline else 1)
+            target_s.set(int(target_level) if target_level else 10)
             _set_text(why_t, why); _set_text(obstacles_t, obst)
             _set_text(skills_t, skills); _set_text(people_t, people)
             _set_text(action_t, action)
+            _draw_goal_graph()
 
         def _on_select(_e=None):
             sel = lb.curselection()
@@ -18597,8 +18712,10 @@ try {
             target_e.delete(0, tk.END)
             status_var.set("active")
             progress_s.set(0)
+            baseline_s.set(1); target_s.set(10); now_s.set(1)
             for t in (why_t, obstacles_t, skills_t, people_t, action_t):
                 t.delete("1.0", tk.END)
+            _draw_goal_graph()
             lb.selection_clear(0, tk.END)
             title_e.focus_set()
 
@@ -18619,20 +18736,24 @@ try {
                 target_e.get().strip(),
                 int(progress_s.get()),
                 status_var.get(),
+                int(baseline_s.get()),
+                int(target_s.get()),
             )
             try:
                 if state["id"] is None:
                     gid = self._db_exec(
                         "INSERT INTO goals (title,life_area,why,obstacles,"
                         "skills_needed,people_needed,action_plan,target_date,"
-                        "progress,status,created_at,updated_at) "
-                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", fields + (now, now))
+                        "progress,status,baseline,target_level,"
+                        "created_at,updated_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", fields + (now, now))
                     state["id"] = gid
                 else:
                     self._db_exec(
                         "UPDATE goals SET title=?,life_area=?,why=?,obstacles=?,"
                         "skills_needed=?,people_needed=?,action_plan=?,"
-                        "target_date=?,progress=?,status=?,updated_at=? "
+                        "target_date=?,progress=?,status=?,baseline=?,"
+                        "target_level=?,updated_at=? "
                         "WHERE id=?", fields + (now, state["id"]))
                 _refresh_list(select_id=state["id"])
                 self.set_status(f"Saved goal: {gtitle}")
