@@ -18446,11 +18446,11 @@ try {
             font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
             activebackground=ACCENT_MIC, relief=tk.FLAT, padx=10, pady=4,
             cursor="hand2", borderwidth=0)
-        self._goals_mic_btn.pack(side=tk.RIGHT, padx=4)
+        self._goals_mic_btn.pack(side=tk.LEFT, padx=(14, 4))
         tk.Button(head, text="🔊 Read", command=_goal_read,
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=4)
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
 
         # Calendar tie-in (pinned bottom).
         tk.Label(tie, text="📅 Add next step to calendar on:", bg=BG_PANEL,
