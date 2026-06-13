@@ -1997,7 +1997,10 @@ class BookReader:
     def _format_handoff_message(data: dict) -> str:
         """Render the spec's one-liner handoff format:
         'Last session: X. Next task: Y. Blocker: Z.'"""
-        last = (data.get("tasks_completed") or "").strip() or "(no notes)"
+        # Prefer the free-form session notes the user recorded; fall back to
+        # the Session-End wizard's "tasks completed" if notes are empty.
+        last = (data.get("session_notes") or data.get("tasks_completed")
+                or "").strip() or "(no notes)"
         nxt  = (data.get("next_session_primary_task") or "").strip() or "(none specified)"
         blk  = (data.get("blockers") or "").strip() or "no"
         return f"Last session: {last}\nNext task: {nxt}\nBlocker: {blk}"
@@ -9995,22 +9998,22 @@ class BookReader:
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
 
-        # ---- Last session summary -----
-        if state:
-            tk.Label(body, text="Last session", bg=BG_DARK, fg=FG_MUTED,
-                     font=("Segoe UI", 9, "bold")
-                     ).pack(anchor=tk.W, pady=(0, 4))
-            tk.Label(body, text=self._format_handoff_message(state),
-                     bg=BG_INPUT, fg=FG_TEXT, font=("Segoe UI", 10),
-                     padx=10, pady=8, wraplength=500,
-                     justify=tk.LEFT, anchor=tk.W
-                     ).pack(fill=tk.X, pady=(0, 14))
-        else:
-            tk.Label(body,
-                     text="No previous session on record — welcome to Sentinel Forge.",
-                     bg=BG_DARK, fg=FG_MUTED,
-                     font=("Segoe UI", 10, "italic")
-                     ).pack(anchor=tk.W, pady=(0, 14))
+        # ---- Last session summary — shows the notes you recorded, and
+        # refreshes live as you record more (see auto-save below). ----------
+        tk.Label(body, text="Last session", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(anchor=tk.W, pady=(0, 4))
+        summary_lbl = tk.Label(
+            body, text=self._format_handoff_message(state or {}),
+            bg=BG_INPUT, fg=FG_TEXT, font=("Segoe UI", 10),
+            padx=10, pady=8, wraplength=500, justify=tk.LEFT, anchor=tk.W)
+        summary_lbl.pack(fill=tk.X, pady=(0, 14))
+
+        def _refresh_summary():
+            try:
+                summary_lbl.configure(text=self._format_handoff_message(
+                    self._load_handoff_state() or {}))
+            except tk.TclError:
+                pass
 
         # 🎤 Voice dictation: clicking a field makes it the mic target
         # (FocusIn), and its 🎤 button focuses it and starts/stops listening —
@@ -10091,6 +10094,35 @@ class BookReader:
             clear_label="Clear", track_for_mic=False)
         if state and state.get("session_notes"):
             notes_text.insert("1.0", state["session_notes"])
+        try:
+            notes_text.edit_modified(False)   # don't let the prefill auto-fire
+        except tk.TclError:
+            pass
+
+        # Auto-save the session notes as you record them (debounced ~0.8s) and
+        # refresh the "Last session" box live — so what you record shows up
+        # there and is waiting for you at the next session start.
+        _notes_after = {"id": None}
+
+        def _save_session_notes():
+            _notes_after["id"] = None
+            cur = self._load_handoff_state() or {}
+            cur["session_notes"] = notes_text.get("1.0", tk.END).strip()
+            self._save_handoff_state(cur)
+            _refresh_summary()
+
+        def _notes_modified(_e=None):
+            try:
+                notes_text.edit_modified(False)
+            except tk.TclError:
+                pass
+            if _notes_after["id"] is not None:
+                try:
+                    self.root.after_cancel(_notes_after["id"])
+                except Exception:
+                    pass
+            _notes_after["id"] = self.root.after(800, _save_session_notes)
+        notes_text.bind("<<Modified>>", _notes_modified, add="+")
 
         # ---- Buttons -----
         btn_row = tk.Frame(body, bg=BG_DARK)
@@ -10103,6 +10135,7 @@ class BookReader:
             cur["session_primary_task"] = primary_task_var.get().strip()
             cur["session_notes"] = notes_text.get("1.0", tk.END).strip()
             self._save_handoff_state(cur)
+            _refresh_summary()
             task = primary_task_var.get().strip() or "(none)"
             self.set_status(f"🎯 Session started — primary task: {task}")
             if dismiss is not None:
