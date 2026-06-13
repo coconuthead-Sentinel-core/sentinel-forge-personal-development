@@ -18403,7 +18403,7 @@ try {
 
         scale_row = tk.Frame(form, bg=BG_DARK)
         scale_row.pack(fill=tk.X, pady=(8, 0))
-        tk.Label(scale_row, text="Baseline (1-10)", bg=BG_DARK, fg=FG_TEXT,
+        tk.Label(scale_row, text="Normal Baseline", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT)
         baseline_s = _scale(scale_row, 1, 10, 1)
         baseline_s.pack(side=tk.LEFT, padx=(6, 16))
