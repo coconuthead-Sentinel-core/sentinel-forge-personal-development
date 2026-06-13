@@ -493,14 +493,9 @@ class BookReader:
             relief=tk.FLAT, padx=10, pady=4,
             cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=2)
-        tk.Button(
-            session_bar, text="▶ Start",
-            command=self.open_session_start_wizard,
-            bg=ACCENT_GREEN, fg="white",
-            font=("Segoe UI", 9, "bold"),
-            relief=tk.FLAT, padx=10, pady=4,
-            cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=2)
+        # ▶ Start button removed — the Session Start panel is now embedded at
+        # the bottom of the dashboard (built at the end of __init__), so it's
+        # always visible and needs no launcher button.
 
         # ---- Compelling Scoreboard (daily lead measures) ---------------
         # A glance-in-5-seconds strip of today's 2-3 lead measures: click a
@@ -607,34 +602,13 @@ class BookReader:
         self.available_voices.append("Microsoft System")
         self.voice_var = tk.StringVar(value=self.available_voices[0])
 
-        # --- Settings line: font face, text size, and mic accuracy on their
-        # own uncrowded row directly under the action buttons. Kept off the
-        # button row so that row stays a clean, uniform line. ----------------
-        row1b = tk.Frame(topbar, bg=BG_PANEL); row1b.pack(fill=tk.X, pady=(6, 0))
-
-        tk.Label(row1b, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(2, 4))
+        # --- Reading controls (font face, text size, mic accuracy, highlight,
+        # color, voice) now live ON the 📖 Reader tab itself — see
+        # _build_reader_controls() — so they sit right where the reading
+        # happens instead of on this launcher dashboard. Only the shared state
+        # vars/data are defined here so every menu + method stays valid. ------
         self.font_var = tk.StringVar(value=self.font_family)
-        font_menu = tk.OptionMenu(
-            row1b, self.font_var, *self.available_fonts,
-            command=self._on_font_change,
-        )
-        _style_optionmenu(font_menu)
-        font_menu.configure(width=14, font=("Segoe UI", 9))
-        font_menu.pack(side=tk.LEFT, padx=(0, 6))
-        btn(row1b, "A−", self.smaller_text, ACCENT_SLATE)
-        btn(row1b, "A+", self.bigger_text, ACCENT_SLATE)
 
-        tk.Label(row1b, text="Mic accuracy:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        _mq = tk.OptionMenu(row1b, self._whisper_quality_var,
-                            "Fast", "Accurate", "Best",
-                            command=self._set_mic_quality)
-        _style_optionmenu(_mq)
-        _mq.configure(width=10, font=("Segoe UI", 9))
-        _mq.pack(side=tk.LEFT)
-
-        # ---- Highlight controls (color + unit) -------------------------
         # Three reading-friendly highlight colors. Indigo is muted so the
         # text underneath stays readable on the dark theme.
         self.HIGHLIGHT_COLORS = {
@@ -643,50 +617,8 @@ class BookReader:
             "Indigo": "#a5b4fc",
         }
         self.HIGHLIGHT_UNITS = ["Word", "Sentence", "Paragraph"]
-
-        controls_row = tk.Frame(dash, bg=BG_PANEL, padx=12, pady=8)
-        controls_row.pack(fill=tk.X)
-
-        # 🖍 Highlight selection — moved to the far left of this row.
-        tk.Button(
-            controls_row, text="🖍  Highlight selection",
-            command=lambda: self.highlight_selection(),
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
-            relief=tk.FLAT, padx=12, pady=6, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.LEFT, padx=(0, 18))
-
-        tk.Label(controls_row, text="Highlight by:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.highlight_unit_var = tk.StringVar(value="Sentence")
-        unit_menu = tk.OptionMenu(
-            controls_row, self.highlight_unit_var, *self.HIGHLIGHT_UNITS,
-        )
-        _style_optionmenu(unit_menu)
-        unit_menu.configure(width=11)
-        unit_menu.pack(side=tk.LEFT, padx=(0, 18))
-
-        tk.Label(controls_row, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.highlight_color_var = tk.StringVar(value="Yellow")
-        color_menu = tk.OptionMenu(
-            controls_row, self.highlight_color_var, *list(self.HIGHLIGHT_COLORS.keys()),
-            command=self._on_highlight_color_change,
-        )
-        _style_optionmenu(color_menu)
-        color_menu.configure(width=8)
-        color_menu.pack(side=tk.LEFT)
-
-        # Voice picker — on the highlight controls row, next to Color.
-        tk.Label(controls_row, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        voice_menu = tk.OptionMenu(
-            controls_row, self.voice_var, *self.available_voices,
-            command=self._on_voice_change,
-        )
-        _style_optionmenu(voice_menu)
-        voice_menu.configure(width=16)
-        voice_menu.pack(side=tk.LEFT)
 
         # ---- Reading timer REMOVED from the UI at the user's request -----
         # The preset map, variables, and methods are kept (dormant and
@@ -890,6 +822,17 @@ class BookReader:
                 self._study_win.withdraw()
         except Exception as e:
             print(f"[init] study window build: {e}", file=sys.stderr)
+
+        # ---- Session Start panel, embedded at the BOTTOM of the dashboard.
+        # Replaces the old ▶ Start popup — it's always visible here now. Built
+        # last so the DB, handoff state, and panel helpers are all ready. -----
+        try:
+            ss_inline = tk.Frame(dash, bg=BG_DARK,
+                                 highlightbackground=BG_PANEL, highlightthickness=1)
+            ss_inline.pack(fill=tk.X, pady=(10, 0))
+            self._build_session_start_panel(ss_inline)
+        except Exception as e:
+            print(f"[init] session-start inline panel: {e}", file=sys.stderr)
 
     # ---- Helpers --------------------------------------------------------
     def set_status(self, msg: str) -> None:
@@ -1919,18 +1862,11 @@ class BookReader:
         return f"Last session: {last}\nNext task: {nxt}\nBlocker: {blk}"
 
     def _maybe_auto_start_wizard(self) -> None:
-        """Auto-launch the Session Start wizard on the first launch of
-        the day. Determines "first launch" by comparing the handoff's
-        recorded session_start_date to today."""
-        state = self._load_handoff_state()
-        if state:
-            start_date = state.get("session_start_date") or (state.get("date") or "")
-            if start_date == date.today().isoformat():
-                return  # already started today
-        try:
-            self.open_session_start_wizard()
-        except tk.TclError:
-            pass
+        """No-op now. The Session Start panel is embedded at the bottom of the
+        dashboard (always visible), so there's no first-launch popup to fire.
+        Kept (still called from main via root.after) so the launch sequence is
+        unchanged; the old modal-popup behavior is intentionally gone."""
+        return
 
     def _maybe_evening_planning_nudge(self) -> None:
         """Ziglar's night-before rule: 'every minute spent planning saves ten
@@ -9796,10 +9732,10 @@ class BookReader:
 
     # ---- Session Start wizard ------------------------------------------
     def open_session_start_wizard(self) -> None:
-        """One-screen modal: shows last session's handoff message,
-        prefills the primary-task field from last session's "next task",
-        captures current energy. On Begin, applies the energy to the
-        topbar slider and records the session start in HANDOFF_STATE."""
+        """Popup form of the Session Start panel. The panel is normally
+        embedded at the bottom of the dashboard (see _build_session_start_panel,
+        built once in __init__); this modal popup is kept for completeness and
+        manual reopen. Single-instance."""
         if self._session_start_win is not None:
             try:
                 if self._session_start_win.winfo_exists():
@@ -9810,7 +9746,6 @@ class BookReader:
                 pass
             self._session_start_win = None
 
-        state = self._load_handoff_state()
         win = tk.Toplevel(self.root)
         self._session_start_win = win
         win.title("🎯  Session Start")
@@ -9832,7 +9767,31 @@ class BookReader:
         except tk.TclError:
             pass
 
-        header = tk.Frame(win, bg=BG_PANEL, padx=14, pady=12)
+        def _close():
+            self._session_start_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+        self._build_session_start_panel(win, dismiss=_close)
+
+    def _build_session_start_panel(self, parent, dismiss=None) -> None:
+        """Build the tabbed Session Start UI (Start / Wheel of Life / Goals)
+        into `parent`. Shows last session's handoff message, prefills the
+        primary-task field from last session's "next task", and on Begin
+        records the session start in HANDOFF_STATE.
+
+        `dismiss` distinguishes the two homes for this panel:
+        - popup mode (dismiss=a close callback): adds a "Skip for now" button
+          and closes the window on Begin.
+        - inline mode (dismiss=None): the panel is embedded at the bottom of
+          the dashboard and is always visible — no Skip, and Begin just saves
+          (the panel stays put)."""
+        inline = dismiss is None
+        state = self._load_handoff_state()
+
+        header = tk.Frame(parent, bg=BG_PANEL, padx=14, pady=12)
         header.pack(fill=tk.X)
         tk.Label(header, text="🎯  Session Start", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT)
@@ -9840,11 +9799,11 @@ class BookReader:
                  bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
                  ).pack(side=tk.RIGHT)
 
-        # ---- Tabs: Start / Wheel of Life / Goals. The Ziglar Performance
-        # Planner now lives here, each piece in its own panel. ------------
-        tabbar = tk.Frame(win, bg=BG_PANEL, padx=10)
+        # ---- Tabs: Start / Wheel of Life / Goals (the Ziglar Performance
+        # Planner pieces), each in its own panel. ------------------------
+        tabbar = tk.Frame(parent, bg=BG_PANEL, padx=10)
         tabbar.pack(fill=tk.X, pady=(0, 8))
-        content = tk.Frame(win, bg=BG_DARK)
+        content = tk.Frame(parent, bg=BG_DARK)
         content.pack(fill=tk.BOTH, expand=True)
         ss_frames: dict = {}
         ss_buttons: dict = {}
@@ -9891,10 +9850,30 @@ class BookReader:
                      font=("Segoe UI", 10, "italic")
                      ).pack(anchor=tk.W, pady=(0, 14))
 
+        # 🎤 Voice dictation: clicking a field makes it the mic target
+        # (FocusIn), and its 🎤 button focuses it and starts/stops listening —
+        # same pattern as Study Notes.
+        def _ss_mic(widget):
+            if self.is_listening:
+                self.toggle_mic()
+                return
+            try:
+                widget.focus_set()
+            except tk.TclError:
+                pass
+            self._set_mic_target(widget)
+            self.toggle_mic()
+
         # ---- Primary task -----
-        tk.Label(body, text="One primary task for this session",
+        pt_head = tk.Frame(body, bg=BG_DARK)
+        pt_head.pack(fill=tk.X)
+        tk.Label(pt_head, text="One primary task for this session",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
-                 ).pack(anchor=tk.W)
+                 ).pack(side=tk.LEFT)
+        tk.Button(pt_head, text="🎤", command=lambda: _ss_mic(task_entry),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
         tk.Label(body,
                  text="(The Sentinel spec is strict — pick ONE focus.)",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic")
@@ -9908,11 +9887,19 @@ class BookReader:
             font=("Segoe UI", 11), relief=tk.FLAT, bd=0,
         )
         task_entry.pack(fill=tk.X, ipady=6, pady=(4, 14))
+        task_entry.bind("<FocusIn>",
+                        lambda _e: self._set_mic_target(task_entry), add="+")
 
         # ---- Session notes -----
-        tk.Label(body, text="Session notes",
+        sn_head = tk.Frame(body, bg=BG_DARK)
+        sn_head.pack(fill=tk.X)
+        tk.Label(sn_head, text="Session notes",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
-                 ).pack(anchor=tk.W)
+                 ).pack(side=tk.LEFT)
+        tk.Button(sn_head, text="🎤", command=lambda: _ss_mic(notes_text),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
+                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
         tk.Label(body,
                  text="(Anything you want to remember for this session — "
                       "saved with your handoff.)",
@@ -9924,19 +9911,14 @@ class BookReader:
             font=("Segoe UI", 10), relief=tk.FLAT, bd=0, wrap=tk.WORD,
         )
         notes_text.pack(fill=tk.BOTH, expand=True, pady=(4, 14))
+        notes_text.bind("<FocusIn>",
+                        lambda _e: self._set_mic_target(notes_text), add="+")
         if state and state.get("session_notes"):
             notes_text.insert("1.0", state["session_notes"])
 
         # ---- Buttons -----
         btn_row = tk.Frame(body, bg=BG_DARK)
         btn_row.pack(fill=tk.X, pady=(12, 0))
-
-        def _close():
-            self._session_start_win = None
-            try:
-                win.destroy()
-            except tk.TclError:
-                pass
 
         def _begin():
             cur = self._load_handoff_state() or {}
@@ -9947,7 +9929,8 @@ class BookReader:
             self._save_handoff_state(cur)
             task = primary_task_var.get().strip() or "(none)"
             self.set_status(f"🎯 Session started — primary task: {task}")
-            _close()
+            if dismiss is not None:
+                dismiss()
 
         tk.Button(btn_row, text="Begin Session  ▶", command=_begin,
                   bg=ACCENT_GREEN, fg="white",
@@ -9955,12 +9938,13 @@ class BookReader:
                   relief=tk.FLAT, padx=18, pady=8,
                   cursor="hand2", borderwidth=0
                   ).pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(btn_row, text="Skip for now", command=_close,
-                  bg=ACCENT_SLATE, fg="white",
-                  font=("Segoe UI", 10),
-                  relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT)
+        if dismiss is not None:
+            tk.Button(btn_row, text="Skip for now", command=dismiss,
+                      bg=ACCENT_SLATE, fg="white",
+                      font=("Segoe UI", 10),
+                      relief=tk.FLAT, padx=12, pady=6,
+                      cursor="hand2", borderwidth=0
+                      ).pack(side=tk.LEFT)
 
         # Build the two Ziglar panels, then reveal the Start panel first.
         self._build_wheel_panel(ss_frames["wheel"],
@@ -9968,8 +9952,8 @@ class BookReader:
         self._build_goals_panel(ss_frames["goals"])
         _show_ss("start")
 
-        win.protocol("WM_DELETE_WINDOW", _close)
-        task_entry.focus_set()
+        if not inline:
+            task_entry.focus_set()
 
     # ---- Session End wizard --------------------------------------------
     def open_session_end_wizard(self) -> None:
@@ -16284,12 +16268,96 @@ try {
     # working notes); Study Notes is for collected excerpts, summaries,
     # and dictation done from the Study workspace itself. Highlights can
     # be sent here directly via the right-click menu in the Highlights tab.
+    def _build_reader_controls(self, parent: tk.Frame) -> None:
+        """The reading toolbar for the 📖 Reader tab — moved here from the main
+        dashboard so font, size, mic accuracy, highlight, color, voice, and
+        Read-aloud all sit right where the reading happens. Every control is
+        bound to the same shared state vars/methods used app-wide, so changing
+        one here is identical to the old dashboard control."""
+        bar = tk.Frame(parent, bg=BG_PANEL, padx=10, pady=6)
+        bar.pack(side=tk.TOP, fill=tk.X)
+
+        # ---- Row A: Read / Stop · font · size · mic accuracy ----
+        row_a = tk.Frame(bar, bg=BG_PANEL)
+        row_a.pack(fill=tk.X)
+        tk.Button(row_a, text="🔊  Read aloud", command=self.read_aloud,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(row_a, text="■  Stop", command=self.stop_reading,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
+
+        tk.Label(row_a, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        font_menu = tk.OptionMenu(row_a, self.font_var, *self.available_fonts,
+                                  command=self._on_font_change)
+        _style_optionmenu(font_menu)
+        font_menu.configure(width=14, font=("Segoe UI", 9))
+        font_menu.pack(side=tk.LEFT, padx=(0, 6))
+        tk.Button(row_a, text="A−", command=self.smaller_text, bg=ACCENT_SLATE,
+                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
+                  padx=10, pady=4, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.LEFT, padx=2)
+        tk.Button(row_a, text="A+", command=self.bigger_text, bg=ACCENT_SLATE,
+                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
+                  padx=10, pady=4, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.LEFT, padx=2)
+        tk.Label(row_a, text="Mic accuracy:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(18, 4))
+        # The state block resets this to None after the early StringVar, and
+        # this tab builds at the end of __init__ — so guard like the Planner does.
+        if self._whisper_quality_var is None:
+            self._whisper_quality_var = tk.StringVar(value="Accurate")
+        mic_menu = tk.OptionMenu(row_a, self._whisper_quality_var,
+                                 "Fast", "Accurate", "Best",
+                                 command=self._set_mic_quality)
+        _style_optionmenu(mic_menu)
+        mic_menu.configure(width=10, font=("Segoe UI", 9))
+        mic_menu.pack(side=tk.LEFT)
+
+        # ---- Row B: highlight selection · highlight unit · color · voice ----
+        row_b = tk.Frame(bar, bg=BG_PANEL)
+        row_b.pack(fill=tk.X, pady=(6, 0))
+        tk.Button(row_b, text="🖍  Highlight selection",
+                  command=lambda: self.highlight_selection(),
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_AMBER, fg="white",
+                  activebackground=ACCENT_AMBER, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
+        tk.Label(row_b, text="Highlight by:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        unit_menu = tk.OptionMenu(row_b, self.highlight_unit_var,
+                                  *self.HIGHLIGHT_UNITS)
+        _style_optionmenu(unit_menu)
+        unit_menu.configure(width=11)
+        unit_menu.pack(side=tk.LEFT, padx=(0, 18))
+        tk.Label(row_b, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        color_menu = tk.OptionMenu(
+            row_b, self.highlight_color_var, *list(self.HIGHLIGHT_COLORS.keys()),
+            command=self._on_highlight_color_change)
+        _style_optionmenu(color_menu)
+        color_menu.configure(width=8)
+        color_menu.pack(side=tk.LEFT)
+        tk.Label(row_b, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(18, 4))
+        voice_menu = tk.OptionMenu(row_b, self.voice_var, *self.available_voices,
+                                   command=self._on_voice_change)
+        _style_optionmenu(voice_menu)
+        voice_menu.configure(width=16)
+        voice_menu.pack(side=tk.LEFT)
+
     def _build_tab_reader(self, parent: tk.Frame) -> None:
         """📖 Reader — the book itself: full text on the left, a chapter
         navigator and a quick Notes panel on the right. Moved here from the
         main dashboard so all reading happens inside the Study workspace.
         Built once (the Study window is persistent), so every reader-widget
         reference elsewhere in the app stays valid."""
+        # Reading controls (font, size, mic accuracy, highlight, color, voice,
+        # Read-aloud) sit at the top of this tab — right where you read.
+        self._build_reader_controls(parent)
+
         body = tk.PanedWindow(
             parent, orient=tk.HORIZONTAL, sashwidth=6,
             bg=BG_DARK, bd=0, sashrelief=tk.FLAT, height=580,
