@@ -18390,17 +18390,9 @@ try {
         status_menu.configure(width=8, font=("Segoe UI", 10, "bold"))
         status_menu.pack(side=tk.LEFT, padx=(6, 0))
 
-        prow = tk.Frame(form, bg=BG_DARK)
-        prow.pack(fill=tk.X, pady=(6, 0))
-        tk.Label(prow, text="Progress", bg=BG_DARK, fg=FG_TEXT, width=12,
-                 anchor="w", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
-        progress_s = tk.Scale(prow, from_=0, to=100, orient=tk.HORIZONTAL,
-                              bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
-                              highlightthickness=0, length=240, resolution=5,
-                              font=("Segoe UI", 9), activebackground=ACCENT_GREEN)
-        progress_s.pack(side=tk.LEFT, padx=(8, 0), fill=tk.X, expand=True)
-
         # ---- Baseline → Target scale (1-10) + check-ins + trend graph ------
+        # Order top→bottom: Baseline/Target, then "where are you now" check-in,
+        # then the computed Progress, then the graph.
         def _scale(parent, lo, hi, init):
             s = tk.Scale(parent, from_=lo, to=hi, orient=tk.HORIZONTAL,
                          bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
@@ -18411,25 +18403,36 @@ try {
 
         scale_row = tk.Frame(form, bg=BG_DARK)
         scale_row.pack(fill=tk.X, pady=(8, 0))
-        tk.Label(scale_row, text="Baseline (1–10)", bg=BG_DARK, fg=FG_TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(scale_row, text="Baseline (1-10)", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT)
         baseline_s = _scale(scale_row, 1, 10, 1)
         baseline_s.pack(side=tk.LEFT, padx=(6, 16))
-        tk.Label(scale_row, text="Target (1–10)", bg=BG_DARK, fg=FG_TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(scale_row, text="Target (1-10)", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT)
         target_s = _scale(scale_row, 1, 10, 10)
         target_s.pack(side=tk.LEFT, padx=(6, 0))
 
         checkin_row = tk.Frame(form, bg=BG_DARK)
         checkin_row.pack(fill=tk.X, pady=(6, 0))
-        tk.Label(checkin_row, text="Where are you now? (1–10)", bg=BG_DARK,
-                 fg=FG_TEXT, font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(checkin_row, text="Where are you now? (1-10)", bg=BG_DARK,
+                 fg=FG_TEXT, font=("Segoe UI", 10)).pack(side=tk.LEFT)
         now_s = _scale(checkin_row, 1, 10, 1)
         now_s.pack(side=tk.LEFT, padx=(6, 10))
         tk.Button(checkin_row, text="✔ Log check-in", command=lambda: _log_checkin(),
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=3,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+
+        # Progress — computed from your check-ins; sits below the check-in row.
+        prow = tk.Frame(form, bg=BG_DARK)
+        prow.pack(fill=tk.X, pady=(8, 0))
+        tk.Label(prow, text="Progress", bg=BG_DARK, fg=FG_TEXT, width=12,
+                 anchor="w", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        progress_s = tk.Scale(prow, from_=0, to=100, orient=tk.HORIZONTAL,
+                              bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
+                              highlightthickness=0, length=240, resolution=5,
+                              font=("Segoe UI", 9), activebackground=ACCENT_GREEN)
+        progress_s.pack(side=tk.LEFT, padx=(8, 0), fill=tk.X, expand=True)
 
         tk.Label(form, text="Progress over time (your check-ins)", bg=BG_DARK,
                  fg=FG_MUTED, font=("Segoe UI", 9, "bold")).pack(anchor="w",
