@@ -324,6 +324,80 @@ def _phonetic_key(word: str) -> str:
     return w[0] + "".join(c for c in w[1:] if c not in "aeiou")
 
 
+# Offline "picture dictionary" — common, concrete words mapped to a built-in
+# emoji symbol (rendered by the OS font, so it needs no image files and works
+# fully offline). Like a real picture dictionary, only depictable words get a
+# picture: "dog" -> 🐶 but "do" -> nothing; "cheese" -> 🧀 but "ch" -> nothing.
+PICTURE_DICT = {
+    # animals
+    "cat": "🐱", "kitten": "🐱", "dog": "🐶", "puppy": "🐶", "bird": "🐦",
+    "fish": "🐟", "horse": "🐴", "cow": "🐮", "pig": "🐷", "sheep": "🐑",
+    "goat": "🐐", "chicken": "🐔", "duck": "🦆", "rabbit": "🐰", "bunny": "🐰",
+    "mouse": "🐭", "rat": "🐀", "bear": "🐻", "lion": "🦁", "tiger": "🐯",
+    "elephant": "🐘", "monkey": "🐵", "frog": "🐸", "snake": "🐍", "turtle": "🐢",
+    "fox": "🦊", "wolf": "🐺", "deer": "🦌", "owl": "🦉", "bee": "🐝",
+    "butterfly": "🦋", "spider": "🕷️", "ant": "🐜", "snail": "🐌", "whale": "🐳",
+    "dolphin": "🐬", "shark": "🦈", "octopus": "🐙", "crab": "🦀", "penguin": "🐧",
+    "dragon": "🐉", "dinosaur": "🦕", "unicorn": "🦄",
+    # food & drink
+    "apple": "🍎", "banana": "🍌", "orange": "🍊", "grapes": "🍇",
+    "strawberry": "🍓", "lemon": "🍋", "cherry": "🍒", "peach": "🍑", "pear": "🍐",
+    "watermelon": "🍉", "pineapple": "🍍", "tomato": "🍅", "carrot": "🥕",
+    "corn": "🌽", "potato": "🥔", "broccoli": "🥦", "mushroom": "🍄",
+    "bread": "🍞", "cheese": "🧀", "egg": "🥚", "bacon": "🥓", "burger": "🍔",
+    "hamburger": "🍔", "fries": "🍟", "pizza": "🍕", "hotdog": "🌭", "taco": "🌮",
+    "sandwich": "🥪", "popcorn": "🍿", "cookie": "🍪", "cake": "🍰", "pie": "🥧",
+    "donut": "🍩", "doughnut": "🍩", "icecream": "🍦", "candy": "🍬",
+    "chocolate": "🍫", "honey": "🍯", "milk": "🥛", "coffee": "☕", "tea": "🍵",
+    "juice": "🧃", "water": "💧", "soda": "🥤", "wine": "🍷",
+    # nature & weather
+    "sun": "☀️", "moon": "🌙", "star": "⭐", "cloud": "☁️", "rain": "🌧️",
+    "snow": "❄️", "snowflake": "❄️", "snowman": "⛄", "lightning": "⚡",
+    "rainbow": "🌈", "fire": "🔥", "tree": "🌳", "flower": "🌸", "rose": "🌹",
+    "leaf": "🍁", "cactus": "🌵", "mountain": "⛰️", "ocean": "🌊", "wave": "🌊",
+    "earth": "🌍", "world": "🌍", "volcano": "🌋",
+    # household & objects
+    "house": "🏠", "home": "🏠", "door": "🚪", "window": "🪟", "bed": "🛏️",
+    "chair": "🪑", "couch": "🛋️", "lamp": "💡", "light": "💡", "key": "🔑",
+    "lock": "🔒", "clock": "🕐", "phone": "📱", "computer": "💻", "laptop": "💻",
+    "keyboard": "⌨️", "tv": "📺", "television": "📺", "camera": "📷", "book": "📚",
+    "books": "📚", "pencil": "✏️", "pen": "🖊️", "scissors": "✂️", "paper": "📄",
+    "money": "💵", "dollar": "💵", "coin": "🪙", "gift": "🎁", "present": "🎁",
+    "balloon": "🎈", "umbrella": "☂️", "glasses": "👓", "hat": "🎩", "crown": "👑",
+    "ring": "💍", "bell": "🔔", "hammer": "🔨", "knife": "🔪", "spoon": "🥄",
+    "fork": "🍴", "cup": "🥤", "candle": "🕯️", "soap": "🧼", "toothbrush": "🪥",
+    "broom": "🧹", "basket": "🧺", "box": "📦", "battery": "🔋", "clock2": "⏰",
+    # vehicles & travel
+    "car": "🚗", "truck": "🚚", "bus": "🚌", "taxi": "🚕", "train": "🚆",
+    "plane": "✈️", "airplane": "✈️", "boat": "⛵", "ship": "🚢", "bike": "🚲",
+    "bicycle": "🚲", "motorcycle": "🏍️", "rocket": "🚀", "helicopter": "🚁",
+    "tractor": "🚜", "anchor": "⚓", "map": "🗺️",
+    # people, body, family
+    "baby": "👶", "boy": "👦", "girl": "👧", "man": "👨", "woman": "👩",
+    "family": "👪", "eye": "👁️", "ear": "👂", "nose": "👃", "mouth": "👄",
+    "tooth": "🦷", "hand": "✋", "foot": "🦶", "brain": "🧠", "heart": "❤️",
+    "bone": "🦴",
+    # clothing
+    "shirt": "👕", "tshirt": "👕", "pants": "👖", "dress": "👗", "shoe": "👟",
+    "shoes": "👟", "boot": "🥾", "sock": "🧦", "socks": "🧦", "gloves": "🧤",
+    "scarf": "🧣", "coat": "🧥",
+    # places & buildings
+    "school": "🏫", "church": "⛪", "hospital": "🏥", "bank": "🏦", "store": "🏪",
+    "castle": "🏰", "tent": "⛺", "bridge": "🌉", "factory": "🏭",
+    # sports, play & music
+    "ball": "⚽", "soccer": "⚽", "football": "🏈", "basketball": "🏀",
+    "baseball": "⚾", "tennis": "🎾", "golf": "⛳", "bowling": "🎳",
+    "trophy": "🏆", "medal": "🏅", "dice": "🎲", "kite": "🪁", "drum": "🥁",
+    "guitar": "🎸", "piano": "🎹", "trumpet": "🎺", "violin": "🎻", "music": "🎵",
+    "microphone": "🎤", "headphones": "🎧",
+    # misc
+    "ghost": "👻", "alien": "👽", "robot": "🤖", "skull": "💀", "clown": "🤡",
+    "angel": "👼", "sword": "⚔️", "shield": "🛡️", "bomb": "💣", "gem": "💎",
+    "diamond": "💎", "telescope": "🔭", "magnet": "🧲", "syringe": "💉",
+    "pill": "💊", "toilet": "🚽", "shower": "🚿", "bathtub": "🛁",
+}
+
+
 class BookReader:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -12759,6 +12833,12 @@ try {
         except Exception:
             pass
 
+    def _word_picture(self, word: str):
+        """Return the picture-dictionary emoji for a word, or None. Only
+        depictable common words have one (that's how a picture dictionary
+        works)."""
+        return PICTURE_DICT.get(re.sub(r"[^a-z]", "", (word or "").lower()))
+
     def open_voice_memory(self) -> None:
         """🗣 Voice Memory editor — the personal dictation correction
         dictionary. Add 'when it hears X, write Y' fixes (auto-applied to ALL
@@ -12921,8 +13001,9 @@ try {
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
 
-        # ---- Spelling Helper: type how a word SOUNDS, get correct spellings
-        # you can hear and click into the "Write instead" box above. ---------
+        # ---- Spelling Helper + picture dictionary: type how a word SOUNDS,
+        # get correct spellings (with a picture for common words) you can hear
+        # and click into the "Write instead" box above. ---------------------
         spellf = tk.Frame(win, bg=BG_DARK, padx=14)
         spellf.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 2))
         sh_head = tk.Frame(spellf, bg=BG_DARK)
@@ -12934,6 +13015,24 @@ try {
                          insertbackground=FG_TEXT, relief=tk.FLAT,
                          font=("Segoe UI", 11))
         sh_in.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 6), ipady=3)
+        say_letters = tk.BooleanVar(value=False)
+
+        # Picture-dictionary display — a big symbol + the word for depictable
+        # common words (🐶 dog, 🧀 cheese), updated live as you type.
+        picf = tk.Frame(spellf, bg=BG_DARK)
+        picf.pack(fill=tk.X)
+        pic_lbl = tk.Label(picf, text="", bg=BG_DARK, fg=FG_TEXT,
+                           font=("Segoe UI Emoji", 40))
+        pic_lbl.pack(side=tk.LEFT, padx=(0, 10))
+        picword = tk.Label(picf, text="", bg=BG_DARK, fg=ACCENT_CYAN,
+                           font=("Segoe UI", 14, "bold"))
+        picword.pack(side=tk.LEFT)
+
+        def _show_picture(word):
+            pic = self._word_picture(word)
+            pic_lbl.configure(text=pic or "")
+            picword.configure(text=(word if pic else ""))
+
         sugg_wrap = tk.Frame(spellf, bg=BG_DARK)
         sugg_wrap.pack(fill=tk.X, pady=(4, 2))
 
@@ -12959,10 +13058,12 @@ try {
                 return
             self.set_status(f"✏️ {len(sugg)} suggestion(s) — click to use, 🔊 to hear.")
             for word in sugg:
+                pic = self._word_picture(word)
                 chip = tk.Frame(sugg_wrap, bg=BG_PANEL)
                 chip.pack(side=tk.LEFT, padx=(0, 6), pady=2)
-                tk.Button(chip, text=word,
-                          command=lambda w=word: (meant_var.set(w), me.focus_set()),
+                tk.Button(chip, text=(f"{pic} {word}" if pic else word),
+                          command=lambda w=word: (meant_var.set(w),
+                                                  _show_picture(w), me.focus_set()),
                           font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_TEXT,
                           activebackground=ACCENT_SLATE, activeforeground="white",
                           relief=tk.FLAT, padx=6, pady=2, cursor="hand2",
@@ -12972,10 +13073,26 @@ try {
                           activebackground=BG_PANEL, relief=tk.FLAT, padx=3, pady=2,
                           cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
 
+        def _on_key(ev=None):
+            _show_picture(sound_var.get().strip())
+            if (say_letters.get() and ev is not None
+                    and getattr(ev, "char", "") and ev.char.isalpha()):
+                self._speak_word(ev.char)
+
         tk.Button(sh_head, text="🔎 Find", command=_find_spellings,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
                   activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=8, pady=2,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(sh_head, text="🔊 Hear",
+                  command=lambda: self._speak_word(sound_var.get()),
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=2,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(6, 0))
+        tk.Checkbutton(sh_head, text="say letters", variable=say_letters,
+                       bg=BG_DARK, fg=FG_MUTED, selectcolor=BG_INPUT,
+                       activebackground=BG_DARK, activeforeground=FG_TEXT,
+                       font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(8, 0))
+        sh_in.bind("<KeyRelease>", _on_key)
         sh_in.bind("<Return>", lambda _e: (_find_spellings(), "break")[1])
 
         _refresh()
