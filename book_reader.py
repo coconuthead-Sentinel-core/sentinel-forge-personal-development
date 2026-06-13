@@ -10144,9 +10144,21 @@ class BookReader:
             self._save_handoff_state(cur)
             _refresh_summary()
             task = primary_task_var.get().strip() or "(none)"
-            self.set_status(f"🎯 Session started — primary task: {task}")
+            self.set_status(
+                f"🎯 Session started — {task}. Set your focus timer in Do Now.")
             if dismiss is not None:
                 dismiss()
+            # Open the Study workspace on the 🎯 Matrix tab and land in the
+            # Do Now quadrant, where the focus timer lives — set the timer
+            # there for this session (a gentle flash fires when it ends).
+            try:
+                self.open_study_workspace()
+                self._show_study_tab("matrix")
+                w = (getattr(self, "_eisenhower_widgets", {}) or {}).get("do")
+                if w is not None:
+                    w.focus_set()
+            except Exception:
+                pass
 
         tk.Button(btn_row, text="Begin Session  ▶", command=_begin,
                   bg=ACCENT_GREEN, fg="white",
@@ -20477,21 +20489,87 @@ try {
         if announce:
             self.set_status("⏱ Timer stopped.")
 
+    def _session_end_flash(self, headline: str = "⏳ TIME TO STOP",
+                           sub: str = "Your focus session is complete.") -> None:
+        """A GENTLE end-of-session alert (in-app — the app is running when the
+        focus timer ends, so no Windows scheduled task is needed). Unlike the
+        loud appointment siren, this is calm by design: a slow-pulsing
+        OpenDyslexic banner in low-glare deep-teal + one pleasant chime. Loud/
+        clear enough not to miss, but easy on the eyes. Click/any key dismisses;
+        it also auto-closes after a minute."""
+        try:
+            import winsound
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)   # one soft chime
+        except Exception:
+            pass
+        try:
+            win = tk.Toplevel(self.root)
+        except Exception:
+            return
+        win.title("Session")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(660, max(420, sw - 80)); h = min(300, max(220, sh - 160))
+        win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//3)}")
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        CALM_A, CALM_B, INK = "#21465A", "#2C5A72", "#EAF4F7"  # low-glare teal
+        win.configure(bg=CALM_A, cursor="hand2")
+        try:
+            fam = ("OpenDyslexic" if "OpenDyslexic" in tkfont.families(win)
+                   else "Verdana")
+        except Exception:
+            fam = "Verdana"
+        wrap = tk.Frame(win, bg=CALM_A)
+        wrap.place(relx=0.5, rely=0.5, anchor="center")
+        tk.Label(wrap, text=headline, bg=CALM_A, fg=INK,
+                 font=(fam, max(26, int(h * 0.16)), "bold")).pack(pady=(0, 8))
+        tk.Label(wrap, text=sub, bg=CALM_A, fg=INK,
+                 font=(fam, max(13, int(h * 0.07)))).pack()
+        tk.Label(wrap, text="Click or press any key to dismiss", bg=CALM_A,
+                 fg=INK, font=(fam, 11, "italic")).pack(pady=(18, 0))
+
+        state = {"on": True}
+
+        def _pulse():
+            if not win.winfo_exists():
+                return
+            state["on"] = not state["on"]
+            bg = CALM_A if state["on"] else CALM_B
+            win.configure(bg=bg); wrap.configure(bg=bg)
+            for c in wrap.winfo_children():
+                try:
+                    c.configure(bg=bg)
+                except tk.TclError:
+                    pass
+            win.after(1100, _pulse)        # slow, gentle pulse — no harsh strobe
+
+        def _dismiss(*_):
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.bind("<Button-1>", _dismiss)
+        win.bind("<Key>", _dismiss)
+        win.after(1100, _pulse)
+        win.after(60000, _dismiss)
+        try:
+            win.focus_force()
+        except tk.TclError:
+            pass
+
     def _matrix_timer_finished(self) -> None:
         self._mtimer_running = False
         self._mtimer_after_id = None
-        try:
-            import winsound
-            winsound.MessageBeep(winsound.MB_ICONASTERISK)
-        except Exception:
-            pass
         self._matrix_timer_reset_button()
-        self.set_status("⏱ Time's up!")
-        try:
-            messagebox.showinfo("Timer", "⏱ Time's up!",
-                                parent=getattr(self, "_study_win", None))
-        except Exception:
-            pass
+        self.set_status("⏱ Time's up — focus session complete.")
+        # Gentle, eye-friendly end-of-session alert (does its own soft chime).
+        self._session_end_flash("⏳ TIME TO STOP",
+                                "Your focus session is complete.")
 
     # ---- Day picker ----------------------------------------------------
     def _build_matrix_day_picker(self, parent: tk.Frame) -> None:
