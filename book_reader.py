@@ -2001,7 +2001,8 @@ class BookReader:
         # the Session-End wizard's "tasks completed" if notes are empty.
         last = (data.get("session_notes") or data.get("tasks_completed")
                 or "").strip() or "(no notes)"
-        nxt  = (data.get("next_session_primary_task") or "").strip() or "(none specified)"
+        nxt  = (data.get("next_session_primary_task")
+                or data.get("session_primary_task") or "").strip() or "(none specified)"
         blk  = (data.get("blockers") or "").strip() or "no"
         return f"Last session: {last}\nNext task: {nxt}\nBlocker: {blk}"
 
@@ -10099,30 +10100,36 @@ class BookReader:
         except tk.TclError:
             pass
 
-        # Auto-save the session notes as you record them (debounced ~0.8s) and
-        # refresh the "Last session" box live — so what you record shows up
-        # there and is waiting for you at the next session start.
-        _notes_after = {"id": None}
+        # Auto-save BOTH the primary task and the session notes as you record
+        # them (debounced ~0.8s) and refresh the "Last session" box live — so
+        # whatever you put in EITHER field shows up there and is waiting for
+        # you at the next session start.
+        _save_after = {"id": None}
 
-        def _save_session_notes():
-            _notes_after["id"] = None
+        def _save_session_fields():
+            _save_after["id"] = None
             cur = self._load_handoff_state() or {}
+            cur["session_primary_task"] = primary_task_var.get().strip()
             cur["session_notes"] = notes_text.get("1.0", tk.END).strip()
             self._save_handoff_state(cur)
             _refresh_summary()
+
+        def _schedule_save(*_):
+            if _save_after["id"] is not None:
+                try:
+                    self.root.after_cancel(_save_after["id"])
+                except Exception:
+                    pass
+            _save_after["id"] = self.root.after(800, _save_session_fields)
 
         def _notes_modified(_e=None):
             try:
                 notes_text.edit_modified(False)
             except tk.TclError:
                 pass
-            if _notes_after["id"] is not None:
-                try:
-                    self.root.after_cancel(_notes_after["id"])
-                except Exception:
-                    pass
-            _notes_after["id"] = self.root.after(800, _save_session_notes)
+            _schedule_save()
         notes_text.bind("<<Modified>>", _notes_modified, add="+")
+        primary_task_var.trace_add("write", _schedule_save)
 
         # ---- Buttons -----
         btn_row = tk.Frame(body, bg=BG_DARK)
