@@ -18435,11 +18435,23 @@ try {
             self.toggle_mic()
 
         def _goal_read():
+            if self.is_reading:                 # button doubles as Stop
+                self.stop_reading(); return
             w = gfocus["w"]
-            if not isinstance(w, tk.Text):     # title is an Entry — read a field
-                w = next((t for t in _goal_text_fields
-                          if t.get("1.0", tk.END).strip()), why_t)
-            self._review_read_widget(w)
+            # Focused Text field with content → read with follow-along highlight.
+            if isinstance(w, tk.Text) and w.get("1.0", tk.END).strip():
+                self._review_read_widget(w); return
+            # Goal title is an Entry → speak it aloud (no highlight, but it reads).
+            if w is title_e and title_e.get().strip():
+                self._speak_word(title_e.get().strip()); return
+            # Otherwise read the first field that actually has text.
+            t = next((t for t in _goal_text_fields
+                      if t.get("1.0", tk.END).strip()), None)
+            if t is not None:
+                self._review_read_widget(t); return
+            if title_e.get().strip():
+                self._speak_word(title_e.get().strip()); return
+            self.set_status("Nothing to read yet — type or dictate some text first.")
 
         self._goals_mic_btn = tk.Button(
             head, text="🎤 Voice", command=_goal_mic,
