@@ -17317,10 +17317,19 @@ try {
                         selectbackground=ACCENT_SLATE, selectforeground="white",
                         relief=tk.FLAT, font=("Segoe UI", 10), activestyle="none",
                         highlightthickness=0)
-        sb = tk.Scrollbar(lbw, orient="vertical", command=lb.yview, width=14)
+        # Wide, always-visible slider (the trough color shows even with a short
+        # list, so it doesn't look "missing" until you have enough notes).
+        sb = tk.Scrollbar(lbw, orient="vertical", command=lb.yview, width=18,
+                          troughcolor=BG_PANEL, bg=ACCENT_SLATE,
+                          activebackground=ACCENT_CYAN, relief=tk.FLAT,
+                          borderwidth=0, highlightthickness=0)
         lb.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # Mouse-wheel scroll while hovering the list.
+        lb.bind("<MouseWheel>",
+                lambda e: (lb.yview_scroll(int(-1 * (e.delta / 120)), "units"),
+                           "break")[1])
         lb.bind("<<ListboxSelect>>", self._on_study_note_select)
         tk.Button(left, text="🗑 Delete", command=self._delete_study_note,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
