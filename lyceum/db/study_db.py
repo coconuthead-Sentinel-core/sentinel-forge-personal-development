@@ -86,6 +86,30 @@ CREATE TABLE IF NOT EXISTS study_note_entries (
 );
 CREATE INDEX IF NOT EXISTS idx_study_note_entries ON study_note_entries(updated_at);
 
+-- Eisenhower Matrix task-completion ticker.
+-- matrix_pomodoros: one row per focus block started via the Matrix timer.
+-- matrix_task_log: one row per completed task line (checkbox [ ] -> [x]),
+-- with optional link to the active pomodoro for per-block + daily + best
+-- aggregate statistics.
+CREATE TABLE IF NOT EXISTS matrix_pomodoros (
+    id INTEGER PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    duration_minutes INTEGER NOT NULL DEFAULT 25,
+    completed_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_matrix_pom_when ON matrix_pomodoros(started_at);
+
+CREATE TABLE IF NOT EXISTS matrix_task_log (
+    id INTEGER PRIMARY KEY,
+    task_text TEXT NOT NULL DEFAULT '',
+    quadrant TEXT NOT NULL DEFAULT 'do',     -- do | delegate | eliminate | schedule
+    completed_at TEXT NOT NULL,
+    pomodoro_id INTEGER                       -- nullable: null = no active block
+);
+CREATE INDEX IF NOT EXISTS idx_matrix_log_when ON matrix_task_log(completed_at);
+CREATE INDEX IF NOT EXISTS idx_matrix_log_pom ON matrix_task_log(pomodoro_id);
+
 CREATE TABLE IF NOT EXISTS day_blocks (
     id INTEGER PRIMARY KEY,
     block_date TEXT NOT NULL,
