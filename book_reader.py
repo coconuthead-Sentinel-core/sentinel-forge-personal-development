@@ -17337,10 +17337,17 @@ try {
         tk.Label(trow, text="Title", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
         self._study_notes_title_var = tk.StringVar()
-        tk.Entry(trow, textvariable=self._study_notes_title_var, bg=BG_INPUT,
-                 fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
-                 font=("Segoe UI", 11)).pack(side=tk.LEFT, fill=tk.X, expand=True,
-                                             padx=(8, 0), ipady=3)
+        title_entry = tk.Entry(trow, textvariable=self._study_notes_title_var,
+                               bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                               relief=tk.FLAT, font=("Segoe UI", 11))
+        title_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0), ipady=3)
+        # Mic dictates here when focused; right-click for Clear/Cut/Copy/Paste.
+        title_entry.bind("<FocusIn>",
+                         lambda _e: self._set_mic_target(title_entry), add="+")
+        self._attach_clipboard_menu(
+            title_entry, clear_cmd=lambda: self._clear_input(title_entry),
+            clear_label="Clear", track_for_mic=False)
+        self._study_notes_title_entry = title_entry
         editor = scrolledtext.ScrolledText(
             right, wrap=tk.WORD,
             font=(self.font_family, 12),
@@ -17486,16 +17493,26 @@ try {
             pass
 
     def _new_study_note(self) -> None:
-        """Blank the editor for a fresh entry (Save will create it)."""
+        """Blank the editor for a fresh entry and auto-stamp the title with the
+        current date + time (metadata tag) — user types their own label after."""
         self._study_notes_entry_id = None
-        if getattr(self, "_study_notes_title_var", None) is not None:
-            self._study_notes_title_var.set("")
+        stamp = datetime.now().strftime("%a %b %d, %Y · %H:%M — ")
+        tv = getattr(self, "_study_notes_title_var", None)
+        if tv is not None:
+            tv.set(stamp)
+        # Drop the caret at the end of the stamp so dictation/typing flows on.
+        te = getattr(self, "_study_notes_title_entry", None)
+        if te is not None:
+            try:
+                te.focus_set()
+                te.icursor(tk.END)
+            except tk.TclError:
+                pass
         w = getattr(self, "_study_notes_widget", None)
         if w is not None:
             try:
                 w.delete("1.0", tk.END)
                 w.edit_modified(False)
-                w.focus_set()
             except tk.TclError:
                 pass
         lb = getattr(self, "_study_notes_listbox", None)
