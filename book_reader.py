@@ -756,7 +756,7 @@ class BookReader:
         )
         self.status.pack(fill=tk.X)
 
-        # ---- The book reader now lives in the Study workspace ------------
+        # ---- The reader now lives in the Study workspace ------------
         # The reading panes (book text + chapter navigator + Notes) moved off
         # the main dashboard into the Study workspace's "📖 Reader" tab, built
         # once by _build_tab_reader() when the (persistent) Study window is
@@ -10765,7 +10765,7 @@ class BookReader:
     # http://127.0.0.1:8000/api/library/ask. The service scans every
     # saved excerpt's body + metadata and returns the top matches with
     # snippets, scores, and matched terms. This is a feature the
-    # standalone book reader can't provide on its own — single-file
+    # standalone reader can't provide on its own — single-file
     # search is local; cross-library search needs the platform.
 
     PLATFORM_ASK_URL = "http://127.0.0.1:8000/api/library/ask"
@@ -14470,7 +14470,7 @@ try {
         # Alt+Tab participation, independent minimize/restore.
 
         def on_close():
-            # The Study window is PERSISTENT: it hosts the book reader, so we
+            # The Study window is PERSISTENT: it hosts the reader, so we
             # never destroy it (that would tear down text_area / notes_area and
             # the ~150 references to them). Force-save any open editors, then
             # HIDE the window. Reopening just shows it again with all state.

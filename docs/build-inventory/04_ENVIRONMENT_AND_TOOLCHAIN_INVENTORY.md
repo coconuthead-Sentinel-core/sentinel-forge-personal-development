@@ -1,7 +1,7 @@
-# Environment and Toolchain Inventory — Sentinel Screen Reader
+# Environment and Toolchain Inventory — Sentinel Forge
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader
+- **Project name:** Sentinel Forge
 - **Build identifier:** Sentinel-Forge
 - **Owner:** Shannon Brian Kelley
 - **Date:** 2026-05-28

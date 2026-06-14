@@ -1,7 +1,7 @@
-# Build Artifact Inventory — Sentinel Screen Reader
+# Build Artifact Inventory — Sentinel Forge
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader
+- **Project name:** Sentinel Forge
 - **Build identifier:** Sentinel-Forge (one-folder PyInstaller build)
 - **Owner:** Shannon Brian Kelley
 - **Date:** 2026-05-28
@@ -13,7 +13,7 @@
 | A-002 | `_internal\` runtime bundle | Python runtime + bundled libs | PyInstaller COLLECT step | `dist\Sentinel-Forge\_internal\` | App starts from packaged runtime | Planned |
 | A-003 | One-folder distributable | Deployable bundle | Full PyInstaller build | `dist\Sentinel-Forge\` (~30 MB no-TTS · ~175 MB with Piper) | Copy folder to clean machine, run | Planned |
 | A-004 | sentinel.ico | App icon (embedded) | Bundled via spec `datas` | embedded in `.exe` + `_internal` | Icon shows on taskbar/shortcut | Verified |
-| A-005 | Source distribution | Git repository | `git push` to `main` | github.com/coconuthead-Sentinel-core/Sentinel-screen-reader | `git clone` + `pip install -r requirements.txt` + run | Verified |
+| A-005 | Source distribution | Git repository | `git push` to `main` | github.com/coconuthead-Sentinel-core/sentinel-forge-personal-development | `git clone` + `pip install -r requirements.txt` + run | Verified |
 
 ## Notes
 - Build artifacts are produced by `scripts\build_exe.ps1` (one command) or by

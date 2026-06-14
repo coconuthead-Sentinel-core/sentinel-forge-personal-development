@@ -242,8 +242,8 @@ the way:
 
 ```powershell
 # 1. Get the code
-git clone https://github.com/coconuthead-Sentinel-core/Sentinel-screen-reader. sentinel-screen-reader
-cd sentinel-screen-reader
+git clone https://github.com/coconuthead-Sentinel-core/sentinel-forge-personal-development.git
+cd sentinel-forge-personal-development
 
 # 2. Install Python deps
 py -3 -m pip install -r requirements.txt

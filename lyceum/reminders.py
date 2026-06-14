@@ -1,7 +1,7 @@
 """Windows-scheduled appointment reminders.
 
 The single mechanism behind appointment reminders: instead of an in-app timer
-(which dies when the Book Reader closes), every warning is a real Windows
+(which dies when the Sentinel Forge closes), every warning is a real Windows
 *scheduled task*. So a reminder fires whether or not the app is running, and we
 ask Windows to wake the machine to run it.
 

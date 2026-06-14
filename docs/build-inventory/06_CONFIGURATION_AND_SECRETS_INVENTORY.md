@@ -1,7 +1,7 @@
-# Configuration and Secrets Inventory — Sentinel Screen Reader
+# Configuration and Secrets Inventory — Sentinel Forge
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader
+- **Project name:** Sentinel Forge
 - **Owner:** Shannon Brian Kelley
 - **Date:** 2026-05-28
 

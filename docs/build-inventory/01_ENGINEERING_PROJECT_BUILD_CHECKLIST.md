@@ -1,7 +1,7 @@
-# Engineering Project Build Checklist — Sentinel Screen Reader
+# Engineering Project Build Checklist — Sentinel Forge
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader
+- **Project name:** Sentinel Forge
 - **Build name:** Sentinel-Forge one-folder PyInstaller build
 - **Owner:** Shannon Brian Kelley
 - **Date:** 2026-05-28

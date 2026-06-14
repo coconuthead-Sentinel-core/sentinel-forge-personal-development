@@ -1,7 +1,7 @@
-# Dependency and Integration Inventory — Sentinel Screen Reader
+# Dependency and Integration Inventory — Sentinel Forge
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader
+- **Project name:** Sentinel Forge
 - **Owner:** Shannon Brian Kelley
 - **Date:** 2026-05-28
 
