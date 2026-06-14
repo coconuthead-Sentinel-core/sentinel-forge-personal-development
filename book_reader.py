@@ -17277,6 +17277,17 @@ try {
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         )
         self._study_notes_mic_btn.pack(side=tk.RIGHT, padx=4)
+        # Mic accuracy mode (Fast / Accurate / Best) — shared app-wide setting.
+        if self._whisper_quality_var is None:
+            self._whisper_quality_var = tk.StringVar(value="Accurate")
+        _snq = tk.OptionMenu(head, self._whisper_quality_var,
+                             "Fast", "Accurate", "Best",
+                             command=self._set_mic_quality)
+        _style_optionmenu(_snq)
+        _snq.configure(width=9, font=("Segoe UI", 9))
+        _snq.pack(side=tk.RIGHT, padx=(8, 2))
+        tk.Label(head, text="mode:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(side=tk.RIGHT, padx=(8, 2))
         # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
         self._study_notes_read_btn = tk.Button(
             head, text="🔊 Read", command=self._study_notes_read_toggle,
