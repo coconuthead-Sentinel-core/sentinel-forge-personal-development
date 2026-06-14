@@ -1,8 +1,9 @@
-# Sentinel Screen Reader
+# Sentinel Forge — Personal Development
 
-> **A native Windows desktop reading app for `.docx`, `.pdf`, `.md`,
-> `.txt`, `.rtf`, and `.html` — with neural read-aloud, highlight-by-sentence,
-> voice dictation, a zone-tagged Library, and a focus & study dashboard.**
+> **A native Windows desktop personal-development workstation: read `.docx`,
+> `.pdf`, `.md`, `.txt`, `.rtf`, and `.html` with neural read-aloud and
+> highlight-by-sentence; capture by voice dictation; and run focused sessions
+> with goals, accountability tracking, and a zone-tagged Library.**
 
 ![Status](https://img.shields.io/badge/status-MVP-success)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
