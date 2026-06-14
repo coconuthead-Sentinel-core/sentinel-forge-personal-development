@@ -1,6 +1,6 @@
 """
-book_reader.py — Memory Cube Book Reader
-=========================================
+book_reader.py — Sentinel Forge — Personal Development
+=====================================================
 
 A real native Windows desktop application. No browser, no web server,
 no API, no internet. One window, big buttons, big readable text,
@@ -401,7 +401,7 @@ PICTURE_DICT = {
 class BookReader:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        root.title("Sentinel Forge")
+        root.title("Sentinel Forge — Personal Development")
         # Size the main window to FIT the screen and centre it, so nothing
         # runs off the bottom on smaller displays (e.g. ~1097x617 laptops).
         try:
@@ -11821,7 +11821,7 @@ class BookReader:
                 "What you can try:\n"
                 "  • Open Windows Settings → Time & Language → Speech and "
                 "verify a voice is installed.\n"
-                "  • Restart the Book Reader app and try again.",
+                "  • Restart Sentinel Forge and try again.",
             )
             return
         if self.is_reading:
