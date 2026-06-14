@@ -1,11 +1,11 @@
 """Generate ../sentinel.ico — a multi-resolution Windows icon labeled
-"Sentinel" for the Book Reader / dashboard launcher.
+"Sentinel" for the Sentinel Forge / dashboard launcher.
 
 Re-run this script if the design needs to change; the .ico itself is
 committed alongside the app so users don't need Pillow at runtime.
 
 Design notes:
-- Dark rounded-square background matches the Book Reader's UI palette
+- Dark rounded-square background matches the Sentinel Forge's UI palette
   (cyan accent, deep-slate fill) so the icon reads as part of the app.
 - A bold "S" sits dead-center as the brand glyph — it stays legible at
   16x16 where the wordmark below would smear into noise.
@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT  = os.path.normpath(os.path.join(HERE, "..", "sentinel.ico"))
 
-# Palette — mirrors the Book Reader's dark theme.
+# Palette — mirrors the Sentinel Forge's dark theme.
 BG_FILL     = (14, 32, 46, 255)     # deep slate, opaque
 BG_BORDER   = (0, 184, 212, 255)    # cyan accent ring
 FG_GLYPH    = (255, 255, 255, 255)  # white "S"

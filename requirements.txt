@@ -1,4 +1,4 @@
-# Sentinel Forge — Book Reader dependencies
+# Sentinel Forge — Personal Development dependencies
 #
 # Core app runs on the Python standard library (tkinter). The packages below
 # unlock optional features; install with:  pip install -r requirements.txt

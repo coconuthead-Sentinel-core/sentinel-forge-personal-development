@@ -1,7 +1,7 @@
-# Build Evidence and Signoff Checklist — Sentinel Screen Reader
+# Build Evidence and Signoff Checklist — Sentinel Forge
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader
+- **Project name:** Sentinel Forge
 - **Owner:** Shannon Brian Kelley
 - **Date:** 2026-05-28
 

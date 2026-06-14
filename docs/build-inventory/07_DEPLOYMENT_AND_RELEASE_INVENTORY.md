@@ -1,7 +1,7 @@
-# Deployment and Release Inventory — Sentinel Screen Reader
+# Deployment and Release Inventory — Sentinel Forge
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader
+- **Project name:** Sentinel Forge
 - **Release name:** Sentinel-Forge MVP
 - **Owner:** Shannon Brian Kelley
 - **Date:** 2026-05-28

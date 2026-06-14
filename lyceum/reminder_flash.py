@@ -1,7 +1,7 @@
 """Standalone appointment-reminder flash.
 
 Launched by a Windows scheduled task (see ``lyceum/reminders.py``) at each
-warning time — so it runs even when the main Book Reader is closed. It reads
+warning time — so it runs even when the main Sentinel Forge is closed. It reads
 one appointment from study.db, then shows a full-screen, top-most, gently
 pulsing LIGHT-TEAL alert in the OpenDyslexic font naming WHO / WHERE and how
 long until the appointment, wakes the screen if it's off, and plays a soft

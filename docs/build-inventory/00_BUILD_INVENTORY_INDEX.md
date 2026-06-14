@@ -1,11 +1,11 @@
-# Sentinel Screen Reader — Build & Inventory Pack
+# Sentinel Forge — Build & Inventory Pack
 
 Filled instance of the **Engineering Project Build & Inventory Template Pack**,
-recording the build state of the Sentinel Screen Reader desktop app.
+recording the build state of the Sentinel Forge desktop app.
 
 ## Document metadata
-- **Project name:** Sentinel Screen Reader (a.k.a. Book Reader / "Sentinel Forge")
-- **Repository:** https://github.com/coconuthead-Sentinel-core/Sentinel-screen-reader
+- **Project name:** Sentinel Forge (a.k.a. Sentinel Forge / "Sentinel Forge")
+- **Repository:** https://github.com/coconuthead-Sentinel-core/sentinel-forge-personal-development
 - **Owner:** Shannon Brian Kelley (*Coconut head*)
 - **Date:** 2026-05-28
 - **Status:** review

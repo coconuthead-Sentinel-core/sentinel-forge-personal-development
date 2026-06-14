@@ -1,1 +1,1 @@
-# Lyceum — modular packages for the Sentinel Forge book reader.
+# Lyceum — modular packages for the Sentinel Forge reader.
