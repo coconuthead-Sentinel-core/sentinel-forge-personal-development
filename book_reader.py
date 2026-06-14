@@ -17238,18 +17238,18 @@ try {
         tk.Label(head, text="📝 Study Notes", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
         tk.Label(head,
-                 text="Autosaves. Right-click a highlight to add it here.",
+                 text="Save each note as its own entry — they archive on the left.",
                  bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
         tk.Button(
-            head, text="💾 Save now", command=self._save_study_notes,
-            font=("Segoe UI", 10), bg=ACCENT_GREEN, fg="white",
+            head, text="💾 Save", command=self._save_study_notes,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
             activebackground=ACCENT_GREEN, relief=tk.FLAT,
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT)
         tk.Button(
-            head, text="Clear", command=self._clear_study_notes,
-            font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
+            head, text="＋ New", command=self._new_study_note,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
             activebackground=ACCENT_SLATE, relief=tk.FLAT,
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=4)
@@ -17278,8 +17278,44 @@ try {
 
         body_frame = tk.Frame(parent, bg=BG_DARK, padx=8, pady=8)
         body_frame.pack(fill=tk.BOTH, expand=True)
+
+        # ---- Left: the archive of saved note entries ----
+        left = tk.Frame(body_frame, bg=BG_DARK)
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 8))
+        tk.Label(left, text="Saved notes", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        lbw = tk.Frame(left, bg=BG_DARK)
+        lbw.pack(fill=tk.Y, expand=True, pady=(4, 6))
+        lb = tk.Listbox(lbw, width=24, bg=BG_INPUT, fg=FG_TEXT,
+                        selectbackground=ACCENT_SLATE, selectforeground="white",
+                        relief=tk.FLAT, font=("Segoe UI", 10), activestyle="none",
+                        highlightthickness=0)
+        sb = tk.Scrollbar(lbw, orient="vertical", command=lb.yview, width=14)
+        lb.configure(yscrollcommand=sb.set)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        lb.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        lb.bind("<<ListboxSelect>>", self._on_study_note_select)
+        tk.Button(left, text="🗑 Delete", command=self._delete_study_note,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(fill=tk.X)
+        self._study_notes_listbox = lb
+        self._study_notes_ids = []
+
+        # ---- Right: title + editor ----
+        right = tk.Frame(body_frame, bg=BG_DARK)
+        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        trow = tk.Frame(right, bg=BG_DARK)
+        trow.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(trow, text="Title", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        self._study_notes_title_var = tk.StringVar()
+        tk.Entry(trow, textvariable=self._study_notes_title_var, bg=BG_INPUT,
+                 fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
+                 font=("Segoe UI", 11)).pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                             padx=(8, 0), ipady=3)
         editor = scrolledtext.ScrolledText(
-            body_frame, wrap=tk.WORD,
+            right, wrap=tk.WORD,
             font=(self.font_family, 12),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
             padx=14, pady=12, relief=tk.FLAT,
@@ -17287,7 +17323,6 @@ try {
             undo=True, autoseparators=True, maxundo=-1,
         )
         editor.pack(fill=tk.BOTH, expand=True)
-        # Read-aloud follow-along highlight (colour set when reading starts).
         editor.tag_configure(
             "reading",
             background=self.HIGHLIGHT_COLORS.get("Yellow", "#fde047"),
@@ -17295,14 +17330,16 @@ try {
         editor.tag_raise("reading", "sel")
         editor.bind("<<Modified>>",
                      lambda _e: self._on_study_notes_modified())
-        # Same affordances as Reader and Notes: clipboard menu, Ctrl+A,
-        # mic focus tracking — wired by the shared helper.
         self._attach_clipboard_menu(
             editor,
             clear_cmd=self._clear_study_notes,
-            clear_label="Clear study notes",
+            clear_label="Clear this note",
         )
         self._study_notes_widget = editor
+        self._study_notes_entry_id = None
+        self._refresh_study_notes_list()
+        if self._study_notes_ids:        # open the most recent note
+            self._load_study_note(self._study_notes_ids[0])
 
     def _study_notes_toggle_mic(self) -> None:
         """Voice-dictate into the Study Notes editor (or stop if listening)."""
@@ -17351,16 +17388,68 @@ try {
         self._matrix_set_read_btn(reading=True)
 
     def _refresh_tab_study_notes(self) -> None:
-        """Load study_notes body from the DB into the editor."""
-        w = self._study_notes_widget
-        if w is None:
+        self._refresh_study_notes_list(select_id=getattr(
+            self, "_study_notes_entry_id", None))
+
+    def _refresh_study_notes_list(self, select_id=None) -> None:
+        """Populate the left archive list from study_note_entries (migrating
+        the old single-blob note into the first entry, once)."""
+        lb = getattr(self, "_study_notes_listbox", None)
+        if lb is None:
             return
         try:
+            n = self._db_query("SELECT COUNT(*) FROM study_note_entries")[0][0]
+            if n == 0:
+                old = self._db_query("SELECT body FROM study_notes WHERE id=1")
+                body = (old[0][0] if old else "").strip()
+                if body:
+                    now = datetime.now().isoformat()
+                    self._db_exec(
+                        "INSERT INTO study_note_entries (title,body,created_at,"
+                        "updated_at) VALUES (?,?,?,?)",
+                        ("Imported notes", body, now, now))
+        except Exception:
+            pass
+        try:
             rows = self._db_query(
-                "SELECT body FROM study_notes WHERE id = 1")
+                "SELECT id,title,body,updated_at FROM study_note_entries "
+                "ORDER BY updated_at DESC")
         except Exception:
             rows = []
-        body = rows[0][0] if rows else ""
+        lb.delete(0, tk.END)
+        self._study_notes_ids = []
+        for rid, title, body, updated in rows:
+            self._study_notes_ids.append(rid)
+            label = ((title or "").strip()
+                     or (body or "").strip().split("\n", 1)[0][:30]
+                     or "(untitled)")
+            lb.insert(tk.END, f"{label}  ·{(updated or '')[:10]}")
+        if select_id in self._study_notes_ids:
+            i = self._study_notes_ids.index(select_id)
+            lb.selection_clear(0, tk.END)
+            lb.selection_set(i)
+            lb.see(i)
+
+    def _on_study_note_select(self, _e=None) -> None:
+        lb = getattr(self, "_study_notes_listbox", None)
+        if lb is None:
+            return
+        sel = lb.curselection()
+        if sel and 0 <= sel[0] < len(self._study_notes_ids):
+            self._load_study_note(self._study_notes_ids[sel[0]])
+
+    def _load_study_note(self, eid) -> None:
+        try:
+            r = self._db_query(
+                "SELECT title,body FROM study_note_entries WHERE id=?", (eid,))
+        except Exception:
+            r = []
+        if not r:
+            return
+        title, body = r[0]
+        self._study_notes_entry_id = eid
+        self._study_notes_title_var.set(title or "")
+        w = self._study_notes_widget
         try:
             w.delete("1.0", tk.END)
             if body:
@@ -17368,6 +17457,38 @@ try {
             w.edit_modified(False)
         except tk.TclError:
             pass
+
+    def _new_study_note(self) -> None:
+        """Blank the editor for a fresh entry (Save will create it)."""
+        self._study_notes_entry_id = None
+        if getattr(self, "_study_notes_title_var", None) is not None:
+            self._study_notes_title_var.set("")
+        w = getattr(self, "_study_notes_widget", None)
+        if w is not None:
+            try:
+                w.delete("1.0", tk.END)
+                w.edit_modified(False)
+                w.focus_set()
+            except tk.TclError:
+                pass
+        lb = getattr(self, "_study_notes_listbox", None)
+        if lb is not None:
+            lb.selection_clear(0, tk.END)
+
+    def _delete_study_note(self) -> None:
+        eid = getattr(self, "_study_notes_entry_id", None)
+        if eid is None:
+            self._new_study_note()
+            return
+        if not messagebox.askyesno("Delete note", "Delete this saved note?"):
+            return
+        try:
+            self._db_exec("DELETE FROM study_note_entries WHERE id=?", (eid,))
+        except Exception as e:
+            self.set_status(f"📝 Delete failed: {e}")
+            return
+        self._new_study_note()
+        self._refresh_study_notes_list()
 
     def _on_study_notes_modified(self) -> None:
         """Debounced autosave on every edit — same 1.5 s timer the
@@ -17390,27 +17511,39 @@ try {
             1500, self._save_study_notes)
 
     def _save_study_notes(self) -> None:
-        """Write the editor's contents to the single study_notes row."""
-        w = self._study_notes_widget
-        if w is None:
+        """Save the editor's contents as the current note entry — INSERT a new
+        one (and archive it on the left) or UPDATE the open one."""
+        w = getattr(self, "_study_notes_widget", None)
+        if w is None or getattr(self, "_study_notes_title_var", None) is None:
             return
         try:
             body = w.get("1.0", tk.END).rstrip()
         except tk.TclError:
             return
+        title = self._study_notes_title_var.get().strip()
+        if not title and not body.strip():
+            return                       # nothing to save
+        if not title:                    # derive a title from the first line
+            title = body.strip().split("\n", 1)[0][:40]
+        now = datetime.now().isoformat()
         try:
-            self._db_exec(
-                "INSERT OR REPLACE INTO study_notes (id, body, updated_at) "
-                "VALUES (1, ?, ?)",
-                (body, datetime.now().isoformat()),
-            )
+            if self._study_notes_entry_id is None:
+                eid = self._db_exec(
+                    "INSERT INTO study_note_entries (title,body,created_at,"
+                    "updated_at) VALUES (?,?,?,?)", (title, body, now, now))
+                self._study_notes_entry_id = eid
+            else:
+                self._db_exec(
+                    "UPDATE study_note_entries SET title=?,body=?,updated_at=? "
+                    "WHERE id=?", (title, body, now, self._study_notes_entry_id))
             self._study_notes_save_after_id = None
-            self.set_status("📝 Study notes saved.")
+            self._refresh_study_notes_list(select_id=self._study_notes_entry_id)
+            self.set_status(f"📝 Saved note: {title or '(untitled)'}")
         except Exception as e:
-            self.set_status(f"📝 Study notes save failed: {e}")
+            self.set_status(f"📝 Study note save failed: {e}")
 
     def _clear_study_notes(self) -> None:
-        w = self._study_notes_widget
+        w = getattr(self, "_study_notes_widget", None)
         if w is None:
             return
         try:
@@ -17419,16 +17552,16 @@ try {
         except tk.TclError:
             return
         if messagebox.askyesno(
-            "Clear study notes?",
-            "Erase all study notes?\n\n"
+            "Clear this note?",
+            "Erase the text in this note?\n\n"
             "(Ctrl+Z to undo within the session.)",
         ):
             try:
                 w.delete("1.0", tk.END)
+                w.edit_modified(False)
             except tk.TclError:
                 return
-            self._save_study_notes()
-            self.set_status("📝 Study notes cleared.")
+            self.set_status("📝 Note cleared (Save to keep it empty).")
 
     def add_text_to_study_notes(self, text: str,
                                   source_label: str = "") -> bool:
@@ -17438,37 +17571,26 @@ try {
         the source widget (for MOVE semantics)."""
         if not text or not text.strip():
             return False
+        w = getattr(self, "_study_notes_widget", None)
+        if w is None:
+            return False
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         if source_label:
             chunk = f"\n> From {source_label}  —  {timestamp}\n{text.strip()}\n"
         else:
             chunk = f"\n—  {timestamp}\n{text.strip()}\n"
         try:
-            rows = self._db_query(
-                "SELECT body FROM study_notes WHERE id = 1")
-        except Exception:
-            rows = []
-        current = rows[0][0] if rows else ""
-        new_body = (current.rstrip() + chunk) if current.strip() else chunk.lstrip()
-        try:
-            self._db_exec(
-                "INSERT OR REPLACE INTO study_notes (id, body, updated_at) "
-                "VALUES (1, ?, ?)",
-                (new_body, datetime.now().isoformat()),
-            )
-        except Exception as e:
-            messagebox.showerror("Could not save to Study Notes", str(e))
+            had = bool(w.get("1.0", tk.END).strip())
+            w.insert(tk.END, chunk if had else chunk.lstrip())
+            w.see(tk.END)
+            w.edit_modified(False)
+        except tk.TclError:
             return False
-        w = self._study_notes_widget
-        if w is not None:
-            try:
-                w.delete("1.0", tk.END)
-                w.insert("1.0", new_body)
-                w.edit_modified(False)
-                w.see(tk.END)
-            except tk.TclError:
-                pass
-        self.set_status("📝 Moved to Study Notes.")
+        tv = getattr(self, "_study_notes_title_var", None)
+        if tv is not None and not tv.get().strip() and source_label:
+            tv.set(f"From {source_label}")
+        self._save_study_notes()       # persists (creates the entry if new)
+        self.set_status("📝 Added to Study Notes.")
         return True
 
     def _capture_widget_text(self, widget):
