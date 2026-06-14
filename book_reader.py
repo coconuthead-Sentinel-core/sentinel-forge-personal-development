@@ -9974,6 +9974,22 @@ class BookReader:
             ss_buttons[key] = b
             ss_frames[key] = tk.Frame(content, bg=BG_DARK)
 
+        # 🎯 Matrix — a LAUNCHER tab (not an inline build). The Matrix is a
+        # heavy stateful tab (4 quadrant editors + timer + autosave handlers);
+        # building it twice would conflict on self._eisenhower_widgets. So this
+        # tab opens the Study workspace and shows the existing Matrix tab.
+        def _go_matrix():
+            try:
+                self.open_study_workspace()
+                self._show_study_tab("matrix")
+            except Exception as e:
+                self.set_status(f"Could not open Matrix: {e}")
+        tk.Button(tabbar, text="🎯 Matrix", command=_go_matrix,
+                  font=("Segoe UI", 10, "bold"), bg=BG_INPUT, fg=FG_TEXT,
+                  activebackground=ACCENT_SLATE, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=6, cursor="hand2",
+                  borderwidth=0).pack(side=tk.LEFT, padx=(0, 3))
+
         # The original Session Start flow becomes the "Start" panel.
         body = tk.Frame(ss_frames["start"], bg=BG_DARK, padx=18, pady=12)
         body.pack(fill=tk.BOTH, expand=True)
