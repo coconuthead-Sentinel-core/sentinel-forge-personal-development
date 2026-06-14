@@ -75,6 +75,17 @@ CREATE TABLE IF NOT EXISTS study_notes (
     updated_at TEXT NOT NULL
 );
 
+-- Study Notes archive: one row per saved note entry (master-detail). The old
+-- single-blob study_notes row is migrated into the first entry on first run.
+CREATE TABLE IF NOT EXISTS study_note_entries (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_study_note_entries ON study_note_entries(updated_at);
+
 CREATE TABLE IF NOT EXISTS day_blocks (
     id INTEGER PRIMARY KEY,
     block_date TEXT NOT NULL,
