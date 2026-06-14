@@ -20691,6 +20691,9 @@ try {
         self._mtimer_after_id = None
         self._mtimer_preset_var = tk.StringVar(value="25 min")
         self._mtimer_display_var = tk.StringVar(value="00:00")
+        # Completion ticker state — links task logs to the active focus block.
+        self._matrix_pomodoro_id = None
+        self._matrix_ticker_var = tk.StringVar(value="")
         tk.Label(tools, text="⏱", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 12)).pack(side=tk.LEFT, padx=(0, 4))
         _tmenu(tools, self._mtimer_preset_var,
@@ -20702,6 +20705,12 @@ try {
               ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, GAP))
         _tbtn(tools, "■ Stop", self._matrix_timer_stop,
               ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, GAP))
+        # --- Completion ticker: ✓ Done · live counters · day total · best ---
+        _tbtn(tools, "✓ Done line", self._matrix_toggle_done_line,
+              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, GAP))
+        tk.Label(tools, textvariable=self._matrix_ticker_var, bg=BG_PANEL,
+                 fg=FG_TEXT, font=("Segoe UI", 10, "bold")
+                 ).pack(side=tk.LEFT, padx=(0, GAP))
         # --- Winner's Time Log (where the day's hours actually went) ---
         _tbtn(tools, "⏱ Time Log", self.open_time_log,
               ACCENT_CYAN).pack(side=tk.LEFT, padx=(GROUP, GAP))
@@ -20866,6 +20875,15 @@ try {
             self._mtimer_after_id = None
         self._mtimer_remaining = int(minutes) * 60
         self._mtimer_running = True
+        # Open a Pomodoro row so completions during this block are scoped to it.
+        try:
+            self._matrix_pomodoro_id = self._db_exec(
+                "INSERT INTO matrix_pomodoros (started_at,duration_minutes,"
+                "completed_count) VALUES (?,?,0)",
+                (datetime.now().isoformat(), int(minutes)))
+        except Exception:
+            self._matrix_pomodoro_id = None
+        self._matrix_refresh_ticker()
         self._matrix_timer_update_display()
         self._matrix_timer_tick()
 
@@ -20900,7 +20918,9 @@ try {
             except Exception:
                 pass
             self._mtimer_after_id = None
+        self._matrix_close_pomodoro()
         self._matrix_timer_reset_button()
+        self._matrix_refresh_ticker()
         if announce:
             self.set_status("⏱ Timer stopped.")
 
@@ -20980,11 +21000,231 @@ try {
     def _matrix_timer_finished(self) -> None:
         self._mtimer_running = False
         self._mtimer_after_id = None
+        # Capture this block's completions BEFORE we close the pomodoro row.
+        block_id = self._matrix_pomodoro_id
+        block_done = self._matrix_block_completions(block_id)
+        new_best = self._matrix_close_pomodoro()
         self._matrix_timer_reset_button()
+        self._matrix_refresh_ticker()
         self.set_status("⏱ Time's up — focus session complete.")
-        # Gentle, eye-friendly end-of-session alert (does its own soft chime).
+        # Show the block summary + gentle end-of-session alert.
+        self._matrix_pomodoro_summary(block_done, new_best)
         self._session_end_flash("⏳ TIME TO STOP",
                                 "Your focus session is complete.")
+
+    # ---- Eisenhower Matrix completion ticker ---------------------------
+    # Markdown-style checkboxes: lines starting with "[ ]" (open) or "[x]"
+    # (done). Clicking the token on a line toggles it; transitioning
+    # [ ]→[x] logs the task to matrix_task_log (linked to the active
+    # Pomodoro when one is running). The ticker label shows live "this
+    # block / today / best" counters.
+    _MATRIX_CHECKBOX_RE = re.compile(r"^(\s*)\[( |x|X)\](\s*)(.*)$")
+
+    def _matrix_quadrant_for_widget(self, widget):
+        for k, w in (self._eisenhower_widgets or {}).items():
+            if w is widget:
+                return k
+        return "do"
+
+    def _matrix_on_checkbox_click(self, _event, key, widget):
+        try:
+            idx = widget.index("@%d,%d" % (_event.x, _event.y))
+        except tk.TclError:
+            return
+        line_no = int(idx.split(".")[0])
+        line_start = f"{line_no}.0"
+        line_end = f"{line_no}.end"
+        try:
+            text = widget.get(line_start, line_end)
+        except tk.TclError:
+            return
+        m = self._MATRIX_CHECKBOX_RE.match(text)
+        if not m:
+            return  # not a checkbox line — let the click pass through
+        # Only react if the user actually clicked within the [ ] / [x] token.
+        token_start_col = len(m.group(1))
+        token_end_col = token_start_col + 3   # "[ ]" / "[x]"
+        col = int(idx.split(".")[1])
+        if col < token_start_col or col > token_end_col:
+            return
+        was_done = m.group(2) in ("x", "X")
+        new_line = f"{m.group(1)}[{' ' if was_done else 'x'}]{m.group(3)}{m.group(4)}"
+        try:
+            widget.delete(line_start, line_end)
+            widget.insert(line_start, new_line)
+            widget.edit_modified(True)   # triggers autosave of the quadrant
+        except tk.TclError:
+            return
+        if not was_done:                  # [ ] -> [x] : log it
+            self._matrix_log_completion(key, m.group(4).strip())
+
+    def _matrix_toggle_done_line(self):
+        """Toolbar fallback for the checkbox click: toggle the line the caret
+        is on in whichever quadrant currently has focus (or Do Now by default)."""
+        w = (getattr(self, "_mic_target", None) if isinstance(
+            getattr(self, "_mic_target", None), tk.Text)
+             else (self._eisenhower_widgets or {}).get("do"))
+        if w is None or w not in (self._eisenhower_widgets or {}).values():
+            w = (self._eisenhower_widgets or {}).get("do")
+        if w is None:
+            return
+        try:
+            line_no = int(w.index(tk.INSERT).split(".")[0])
+        except tk.TclError:
+            return
+        line_start, line_end = f"{line_no}.0", f"{line_no}.end"
+        try:
+            text = w.get(line_start, line_end)
+        except tk.TclError:
+            return
+        m = self._MATRIX_CHECKBOX_RE.match(text)
+        if not m:                         # no checkbox yet — prepend one
+            if not text.strip():
+                return
+            try:
+                w.insert(line_start, "[x] ")
+                w.edit_modified(True)
+            except tk.TclError:
+                return
+            self._matrix_log_completion(
+                self._matrix_quadrant_for_widget(w), text.strip())
+        else:
+            was_done = m.group(2) in ("x", "X")
+            new_line = (f"{m.group(1)}[{' ' if was_done else 'x'}]"
+                        f"{m.group(3)}{m.group(4)}")
+            try:
+                w.delete(line_start, line_end)
+                w.insert(line_start, new_line)
+                w.edit_modified(True)
+            except tk.TclError:
+                return
+            if not was_done:
+                self._matrix_log_completion(
+                    self._matrix_quadrant_for_widget(w), m.group(4).strip())
+
+    def _matrix_log_completion(self, quadrant, task_text):
+        task_text = (task_text or "").strip()[:300]
+        try:
+            self._db_exec(
+                "INSERT INTO matrix_task_log (task_text,quadrant,completed_at,"
+                "pomodoro_id) VALUES (?,?,?,?)",
+                (task_text, quadrant, datetime.now().isoformat(),
+                 self._matrix_pomodoro_id))
+            if self._matrix_pomodoro_id is not None:
+                self._db_exec(
+                    "UPDATE matrix_pomodoros SET completed_count="
+                    "(SELECT COUNT(*) FROM matrix_task_log WHERE pomodoro_id=?) "
+                    "WHERE id=?", (self._matrix_pomodoro_id,
+                                   self._matrix_pomodoro_id))
+        except Exception:
+            return
+        self._matrix_refresh_ticker()
+
+    def _matrix_block_completions(self, pomodoro_id):
+        if pomodoro_id is None:
+            return []
+        try:
+            return self._db_query(
+                "SELECT quadrant,task_text,completed_at FROM matrix_task_log "
+                "WHERE pomodoro_id=? ORDER BY completed_at", (pomodoro_id,))
+        except Exception:
+            return []
+
+    def _matrix_close_pomodoro(self):
+        """Close the active block. Returns True if today's total just beat the
+        all-time daily best — caller uses that to celebrate."""
+        if self._matrix_pomodoro_id is None:
+            return False
+        try:
+            self._db_exec(
+                "UPDATE matrix_pomodoros SET ended_at=? WHERE id=?",
+                (datetime.now().isoformat(), self._matrix_pomodoro_id))
+        except Exception:
+            pass
+        self._matrix_pomodoro_id = None
+        # Did we just break the personal best?
+        today = date.today().isoformat()
+        try:
+            today_n = self._db_query(
+                "SELECT COUNT(*) FROM matrix_task_log "
+                "WHERE substr(completed_at,1,10)=?", (today,))[0][0]
+            best_other = self._db_query(
+                "SELECT COALESCE(MAX(c),0) FROM (SELECT COUNT(*) AS c "
+                "FROM matrix_task_log WHERE substr(completed_at,1,10)<>? "
+                "GROUP BY substr(completed_at,1,10))", (today,))[0][0]
+        except Exception:
+            return False
+        return today_n > 0 and today_n > best_other
+
+    def _matrix_refresh_ticker(self):
+        try:
+            this_block = 0
+            if self._matrix_pomodoro_id is not None:
+                this_block = self._db_query(
+                    "SELECT COUNT(*) FROM matrix_task_log WHERE pomodoro_id=?",
+                    (self._matrix_pomodoro_id,))[0][0]
+            today = date.today().isoformat()
+            today_n = self._db_query(
+                "SELECT COUNT(*) FROM matrix_task_log "
+                "WHERE substr(completed_at,1,10)=?", (today,))[0][0]
+            best = self._db_query(
+                "SELECT COALESCE(MAX(c),0) FROM (SELECT COUNT(*) AS c "
+                "FROM matrix_task_log GROUP BY substr(completed_at,1,10))"
+            )[0][0]
+        except Exception:
+            this_block = today_n = best = 0
+        running = "🟢" if self._matrix_pomodoro_id is not None else "⚪"
+        self._matrix_ticker_var.set(
+            f"{running} block: {this_block}   ·   today: {today_n}   "
+            f"·   🏆 best: {best}")
+
+    def _matrix_pomodoro_summary(self, completions, new_best):
+        win = tk.Toplevel(self.root)
+        win.title("Focus block summary")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w, h = min(520, sw - 80), min(420, sh - 140)
+        win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//3)}")
+        win.configure(bg=BG_DARK)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        head.pack(fill=tk.X)
+        tk.Label(head, text="🎯 Focus block complete",
+                 bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 13, "bold")
+                 ).pack(side=tk.LEFT)
+        tk.Label(head, text=f"{len(completions)} done",
+                 bg=BG_PANEL, fg=ACCENT_GREEN, font=("Segoe UI", 12, "bold")
+                 ).pack(side=tk.RIGHT)
+        if new_best:
+            tk.Label(win, text="🏆  NEW DAILY BEST  🏆", bg=BG_DARK,
+                     fg=ACCENT_AMBER, font=("Segoe UI", 12, "bold")
+                     ).pack(pady=(8, 0))
+        body = tk.Frame(win, bg=BG_DARK, padx=14, pady=8)
+        body.pack(fill=tk.BOTH, expand=True)
+        if not completions:
+            tk.Label(body, text="No tasks were checked off in this block.",
+                     bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 10, "italic")).pack(anchor="w")
+        else:
+            tk.Label(body, text="Tasks completed", bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            box = scrolledtext.ScrolledText(body, height=10, wrap=tk.WORD,
+                                            bg=BG_INPUT, fg=FG_TEXT,
+                                            relief=tk.FLAT, font=("Segoe UI", 10))
+            box.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+            for q, text, when in completions:
+                ts = (when or "")[11:16]
+                box.insert(tk.END, f"  ✓  [{q}]  {ts}   {text}\n")
+            box.configure(state=tk.DISABLED)
+        tk.Button(win, text="Close", command=win.destroy,
+                  font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=5,
+                  cursor="hand2", borderwidth=0).pack(pady=10)
 
     # ---- Day picker ----------------------------------------------------
     def _build_matrix_day_picker(self, parent: tk.Frame) -> None:
@@ -21250,6 +21490,16 @@ try {
         )
         self._eisenhower_widgets[key] = editor
         self._eisenhower_save_after_ids[key] = None
+        # Click the [ ] / [x] token at the start of a line to toggle it
+        # (completion ticker). Logs on [ ] -> [x] transitions.
+        editor.bind(
+            "<Button-1>",
+            lambda e, k=key, w=editor: self._matrix_on_checkbox_click(e, k, w),
+            add="+")
+        # Refresh the live "this block / today / best" ticker once, after the
+        # last quadrant is wired.
+        if key == self._EISENHOWER_QUADRANTS[-1][0]:
+            self._matrix_refresh_ticker()
 
     # ---- Block CRUD ----------------------------------------------------
     def _refresh_blocks_for_selected_day(self) -> None:
