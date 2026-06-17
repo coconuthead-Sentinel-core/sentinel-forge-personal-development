@@ -2151,7 +2151,7 @@ class BookReader:
             win.attributes("-topmost", True)
         except tk.TclError:
             pass
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._time_audit_win = None
@@ -2287,7 +2287,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(520, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._time_log_win = None
@@ -2531,7 +2531,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(640, 470)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         rating_var = tk.StringVar(value="—")
 
@@ -2837,7 +2837,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(660, 470)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._fi_win = None
@@ -3190,7 +3190,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(520, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._core_four_win = None
@@ -3389,7 +3389,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(540, 450)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._latte_win = None
@@ -3671,7 +3671,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 460)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._dream_win = None
@@ -4000,7 +4000,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 460)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _cancel_tick():
             aid = getattr(self, "_wishlist_after_id", None)
@@ -4287,7 +4287,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(540, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._runrate_win = None
@@ -4476,7 +4476,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(540, 420)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._tvm_win = None
@@ -4706,7 +4706,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(480, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._money_hub_win = None
@@ -4916,7 +4916,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 460)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._smart_win = None
@@ -5250,7 +5250,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(600, 480)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._compound_win = None
@@ -5480,7 +5480,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 460)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._subs_win = None
@@ -5663,7 +5663,7 @@ class BookReader:
             sw, sh = 1280, 800
         w = min(560, max(420, sw - 120)); h = 360
         win.geometry(f"{w}x{h}+{(sw - w) // 2}+{max(0, (sh - h) // 2 - 30)}")
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
         try:
             win.attributes("-topmost", True)
         except tk.TclError:
@@ -5909,7 +5909,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(680, 480)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._v2mom_win = None
@@ -6165,7 +6165,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(520, 480)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._ten_goals_win = None
@@ -6385,7 +6385,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(680, 480)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._systems_win = None
@@ -6717,7 +6717,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 470)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._leadlag_win = None
@@ -6975,7 +6975,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 470)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._habits_win = None
@@ -7231,7 +7231,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(500, 520)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
         self._tracker_month = date.today().replace(day=1)
         self._tracker_hid = None
 
@@ -7593,7 +7593,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(700, 490)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._pert_win = None
@@ -8025,7 +8025,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(580, 490)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._vision_win = None
@@ -8204,7 +8204,7 @@ class BookReader:
             sw, sh = 1280, 800
         w = min(1000, sw - 40); h = min(720, sh - 60)
         win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//2-20)}")
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
         try:
             win.attributes("-topmost", True)
         except tk.TclError:
@@ -8402,7 +8402,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(540, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._nw_win = None
@@ -8627,7 +8627,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(600, 500)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._exp_win = None
@@ -8859,7 +8859,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(720, 500)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._assets_win = None
@@ -9072,7 +9072,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(580, 480)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._seasons_win = None
@@ -9244,7 +9244,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(600, 520)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._fee_win = None
@@ -9442,7 +9442,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(600, 540)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._cm_win = None
@@ -9633,7 +9633,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(480, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._planning_win = None
@@ -9723,7 +9723,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(480, 360)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._track_win = None
@@ -9802,7 +9802,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 460)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._money_panel_win = None
@@ -9906,7 +9906,7 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 480)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
         try:
             win.grab_set()  # modal
         except tk.TclError:
@@ -10221,7 +10221,7 @@ class BookReader:
         win.geometry("620x680")
         win.minsize(520, 560)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
         try:
             win.grab_set()
         except tk.TclError:
@@ -12947,7 +12947,7 @@ try {
         win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//2-24)}")
         win.minsize(480, 440)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._voice_memory_win = None
@@ -14478,7 +14478,7 @@ try {
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 380)
         win.configure(bg=BG_DARK)
-        # NOTE: do NOT call win.transient(self.root) here. A transient
+        # NOTE: do NOT call # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows here. A transient
         # window on Windows doesn't get its own taskbar entry, so once
         # it's iconified there's no way for the user to restore it from
         # the taskbar. The Study window is rich enough to deserve a
@@ -19005,7 +19005,7 @@ try {
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(520, 440)
         win.configure(bg=BG_DARK)
-        # NOTE: do NOT call win.transient(self.root) here. On Windows a
+        # NOTE: do NOT call # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows here. On Windows a
         # transient toplevel loses its minimize/maximize buttons (only the
         # ✕ remains) and gets no taskbar entry. The Idea Warehouse is a full
         # working window, so it deserves a proper top-level identity: its own
@@ -19683,7 +19683,7 @@ try {
         dw, dh = 480, 340
         win.geometry(f"{dw}x{dh}+{max(0,(sw-dw)//2)}+{max(0,(sh-dh)//2-24)}")
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._scoreboard_editor_win = None
@@ -19894,7 +19894,7 @@ try {
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 420)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         def _close():
             self._not_to_do_win = None
@@ -20176,7 +20176,7 @@ try {
         h = min(660, max(420, sh - 90))
         x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
         win.geometry(f"{w}x{h}+{x}+{y}")
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         self._focus_block_after_id = None
         self._focus_block_remaining = 0
@@ -20362,7 +20362,7 @@ try {
         w = min(720, max(460, sw - 80)); h = min(560, max(360, sh - 120))
         x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
         win.geometry(f"{w}x{h}+{x}+{y}")
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
         try:
             win.attributes("-topmost", True)
         except tk.TclError:
@@ -20482,7 +20482,7 @@ try {
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(460, 420)
         win.configure(bg=BG_DARK)
-        win.transient(self.root)
+        # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
 
         rows_state: list = []
         week_var = tk.StringVar(value="")
