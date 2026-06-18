@@ -1053,6 +1053,23 @@ class BookReader:
         mic_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.mic_btn = mic_btn
 
+        # Installed: 🖍 Highlight selection + the 3-color (Yellow/Teal/
+        # Indigo) picker bound to self.highlight_color_var. Click 🖍 to
+        # highlight the current selection in whichever color is picked.
+        tk.Button(
+            body, text="🖍 Highlight",
+            command=lambda: self.highlight_selection(),
+            font=("Segoe UI", 9, "bold"),
+            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
+            relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0,
+        ).pack(side=tk.LEFT, padx=(12, 4))
+        _ftb_color = tk.OptionMenu(
+            body, self.highlight_color_var,
+            *list(self.HIGHLIGHT_COLORS.keys()))
+        _style_optionmenu(_ftb_color)
+        _ftb_color.configure(width=7, font=("Segoe UI", 9, "bold"))
+        _ftb_color.pack(side=tk.LEFT)
+
         # Dock/Undock toggle (part of the toolbar shell, not a feature).
         dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock"
         self._ftb_dock_btn = tk.Button(
