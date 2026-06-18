@@ -1476,10 +1476,7 @@ class BookReader:
             label="👥  Delegate  (Urgent, Not Important)",
             command=lambda: self.add_selection_to_matrix_quadrant(
                 "delegate", source_widget=self.notes_area))
-        m.add_command(
-            label="🗑  Eliminate  (Neither)",
-            command=lambda: self.add_selection_to_matrix_quadrant(
-                "eliminate", source_widget=self.notes_area))
+        # (🗑 Eliminate menu item removed — Delete/Remove widgets were taken out.)
         # Drop the menu just under the button so it feels attached to it.
         try:
             x = self._notes_to_matrix_btn.winfo_rootx()
@@ -1606,9 +1603,7 @@ class BookReader:
                        command=lambda: self.highlight_selection("Teal"))
         hl.add_command(label="Indigo",
                        command=lambda: self.highlight_selection("Indigo"))
-        hl.add_separator()
-        hl.add_command(label="Remove highlight",
-                       command=self.remove_highlights_in_selection)
+        # (Remove highlight menu item removed — Delete/Remove widgets were taken out.)
         m.add_cascade(label="🖍  Highlight selection", menu=hl)
         m.add_command(label="📌  Add to topic…",        command=self.add_selection_to_topic)
         m.add_command(label="📝  Add to Study Notes",   command=self.add_selection_to_study_notes)
@@ -1628,9 +1623,7 @@ class BookReader:
         matrix_menu_r.add_command(label="👥  Delegate  (Urgent, Not Important)",
             command=lambda: self.add_selection_to_matrix_quadrant(
                 "delegate", source_widget=self.text_area))
-        matrix_menu_r.add_command(label="🗑  Eliminate  (Neither)",
-            command=lambda: self.add_selection_to_matrix_quadrant(
-                "eliminate", source_widget=self.text_area))
+        # (🗑 Eliminate menu item removed — Delete/Remove widgets were taken out.)
         m.add_cascade(label="🎯  Add to Matrix", menu=matrix_menu_r)
         m.add_command(label="🔖  Bookmark this spot",   command=self.bookmark_here)
         m.add_command(label="📒  Look up in glossary",  command=self.lookup_selected_in_glossary)
@@ -2945,10 +2938,7 @@ class BookReader:
             except Exception:
                 pass
             _refresh_balance(); _refresh_list()
-        tk.Button(ldel, text="🗑 Delete paycheck", command=_delete_paycheck,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
-                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # (🗑 Delete paycheck removed — Delete/Remove widgets were taken out.)
         lwrap = tk.Frame(left, bg=BG_DARK); lwrap.pack(fill=tk.BOTH, expand=True)
         listbox = tk.Listbox(lwrap, bg=BG_INPUT, fg=FG_TEXT,
                              selectbackground=ACCENT_EMERALD, selectforeground="white",
@@ -3084,10 +3074,7 @@ class BookReader:
             except Exception:
                 pass
             _refresh_budget()
-        tk.Button(right, text="🗑 Remove selected", command=_remove_budget,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=3,
-                  cursor="hand2", borderwidth=0).pack(anchor="e", padx=2, pady=(4, 0))
+        # (🗑 Remove selected removed — Delete/Remove widgets were taken out.)
         paned.add(right)
 
         listbox.bind("<<ListboxSelect>>", lambda _e: (
@@ -3484,10 +3471,7 @@ class BookReader:
             except Exception:
                 pass
             _refresh()
-        tk.Button(win, text="🗑 Remove selected", command=_remove,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=3,
-                  cursor="hand2", borderwidth=0).pack(anchor="e", padx=14, pady=(2, 8))
+        # (🗑 Remove selected removed — Delete/Remove widgets were taken out.)
 
         def _refresh():
             rows = self._latte_week_rows()
@@ -3832,8 +3816,7 @@ class BookReader:
                       ACCENT_SLATE).pack(side=tk.LEFT, padx=2)
                 _mini(btns, "🖼 Image", lambda b=bid: _set_image(b),
                       ACCENT_SLATE).pack(side=tk.LEFT, padx=2)
-                _mini(btns, "🗑", lambda b=bid, n=name: _delete(b, n),
-                      ACCENT_RED).pack(side=tk.LEFT, padx=2)
+                # (🗑 Delete bucket removed — Delete/Remove widgets were taken out.)
 
         def _quick_add(bid, cur_saved, amt):
             try:
@@ -4133,12 +4116,7 @@ class BookReader:
                     tk.Label(btns, text="🔒 Locked — buying disabled until the "
                              "timer ends", bg=BG_PANEL, fg=FG_MUTED,
                              font=("Segoe UI", 9, "italic")).pack(side=tk.LEFT)
-                tk.Button(btns, text="🗑 Let it go",
-                          command=lambda b=bid: _decide(b, "dropped"),
-                          font=("Segoe UI", 9, "bold"), bg=ACCENT_EMERALD,
-                          fg="white", activebackground=ACCENT_EMERALD,
-                          relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
-                          borderwidth=0).pack(side=tk.RIGHT, padx=2)
+                # (🗑 Let it go removed — Delete/Remove widgets were taken out.)
             dn, dsum, bn = self._wishlist_counts()
             stat_var.set(f"🧊 Cooling off: {len(rows)}   ·   💪 Let go: {dn} "
                          f"({self._money_fmt(dsum)} kept)   ·   🛒 Bought: {bn}")
@@ -5576,11 +5554,7 @@ class BookReader:
                 if lastr:
                     tk.Label(row, text=f"reviewed {lastr}", bg=bg, fg=FG_MUTED,
                              font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(10, 0))
-                tk.Button(row, text="🗑", command=lambda s=sid: (
-                              self._subs_delete(s), _render()),
-                          font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
-                          activebackground=ACCENT_RED, relief=tk.FLAT, padx=8,
-                          pady=2, cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+                # (🗑 Delete subscription removed — Delete/Remove widgets were taken out.)
                 if act:
                     tk.Button(row, text="Cancel", command=lambda s=sid: (
                                   self._subs_set_active(s, 0), _render()),
@@ -6029,10 +6003,7 @@ class BookReader:
             self._v2mom_delete(gid)
             _new(); _refresh_list()
         # (💾 Save goal removed — Save widgets were taken out of the project.)
-        tk.Button(srow, text="🗑 Delete", command=_delete,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=10, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # (🗑 Delete removed — Delete/Remove widgets were taken out.)
         paned.add(right)
 
         listbox.bind("<<ListboxSelect>>", lambda _e: (
@@ -6442,11 +6413,7 @@ class BookReader:
                   bg=BG_PANEL, fg=FG_MUTED, activebackground=ACCENT_SLATE,
                   activeforeground="white", relief=tk.FLAT, padx=8, pady=2,
                   cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
-        tk.Button(title_row, text="🗑", command=lambda: _del_system(),
-                  font=("Segoe UI", 9, "bold"), bg=BG_PANEL, fg=FG_MUTED,
-                  activebackground=ACCENT_RED, activeforeground="white",
-                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2",
-                  borderwidth=0).pack(side=tk.RIGHT, padx=(0, 4))
+        # (🗑 Delete system removed — Delete/Remove widgets were taken out.)
 
         nextbar = tk.Label(right, textvariable=next_var, bg="#042f2e", fg="#6ee7b7",
                            font=("Segoe UI", 13, "bold"), anchor=tk.W, padx=12,
@@ -6561,12 +6528,7 @@ class BookReader:
                 if is_next:
                     tk.Label(row, text="NEXT", bg=rb, fg="#5eead4",
                              font=("Segoe UI", 8, "bold")).pack(side=tk.LEFT, padx=(6, 0))
-                tk.Button(row, text="🗑", command=lambda s=stp_id: (
-                              self._step_delete(s), _render_steps()),
-                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
-                          activebackground=ACCENT_RED, activeforeground="white",
-                          relief=tk.FLAT, padx=4, cursor="hand2",
-                          borderwidth=0).pack(side=tk.RIGHT)
+                # (🗑 Delete step removed — Delete/Remove widgets were taken out.)
                 tk.Button(row, text="↓", command=lambda s=stp_id: (
                               self._step_move(sid, s, 1), _render_steps()),
                           font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
@@ -6795,12 +6757,7 @@ class BookReader:
                          font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
                 tk.Label(row, text=val, bg="#3b0a0a", fg="#fca5a5",
                          font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(10, 0))
-                tk.Button(row, text="🗑", command=lambda i=lid: (
-                              self._lag_delete(i), _render()),
-                          font=("Segoe UI", 8), bg="#3b0a0a", fg="#fca5a5",
-                          activebackground=ACCENT_RED, activeforeground="white",
-                          relief=tk.FLAT, padx=4, cursor="hand2",
-                          borderwidth=0).pack(side=tk.RIGHT)
+                # (🗑 Delete lag removed — Delete/Remove widgets were taken out.)
                 tk.Button(row, text="✎ reading", command=lambda i=lid: _upd(i),
                           font=("Segoe UI", 8, "bold"), bg="#3b0a0a", fg="#fecaca",
                           activebackground=ACCENT_SLATE, activeforeground="white",
@@ -7076,12 +7033,7 @@ class BookReader:
                 if streak:
                     tk.Label(topl, text=f"🔥 {streak}d", bg=rb, fg=ACCENT_AMBER,
                              font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(8, 0))
-                tk.Button(topl, text="🗑", command=lambda i=hid: (
-                              self._habit_delete(i), _render()),
-                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
-                          activebackground=ACCENT_RED, activeforeground="white",
-                          relief=tk.FLAT, padx=4, cursor="hand2",
-                          borderwidth=0).pack(side=tk.RIGHT)
+                # (🗑 Delete habit removed — Delete/Remove widgets were taken out.)
                 tk.Label(card, text=self._habit_formula(cue, new), bg=rb, fg=FG_TEXT,
                          font=("Segoe UI", 12, "bold"), wraplength=w - 130,
                          justify=tk.LEFT, anchor=tk.W).pack(fill=tk.X, pady=(4, 0))
@@ -7651,11 +7603,7 @@ class BookReader:
                          fg=FG_TEXT, insertbackground=FG_TEXT, relief=tk.FLAT,
                          font=("Segoe UI", 11, "bold"))
         tgt_e.pack(side=tk.LEFT, ipady=2)
-        tk.Button(trow, text="🗑", command=lambda: _del_plan(),
-                  font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
-                  activebackground=ACCENT_RED, activeforeground="white",
-                  relief=tk.FLAT, padx=6, cursor="hand2",
-                  borderwidth=0).pack(side=tk.RIGHT)
+        # (🗑 Delete plan removed — Delete/Remove widgets were taken out.)
 
         banner = tk.Label(right, text="", bg="#1e1b4b", fg="#fef9c3",
                           font=("Segoe UI", 12, "bold"), wraplength=w - 250,
@@ -7794,12 +7742,7 @@ class BookReader:
                     tk.Label(info, text=f"{sc['start'].strftime('%b %d, %Y')} → "
                              f"{sc['end'].strftime('%b %d, %Y')}  ·  {sc['weeks']:g} wk",
                              bg=rb, fg="#93c5fd", font=("Segoe UI", 8)).pack(anchor="w")
-                tk.Button(row, text="🗑", command=lambda i=sid: (
-                              self._pert_step_delete(i), _render()),
-                          font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
-                          activebackground=ACCENT_RED, activeforeground="white",
-                          relief=tk.FLAT, padx=4, cursor="hand2",
-                          borderwidth=0).pack(side=tk.RIGHT)
+                # (🗑 Delete PERT step removed — Delete/Remove widgets were taken out.)
                 tk.Button(row, text="↓", command=lambda i=sid: (
                               self._pert_step_move(pid, i, 1), _render()),
                           font=("Segoe UI", 9), bg=rb, fg=FG_MUTED,
@@ -8128,12 +8071,7 @@ class BookReader:
                 ce.pack(fill=tk.X, ipady=2)
                 ce.bind("<FocusOut>",
                         lambda _e, i=vid, v=cap: self._vision_set_caption(i, v.get().strip()))
-                tk.Button(card, text="🗑", command=lambda i=vid: (
-                              self._vision_delete(i), _render()),
-                          font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
-                          activebackground=ACCENT_RED, activeforeground="white",
-                          relief=tk.FLAT, padx=4, cursor="hand2",
-                          borderwidth=0).pack(side=tk.RIGHT)
+                # (🗑 Delete vision card removed — Delete/Remove widgets were taken out.)
                 tk.Button(card, text="↓", command=lambda i=vid: (
                               self._vision_move(i, 1), _render()),
                           font=("Segoe UI", 9), bg=BG_PANEL, fg=FG_MUTED,
@@ -8923,12 +8861,7 @@ class BookReader:
                                  side=tk.LEFT, fill=tk.X, expand=True)
                     tk.Label(r, text=self._money_fmt(amount), bg=BG_PANEL,
                              fg=FG_MUTED, font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
-                    tk.Button(r, text="🗑", command=lambda i=hid: (
-                                  self._asset_delete(i), _render()),
-                              font=("Segoe UI", 8), bg=BG_PANEL, fg=FG_MUTED,
-                              activebackground=ACCENT_RED, activeforeground="white",
-                              relief=tk.FLAT, padx=3, cursor="hand2",
-                              borderwidth=0).pack(side=tk.RIGHT)
+                    # (🗑 Delete asset removed — Delete/Remove widgets were taken out.)
                     tk.Button(r, text="→", command=lambda i=hid, b=key: (
                                   self._asset_move(i, _next_bucket(b)), _render()),
                               font=("Segoe UI", 9, "bold"), bg=BG_PANEL, fg=color,
@@ -10394,15 +10327,8 @@ class BookReader:
         lib_tools.pack(fill=tk.X)
         # (Library Color: picker, 🖍 Highlight selection button, and
         #  Voice: picker removed — same widget family as the reader
-        #  control bar that was taken out. ✕ Unhighlight kept so users
-        #  can still clear highlights they made via the right-click menu.)
-        tk.Button(
-            lib_tools, text="✕ Unhighlight",
-            command=self._library_remove_highlight,
-            font=("Segoe UI", 10, "bold"),
-            bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
-            relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.LEFT, padx=(0, 10))
+        #  control bar that was taken out. ✕ Unhighlight ALSO removed
+        #  now as part of the Delete/Remove sweep.)
 
         # Path hint
         path_hint = tk.Label(
@@ -10452,8 +10378,7 @@ class BookReader:
         #  was taken out of the project.)
         lbtn(btn_row, "+  Add files…",  self._library_add_files,
              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
-        lbtn(btn_row, "🗑  Remove",      self._library_remove_selected,
-             ACCENT_RED).pack(side=tk.LEFT, padx=6)
+        # (🗑 Remove (Library) removed — Delete/Remove widgets were taken out.)
         lbtn(btn_row, "📂  Open folder", self._library_open_folder,
              ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
         lbtn(btn_row, "🔄  Refresh",     self._refresh_library_list,
@@ -11648,8 +11573,7 @@ class BookReader:
                              cursor="hand2", borderwidth=0)
         b("+  Add commentaries…", add_files,       ACCENT_GREEN
           ).pack(side=tk.LEFT, padx=(0, 6))
-        b("🗑  Remove",            remove_selected, ACCENT_RED
-          ).pack(side=tk.LEFT, padx=6)
+        # (🗑 Remove (Reader) removed — Delete/Remove widgets were taken out.)
         b("📂  Open folder",       open_folder,     ACCENT_SLATE
           ).pack(side=tk.LEFT, padx=6)
         b("🔄  Refresh",           refresh,         ACCENT_SLATE
@@ -12894,10 +12818,7 @@ class BookReader:
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(8, 0),
                                                       pady=(6, 0))
 
-        tk.Button(foot, text="🗑 Delete selected", command=_delete,
-                  font=("Segoe UI", 10), bg=ACCENT_RED, fg="white",
-                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=12, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # (🗑 Delete selected removed — Delete/Remove widgets were taken out.)
         tk.Button(foot, text="Close", command=_close,
                   font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=5,
@@ -13227,8 +13148,7 @@ class BookReader:
                             activeforeground="white")
         list_menu.add_command(label="➕  New entry",
                               command=self._prompt_lib_new)
-        list_menu.add_command(label="🗑  Delete this entry",
-                              command=self._prompt_lib_delete_current)
+        # (🗑 Delete this entry menu item removed — Delete/Remove widgets were taken out.)
 
         def _pl_list_rclick(event):
             idx = lb.nearest(event.y)
@@ -13306,7 +13226,7 @@ class BookReader:
         # (Prompts library 💾 Save removed — Save widgets were taken out.)
         _mk("+ New",             self._prompt_lib_new,           ACCENT_CYAN)
         _mk("📋 Paste → Response", self._prompt_lib_paste_response, ACCENT_AMBER)
-        _mk("🗑 Delete",          self._prompt_lib_delete_current, ACCENT_RED)
+        # (🗑 Delete (Prompts) removed — Delete/Remove widgets were taken out.)
         panes.add(right, minsize=380, stretch="always")
 
         def _close():
@@ -14721,13 +14641,7 @@ class BookReader:
             self._audit_renumber_findings()
             self._audit_schedule_save()
 
-        tk.Button(row, text="🗑",
-                  command=_remove,
-                  bg=ACCENT_SLATE, fg="white",
-                  font=("Segoe UI", 9, "bold"),
-                  relief=tk.FLAT, padx=4, pady=2,
-                  cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=2)
+        # (🗑 Remove finding removed — Delete/Remove widgets were taken out.)
 
         self._audit_finding_widgets.append(widget_ref)
 
@@ -15324,9 +15238,7 @@ class BookReader:
                       command=self._add_selected_highlight_to_study_notes)
         m.add_command(label="Jump to",
                       command=self._jump_to_selected_highlight)
-        m.add_separator()
-        m.add_command(label="Delete highlight",
-                      command=self._delete_selected_highlight)
+        # (Delete highlight menu item removed — Delete/Remove widgets were taken out.)
         try:
             m.tk_popup(event.x_root, event.y_root)
         finally:
@@ -15379,7 +15291,7 @@ class BookReader:
                              cursor="hand2", borderwidth=0)
         lb_btn("+ New",  self._create_new_topic,      ACCENT_GREEN).pack(side=tk.LEFT, padx=(0,4))
         lb_btn("Rename", self._rename_selected_topic, ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
-        lb_btn("🗑 Delete", self._delete_selected_topic, ACCENT_RED).pack(side=tk.LEFT, padx=4)
+        # (🗑 Delete (Topics) removed — Delete/Remove widgets were taken out.)
         self._topics_listbox = tk.Listbox(
             left, bg=BG_INPUT, fg=FG_TEXT,
             selectbackground=ACCENT_CYAN, selectforeground="white",
@@ -15407,7 +15319,7 @@ class BookReader:
                              cursor="hand2", borderwidth=0)
         rb("View / Jump", self._view_or_jump_topic_entry, ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, 4))
         rb("Copy",   self._copy_topic_entry_text,    ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
-        rb("🗑 Delete entry", self._delete_topic_entry, ACCENT_RED).pack(side=tk.LEFT, padx=4)
+        # (🗑 Delete entry (Topics) removed — Delete/Remove widgets were taken out.)
         entry_frame = tk.Frame(right, bg=BG_DARK)
         entry_frame.pack(fill=tk.BOTH, expand=True)
         self._topic_entries_listbox = tk.Listbox(
@@ -15827,7 +15739,7 @@ class BookReader:
                              relief=tk.FLAT, padx=8, pady=4,
                              cursor="hand2", borderwidth=0)
         lb_btn("+ Today", self._new_today_journal_entry, ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 4))
-        lb_btn("🗑 Delete",  self._delete_selected_journal,  ACCENT_RED).pack(side=tk.LEFT)
+        # (🗑 Delete (Journal) removed — Delete/Remove widgets were taken out.)
         list_frame = tk.Frame(left, bg=BG_DARK)
         list_frame.pack(fill=tk.BOTH, expand=True)
         self._journal_listbox = tk.Listbox(
@@ -16992,10 +16904,7 @@ class BookReader:
                 lambda e: (lb.yview_scroll(int(-1 * (e.delta / 120)), "units"),
                            "break")[1])
         lb.bind("<<ListboxSelect>>", self._on_study_note_select)
-        tk.Button(left, text="🗑 Delete", command=self._delete_study_note,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
-                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
-                  cursor="hand2", borderwidth=0).pack(fill=tk.X)
+        # (🗑 Delete (Study Notes) removed — Delete/Remove widgets were taken out.)
         self._study_notes_listbox = lb
         self._study_notes_ids = []
 
@@ -17758,11 +17667,7 @@ class BookReader:
                       font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
                       activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6,
                       pady=1, cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(3, 0))
-            tk.Button(btnrow, text="🗑",
-                      command=lambda ds=dstr: self._planner_delete_selected(ds),
-                      font=("Segoe UI", 10, "bold"), bg=ACCENT_RED, fg="white",
-                      activebackground=ACCENT_RED, relief=tk.FLAT, padx=6,
-                      pady=1, cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+            # (🗑 Planner-day delete removed — Delete/Remove widgets were taken out.)
 
             # Notes display: word-wrapped read-only Text so long notes show in
             # full. Click a note to select it, double-click to toggle done.
@@ -18594,10 +18499,7 @@ class BookReader:
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=3,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(lbtn, text="🗑 Delete", command=_delete_goal,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
-                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (🗑 Delete goal removed — Delete/Remove widgets were taken out.)
         # (💾 Save goal removed — Save widgets were taken out of the project.)
 
         _refresh_list()
@@ -18829,10 +18731,7 @@ class BookReader:
                       font=("Segoe UI", 11), bg=BG_PANEL,
                       fg=ACCENT_AMBER if bt else FG_MUTED, activebackground=BG_PANEL,
                       relief=tk.FLAT, bd=0, cursor="hand2").pack(side=tk.LEFT, padx=(0, 6))
-            tk.Button(rf, text="🗑", command=lambda t=tid: _delete(t),
-                      font=("Segoe UI", 10), bg=BG_PANEL, fg=ACCENT_RED,
-                      activebackground=BG_PANEL, relief=tk.FLAT, bd=0,
-                      cursor="hand2").pack(side=tk.RIGHT, padx=(4, 0))
+            # (🗑 Big-Three task delete removed — Delete/Remove widgets were taken out.)
             tk.Button(rf, text="✓", command=lambda t=tid: _done(t),
                       font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=ACCENT_GREEN,
                       activebackground=BG_PANEL, relief=tk.FLAT, bd=0,
@@ -19648,10 +19547,7 @@ class BookReader:
                 except Exception:
                     return
                 _refresh()
-            tk.Button(addrow, text="🗑", command=_delete, font=("Segoe UI", 10),
-                      bg=BG_PANEL, fg=ACCENT_RED, activebackground=BG_PANEL,
-                      relief=tk.FLAT, bd=0, cursor="hand2",
-                      padx=4).pack(side=tk.LEFT, padx=(4, 0))
+            # (🗑 Delete (Not-To-Do/Sites) removed — Delete/Remove widgets were taken out.)
             ent.insert(0, "")
             tk.Label(col, text=placeholder, bg=BG_DARK, fg=FG_MUTED,
                      font=("Segoe UI", 8, "italic")).pack(anchor="w")
@@ -20159,9 +20055,7 @@ class BookReader:
                 except ValueError:
                     pass
                 rf.destroy()
-            tk.Button(top, text="🗑", command=_del, font=("Segoe UI", 10),
-                      bg=BG_PANEL, fg=ACCENT_RED, activebackground=BG_PANEL,
-                      relief=tk.FLAT, bd=0, cursor="hand2").pack(side=tk.RIGHT)
+            # (🗑 Weekly-roles delete removed — Delete/Remove widgets were taken out.)
             tk.Entry(top, textvariable=rv, bg=BG_INPUT, fg=FG_TEXT,
                      insertbackground=FG_TEXT, relief=tk.FLAT,
                      font=("Segoe UI", 11)).pack(side=tk.LEFT, fill=tk.X,
