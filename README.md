@@ -1,9 +1,9 @@
 # Sentinel Forge — Personal Development
 
 > **A native Windows desktop personal-development workstation: read `.docx`,
-> `.pdf`, `.md`, `.txt`, `.rtf`, and `.html` with highlight-by-sentence, and
-> run focused sessions with goals, accountability tracking, and a zone-tagged
-> Library.**
+> `.pdf`, `.md`, `.txt`, `.rtf`, and `.html` with highlight-by-sentence,
+> capture by Whisper voice dictation, and run focused sessions with goals,
+> accountability tracking, and a zone-tagged Library.**
 
 ![Status](https://img.shields.io/badge/status-MVP-success)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -269,6 +269,8 @@ powershell -ExecutionPolicy Bypass -File scripts\install_book_reader_shortcut.ps
 
 | Package | Why |
 |---|---|
+| `faster-whisper` | on-device Whisper voice dictation (downloads its model on first use) |
+| `sounddevice` · `numpy` · `noisereduce` | mic capture, audio buffers, and noise suppression for dictation |
 | `python-docx` | parse `.docx` |
 | `pypdf` | parse `.pdf` |
 | `beautifulsoup4` | parse `.html` |

@@ -160,12 +160,16 @@ PIPER_EXE     = os.path.join(_BR_BASE, "tts", "piper.exe")
 _VOICES_DIR   = os.path.join(_BR_BASE, "tts", "voices")
 HAS_PIPER     = os.path.exists(PIPER_EXE) and os.path.isdir(_VOICES_DIR) and any(f.endswith('.onnx') for f in os.listdir(_VOICES_DIR))
 
-# Microphone / voice dictation has been removed from this project.
-# These two flags are kept as False so the many `if HAS_WHISPER:` /
-# `if HAS_DENOISE:` guards throughout the file short-circuit cleanly
-# without us having to delete every gated branch.
-HAS_WHISPER = False
-HAS_DENOISE = False
+# Modern speech-to-text: faster-whisper (a Whisper implementation) + a mic
+# capture lib. Checked lightly via find_spec so we don't pay the heavy import
+# cost at startup — the real imports happen lazily when the mic first starts.
+import importlib.util as _ilu
+HAS_WHISPER = (_ilu.find_spec("faster_whisper") is not None
+               and _ilu.find_spec("sounddevice") is not None)
+# Optional mic noise suppression applied before Whisper. (RNNoise's Python
+# binding conflicts with faster-whisper's `av` dependency, so we use the
+# conflict-free `noisereduce` spectral-gating engine to the same end.)
+HAS_DENOISE = _ilu.find_spec("noisereduce") is not None
 
 # Pomodoro cycle constants. The work duration comes from the active
 # block (or the preset dropdown for a freestanding timer). Breaks are
@@ -1025,10 +1029,7 @@ class BookReader:
         body.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
         self._ftb_body = body
 
-        # Installed widget: Fast / Accurate / Best picker (re-homed from
-        # the old per-tab mic-accuracy dropdowns into the floating toolbar).
-        # The microphone feature itself is removed, so this is a shell —
-        # selecting an option updates the bound var and the status line.
+        # Installed: the Fast / Accurate / Best Whisper-quality picker.
         if self._whisper_quality_var is None:
             self._whisper_quality_var = tk.StringVar(value="Accurate")
         tk.Label(body, text="Quality:", bg=BG_PANEL, fg=FG_MUTED,
@@ -1036,10 +1037,21 @@ class BookReader:
                  ).pack(side=tk.LEFT, padx=(2, 4))
         _ftb_q = tk.OptionMenu(body, self._whisper_quality_var,
                                "Fast", "Accurate", "Best",
-                               command=self._ftb_quality_change)
+                               command=self._set_mic_quality)
         _style_optionmenu(_ftb_q)
         _ftb_q.configure(width=9, font=("Segoe UI", 9, "bold"))
         _ftb_q.pack(side=tk.LEFT)
+
+        # Installed: 🎤 Voice toggle button. Self.mic_btn is reassigned to
+        # this widget so _start_mic / _stop_mic can flip its label between
+        # "🎤  Voice" and "■  Stop mic", just like the original topbar one.
+        mic_btn = tk.Button(
+            body, text="🎤  Voice", command=self.toggle_mic,
+            font=("Segoe UI", 9, "bold"),
+            bg=ACCENT_MIC, fg="white", activebackground=ACCENT_MIC,
+            relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0)
+        mic_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self.mic_btn = mic_btn
 
         # Dock/Undock toggle (part of the toolbar shell, not a feature).
         dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock"
@@ -1599,11 +1611,9 @@ class BookReader:
             self.set_status("Notes cleared.")
 
     def _set_mic_target(self, widget) -> None:
-        """No-op since the mic feature was removed. Kept because
-        hundreds of `bind("<FocusIn>", ..._set_mic_target...)` calls
-        still exist throughout the file; rewriting all of them is
-        pointless when the destination just goes nowhere."""
-        return
+        """Remember which text widget last had focus, so the mic
+        dictates into whichever section the user was working in."""
+        self._mic_target = widget
 
     def _show_notes_to_study_menu(self) -> None:
         """Drop a picker under the Notes header's '📓 → Study' button.
@@ -12406,10 +12416,11 @@ class BookReader:
     # section — this is the canonical and only dictation path.
 
     def toggle_mic(self) -> None:
-        """Mic feature removed from the project — this is a no-op kept so
-        any stale UI binding that still calls it does nothing instead of
-        raising AttributeError."""
-        return
+        """Mic button handler — start listening if off, stop if on."""
+        if self.is_listening:
+            self._stop_mic()
+            return
+        self._start_mic()
 
     def _start_mic(self) -> None:
         """Start dictation. Whisper-only — on-device faster-whisper with
