@@ -1,9 +1,9 @@
 # Sentinel Forge — Personal Development
 
 > **A native Windows desktop personal-development workstation: read `.docx`,
-> `.pdf`, `.md`, `.txt`, `.rtf`, and `.html` with neural read-aloud and
-> highlight-by-sentence; capture by voice dictation; and run focused sessions
-> with goals, accountability tracking, and a zone-tagged Library.**
+> `.pdf`, `.md`, `.txt`, `.rtf`, and `.html` with highlight-by-sentence, and
+> run focused sessions with goals, accountability tracking, and a zone-tagged
+> Library.**
 
 ![Status](https://img.shields.io/badge/status-MVP-success)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -16,8 +16,6 @@
 
 - **Open** any book (`.docx`, `.pdf`, `.md`, `.txt`, `.rtf`, `.html`) and
   read it in a big, readable single-window UI
-- **Read aloud** with the bundled **Piper neural voice** (offline,
-  high-quality) or fall back to Windows SAPI5
 - **Highlight by sentence, word, or paragraph** with 8 colour swatches
 - **Save excerpts** — click Save, the selected (or whole) passage is
   written as a `.md` with YAML front-matter recording zone, cognitive
@@ -91,10 +89,7 @@ Beyond reading, the app is a study and focus workstation:
   best streak, and month navigation.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
-  Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊
-  read-aloud.
-- **🎤 Voice dictation (Whisper)** — on-device, offline speech-to-text
-  with a Fast / Accurate / Best accuracy selector.
+  Sunsama-style weekly **Planner**.
 - **🚀 Performance dashboard** (4DX + Ziglar): a **🏆 Compelling
   Scoreboard** of daily lead measures with streaks, a **🧠 Idea
   Warehouse** (ABCDE priorities, Big-Three, schedule-to-planner,
@@ -248,11 +243,7 @@ cd sentinel-forge-personal-development
 # 2. Install Python deps
 py -3 -m pip install -r requirements.txt
 
-# 3. (Optional) Install the Piper neural TTS bundle (~100 MB)
-#    The app will fall back to Windows SAPI5 if you skip this.
-powershell -ExecutionPolicy Bypass -File scripts\install_tts.ps1
-
-# 4. Run it
+# 3. Run it
 py -3 book_reader.py
 ```
 
@@ -278,12 +269,9 @@ powershell -ExecutionPolicy Bypass -File scripts\install_book_reader_shortcut.ps
 
 | Package | Why |
 |---|---|
-| `faster-whisper` | on-device Whisper voice dictation (downloads its model on first use) |
-| `sounddevice` · `numpy` · `noisereduce` | mic capture, audio buffers, and noise suppression for dictation |
 | `python-docx` | parse `.docx` |
 | `pypdf` | parse `.pdf` |
 | `beautifulsoup4` | parse `.html` |
-| `pyttsx3` | Windows SAPI5 fallback voice |
 | `send2trash` | recoverable deletes from the Library |
 | `tkinterdnd2` | drop-files-on-the-Library-window support (optional) |
 

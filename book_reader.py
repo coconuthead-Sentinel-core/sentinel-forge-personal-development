@@ -160,16 +160,12 @@ PIPER_EXE     = os.path.join(_BR_BASE, "tts", "piper.exe")
 _VOICES_DIR   = os.path.join(_BR_BASE, "tts", "voices")
 HAS_PIPER     = os.path.exists(PIPER_EXE) and os.path.isdir(_VOICES_DIR) and any(f.endswith('.onnx') for f in os.listdir(_VOICES_DIR))
 
-# Modern speech-to-text: faster-whisper (a Whisper implementation) + a mic
-# capture lib. Checked lightly via find_spec so we don't pay the heavy import
-# cost at startup — the real imports happen lazily when the mic first starts.
-import importlib.util as _ilu
-HAS_WHISPER = (_ilu.find_spec("faster_whisper") is not None
-               and _ilu.find_spec("sounddevice") is not None)
-# Optional mic noise suppression applied before Whisper. (RNNoise's Python
-# binding conflicts with faster-whisper's `av` dependency, so we use the
-# conflict-free `noisereduce` spectral-gating engine to the same end.)
-HAS_DENOISE = _ilu.find_spec("noisereduce") is not None
+# Microphone / voice dictation has been removed from this project.
+# These two flags are kept as False so the many `if HAS_WHISPER:` /
+# `if HAS_DENOISE:` guards throughout the file short-circuit cleanly
+# without us having to delete every gated branch.
+HAS_WHISPER = False
+HAS_DENOISE = False
 
 # Pomodoro cycle constants. The work duration comes from the active
 # block (or the preset dropdown for a freestanding timer). Breaks are
@@ -657,10 +653,6 @@ class BookReader:
             ("📋 Planning", self.open_planning_hub,    ACCENT_PURPLE),
             ("📊 Track",    self.open_track_hub,        ACCENT_INDIGO),
             ("💰 Money",    self.open_money_panel,      ACCENT_GOLD),
-            ("🔊 Read",     self.read_aloud,            ACCENT_GREEN),
-            ("■ Stop",      self.stop_reading,          ACCENT_SLATE),
-            ("🎤 Voice",    self.toggle_mic,            ACCENT_MIC),
-            ("💾 Save",     self.save_excerpt,          ACCENT_PINK),
             ("📓 Study",    self.open_study_workspace,  ACCENT_RED),
         ]
         self._topbar_buttons = {}
@@ -679,10 +671,10 @@ class BookReader:
         self._planning_btn = self._topbar_buttons["📋 Planning"]
         self._ideas_btn = self._ten_goals_btn = self._vision_btn = self._planning_btn
         self._track_btn = self._review_btn = self._topbar_buttons["📊 Track"]
-        self.mic_btn = self._topbar_buttons["🎤 Voice"]
-        # Mic accuracy var lives here; its picker is built on the settings line
-        # below so the top row stays a clean, uniform line of buttons.
-        self._whisper_quality_var = tk.StringVar(value="Accurate")
+        # Mic feature was removed — keep a None stub so dead references that
+        # still touch self.mic_btn / self._whisper_quality_var don't crash.
+        self.mic_btn = None
+        self._whisper_quality_var = None
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
@@ -816,7 +808,6 @@ class BookReader:
         self._tts_speech_start_idx: str = "1.0"
         # Microphone / dictation state
         self.is_listening: bool = False
-        self._mic_proc: subprocess.Popen | None = None
         self._mic_queue: queue.Queue | None = None
         self._mic_thread: threading.Thread | None = None
         self._mic_poll_after_id: str | None = None
@@ -1395,7 +1386,7 @@ class BookReader:
                       command=lambda: self.lookup_selected_in_glossary(
                           source_widget=self.notes_area))
         m.add_separator()
-        m.add_command(label="💾  Save notes now", command=self._save_notes)
+        # (💾 Save notes now menu item removed — Save widgets were taken out.)
         m.add_command(label="Clear notes…",        command=self._clear_notes)
         self._notes_menu = m
         self.notes_area.bind("<Button-3>", self._show_notes_context_menu)
@@ -1424,9 +1415,11 @@ class BookReader:
             self.set_status("Notes cleared.")
 
     def _set_mic_target(self, widget) -> None:
-        """Remember which text widget last had focus, so the mic
-        dictates into whichever section the user was working in."""
-        self._mic_target = widget
+        """No-op since the mic feature was removed. Kept because
+        hundreds of `bind("<FocusIn>", ..._set_mic_target...)` calls
+        still exist throughout the file; rewriting all of them is
+        pointless when the destination just goes nowhere."""
+        return
 
     def _show_notes_to_study_menu(self) -> None:
         """Drop a picker under the Notes header's '📓 → Study' button.
@@ -2646,15 +2639,10 @@ class BookReader:
         rmenu = tk.OptionMenu(rrow, rating_var, "—", "1", "2", "3", "4", "5")
         _style_optionmenu(rmenu); rmenu.configure(width=4, font=("Segoe UI", 10, "bold"))
         rmenu.pack(side=tk.LEFT, padx=(6, 0))
-        tk.Label(rrow, text="🎤 Tip: click a box, then the toolbar 🎤 Voice note "
-                 "dictates into it.", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(12, 0))
+        # (Mic tip removed — microphone feature was taken out.)
 
         srow = tk.Frame(right, bg=BG_DARK); srow.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
-        tk.Button(srow, text="💾 Save review", command=lambda: _save(False),
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save review removed — Save widgets were taken out of the project.)
 
         def _q_box(label_text):
             tk.Label(right, text=label_text, bg=BG_DARK, fg=FG_TEXT,
@@ -2667,10 +2655,7 @@ class BookReader:
             box.pack(fill=tk.BOTH, expand=True, padx=2)
             box.bind("<FocusIn>",
                      lambda _e, b=box: self._set_mic_target(b), add="+")
-            tk.Button(right, text="🔊 Listen", command=lambda b=box: self._review_read_widget(b),
-                      font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
-                      activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10,
-                      pady=2, cursor="hand2", borderwidth=0).pack(anchor="e", padx=2, pady=(2, 0))
+            # (🔊 Listen removed — read-aloud feature was taken out.)
             return box
 
         box1 = _q_box("✅  What did I do right today?")
@@ -6043,10 +6028,7 @@ class BookReader:
                 return
             self._v2mom_delete(gid)
             _new(); _refresh_list()
-        tk.Button(srow, text="💾 Save goal", command=_save,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_CYAN, fg="white",
-                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save goal removed — Save widgets were taken out of the project.)
         tk.Button(srow, text="🗑 Delete", command=_delete,
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_RED, relief=tk.FLAT, padx=10, pady=6,
@@ -6255,10 +6237,7 @@ class BookReader:
             self.set_status(f"✍ {len(lines)} goals written into your "
                             "subconscious. See you tomorrow.")
             _refresh_streak()
-        tk.Button(srow, text="💾 Save today's goals", command=_save,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_PINK, fg="white",
-                  activebackground=ACCENT_PINK, relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save today's goals removed — Save widgets were taken out of the project.)
 
         _refresh_streak()
         entries[0][1].focus_set()
@@ -9994,26 +9973,8 @@ class BookReader:
         body = tk.Frame(ss_frames["start"], bg=BG_DARK, padx=18, pady=12)
         body.pack(fill=tk.BOTH, expand=True)
 
-        # ---- Mic accuracy (Fast / Accurate / Best) — sets the dictation
-        # quality for the 🎤 buttons below (and app-wide; it's a shared
-        # setting). Guard the var: the state block resets it to None and this
-        # panel builds at the end of __init__. -----------------------------
-        acc_row = tk.Frame(body, bg=BG_DARK)
-        acc_row.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(acc_row, text="🎤 Mic accuracy:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _ss_acc = tk.OptionMenu(acc_row, self._whisper_quality_var,
-                                "Fast", "Accurate", "Best",
-                                command=self._set_mic_quality)
-        _style_optionmenu(_ss_acc)
-        _ss_acc.configure(width=10, font=("Segoe UI", 9))
-        _ss_acc.pack(side=tk.LEFT, padx=(6, 0))
-        tk.Button(acc_row, text="🗣 Voice Memory", command=self.open_voice_memory,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
+        # (Mic accuracy + Voice Memory row removed — microphone feature
+        #  was taken out of the project.)
 
         # ---- Last session summary — shows the notes you recorded, and
         # refreshes live as you record more (see auto-save below). ----------
@@ -10032,23 +9993,8 @@ class BookReader:
             except tk.TclError:
                 pass
 
-        # 🎤 Voice dictation: clicking a field makes it the mic target
-        # (FocusIn), and its 🎤 button focuses it and starts/stops listening —
-        # same pattern as Study Notes. The buttons are registered in
-        # self._session_start_mic_btns so _start_mic/_stop_mic flip them to a
-        # red "■ Stop" while listening (the feedback every other mic gives).
+        # (Per-field 🎤 dictation buttons removed with the mic feature.)
         self._session_start_mic_btns = []
-
-        def _ss_mic(widget):
-            if self.is_listening:
-                self.toggle_mic()
-                return
-            try:
-                widget.focus_set()
-            except tk.TclError:
-                pass
-            self._set_mic_target(widget)
-            self.toggle_mic()
 
         # ---- Primary task -----
         pt_head = tk.Frame(body, bg=BG_DARK)
@@ -10056,12 +10002,6 @@ class BookReader:
         tk.Label(pt_head, text="One primary task for this session",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
                  ).pack(side=tk.LEFT)
-        _pt_mic = tk.Button(pt_head, text="🎤", command=lambda: _ss_mic(task_entry),
-                            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
-                            cursor="hand2", borderwidth=0)
-        _pt_mic.pack(side=tk.RIGHT)
-        self._session_start_mic_btns.append(_pt_mic)
         tk.Label(body,
                  text="(The Sentinel spec is strict — pick ONE focus.)",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic")
@@ -10087,12 +10027,6 @@ class BookReader:
         tk.Label(sn_head, text="Session notes",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
                  ).pack(side=tk.LEFT)
-        _sn_mic = tk.Button(sn_head, text="🎤", command=lambda: _ss_mic(notes_text),
-                            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
-                            cursor="hand2", borderwidth=0)
-        _sn_mic.pack(side=tk.RIGHT)
-        self._session_start_mic_btns.append(_sn_mic)
         tk.Label(body,
                  text="(Anything you want to remember for this session — "
                       "saved with your handoff.)",
@@ -10300,12 +10234,7 @@ class BookReader:
             self.set_status(f"⏹ Handoff saved — next task: {nxt}")
             _close()
 
-        tk.Button(btn_row, text="Save Handoff  ✓", command=_save,
-                  bg=ACCENT_GREEN, fg="white",
-                  font=("Segoe UI", 11, "bold"),
-                  relief=tk.FLAT, padx=18, pady=8,
-                  cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=(0, 8))
+        # (Save Handoff ✓ removed — Save widgets were taken out of the project.)
         tk.Button(btn_row, text="Cancel", command=_close,
                   bg=ACCENT_SLATE, fg="white",
                   font=("Segoe UI", 10),
@@ -10463,22 +10392,10 @@ class BookReader:
         # share the reader's variables so the two stay in sync.
         lib_tools = tk.Frame(win, bg=BG_PANEL, padx=10, pady=5)
         lib_tools.pack(fill=tk.X)
-        tk.Label(lib_tools, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(0, 4))
-        lib_color_menu = tk.OptionMenu(
-            lib_tools, self.highlight_color_var,
-            *list(self.HIGHLIGHT_COLORS.keys()))
-        _style_optionmenu(lib_color_menu)
-        lib_color_menu.configure(width=7, font=("Segoe UI", 10, "bold"))
-        lib_color_menu.pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(
-            lib_tools, text="🖍  Highlight selection",
-            command=lambda: self._library_highlight_selection(
-                self.highlight_color_var.get()),
-            font=("Segoe UI", 10, "bold"),
-            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
-            relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.LEFT, padx=(0, 6))
+        # (Library Color: picker, 🖍 Highlight selection button, and
+        #  Voice: picker removed — same widget family as the reader
+        #  control bar that was taken out. ✕ Unhighlight kept so users
+        #  can still clear highlights they made via the right-click menu.)
         tk.Button(
             lib_tools, text="✕ Unhighlight",
             command=self._library_remove_highlight,
@@ -10486,14 +10403,6 @@ class BookReader:
             bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
             relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.LEFT, padx=(0, 10))
-        tk.Label(lib_tools, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(4, 4))
-        lib_voice_menu = tk.OptionMenu(
-            lib_tools, self.voice_var, *self.available_voices,
-            command=self._on_voice_change)
-        _style_optionmenu(lib_voice_menu)
-        lib_voice_menu.configure(width=13, font=("Segoe UI", 10, "bold"))
-        lib_voice_menu.pack(side=tk.LEFT, padx=(0, 8))
 
         # Path hint
         path_hint = tk.Label(
@@ -10539,10 +10448,8 @@ class BookReader:
                 relief=tk.FLAT, padx=10, pady=5, cursor="hand2", borderwidth=0,
             )
 
-        lbtn(btn_row, "🔊  Read aloud", self._library_read_aloud,
-             ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
-        lbtn(btn_row, "■  Stop",        self.stop_reading,
-             ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, 14))
+        # (Library 🔊 Read aloud + ■ Stop removed — read-aloud feature
+        #  was taken out of the project.)
         lbtn(btn_row, "+  Add files…",  self._library_add_files,
              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
         lbtn(btn_row, "🗑  Remove",      self._library_remove_selected,
@@ -12385,84 +12292,30 @@ class BookReader:
         self.set_status("Stopped.")
 
     # ---- Microphone / voice note ---------------------------------------
-    # The mic uses Windows' built-in offline speech recognition
-    # (System.Speech in PowerShell). Recognized phrases stream out on
-    # the PS process's stdout and get appended to the Notes panel on
-    # the main thread.
-    #
-    # IMPORTANT: we use the SYNCHRONOUS Recognize() API rather than the
-    # async event-handler pattern. When PowerShell is launched with
-    # `-Command`, .NET event callbacks registered via add_X() can fail
-    # to dispatch because the script-block runspace has no message
-    # pump — speech is "heard" but the callback never fires. Synchronous
-    # Recognize() blocks the script thread until a phrase is recognized
-    # (or an initial-silence timeout elapses), so no event pump is needed.
-    # A diagnostic log is written to %TEMP%\bookreader_mic.log to make
-    # future failures easy to triage.
-    _MIC_PS_SCRIPT = r"""
-$ErrorActionPreference = 'Stop'
-$logPath = Join-Path $env:TEMP 'bookreader_mic.log'
-function _Log($m) {
-    try {
-        Add-Content -Path $logPath -Encoding UTF8 -Value (
-            '[' + ([DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss.fff')) + '] ' + $m)
-    } catch {}
-}
-# Truncate the log at start so each session is easy to read.
-try { Set-Content -Path $logPath -Value '' -Encoding UTF8 } catch {}
-_Log '=== mic script start (sync Recognize mode) ==='
-try {
-    Add-Type -AssemblyName System.Speech
-    _Log 'System.Speech assembly loaded'
-    $rec = New-Object System.Speech.Recognition.SpeechRecognitionEngine
-    _Log ('Recognizer: ' + $rec.RecognizerInfo.Name + ' / ' + $rec.RecognizerInfo.Culture)
-    $rec.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
-    _Log 'Dictation grammar loaded'
-    $rec.SetInputToDefaultAudioDevice()
-    _Log 'Audio input set to default device'
-    [Console]::Out.WriteLine('__MIC_READY__')
-    [Console]::Out.Flush()
-    _Log '__MIC_READY__ written'
-    while ($true) {
-        try {
-            # 10s initial-silence timeout. If the user is quiet for that
-            # long, Recognize returns $null and we loop again — keeps
-            # the script alive without burning CPU.
-            $result = $rec.Recognize([TimeSpan]::FromSeconds(10))
-            if ($result -and $result.Text) {
-                _Log ('recognized: ' + $result.Text)
-                [Console]::Out.WriteLine($result.Text)
-                [Console]::Out.Flush()
-            }
-        } catch {
-            _Log ('recognize-loop error: ' + $_.Exception.Message)
-        }
-    }
-} catch {
-    _Log ('FATAL: ' + $_.Exception.Message)
-    Write-Output ('STT_ERROR: ' + $_.Exception.Message)
-    exit 1
-}
-"""
+    # Single mic stack: on-device faster-whisper (Whisper STT) fed by
+    # sounddevice for capture and noisereduce for noise suppression.
+    # See requirements.txt and the README's "Voice dictation (Whisper)"
+    # section — this is the canonical and only dictation path.
 
     def toggle_mic(self) -> None:
-        """Mic button handler — start listening if off, stop if on."""
-        if self.is_listening:
-            self._stop_mic()
-            return
-        if self.is_reading:
-            messagebox.showinfo(
-                "Stop reading first",
-                "Read aloud is currently playing through the speakers, "
-                "which the microphone would pick up. Click ■ Stop, then "
-                "press 🎤 Voice note again.",
-            )
-            return
-        self._start_mic()
+        """Mic feature removed from the project — this is a no-op kept so
+        any stale UI binding that still calls it does nothing instead of
+        raising AttributeError."""
+        return
 
     def _start_mic(self) -> None:
-        """Start dictation. Uses faster-whisper (modern STT) when available,
-        otherwise falls back to Windows System.Speech via PowerShell."""
+        """Start dictation. Whisper-only — on-device faster-whisper with
+        sounddevice capture. If Whisper isn't installed, we tell the user
+        how to install it instead of silently falling back to a worse mic."""
+        if not HAS_WHISPER:
+            messagebox.showerror(
+                "Voice dictation unavailable",
+                "Voice dictation needs the Whisper stack:\n\n"
+                "    py -3 -m pip install faster-whisper sounddevice "
+                "numpy noisereduce\n\n"
+                "(See requirements.txt — these are the only supported "
+                "microphone components.)")
+            return
         self._mic_queue = queue.Queue()
         self.is_listening = True
 
@@ -12510,52 +12363,13 @@ try {
         target_name = self._mic_target_label(target)
         self._mic_target_name = target_name
 
-        if HAS_WHISPER:
-            # Modern path: capture audio + transcribe with faster-whisper.
-            self._whisper_stop = threading.Event()
-            self._mic_thread = threading.Thread(
-                target=self._whisper_record_loop, daemon=True)
-            self._mic_thread.start()
-            self.set_status(
-                f"🎤 Starting Whisper… dictation will go to {target_name}.")
-        else:
-            # Fallback: Windows System.Speech via PowerShell.
-            try:
-                self._mic_proc = subprocess.Popen(
-                    ["powershell", "-NoProfile", "-Command", self._MIC_PS_SCRIPT],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    stdin=subprocess.DEVNULL,
-                    text=True, encoding="utf-8", errors="replace", bufsize=1,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-            except Exception as e:
-                self.is_listening = False
-                messagebox.showerror("Microphone could not start", str(e))
-                self._stop_mic()
-                return
-
-            def reader() -> None:
-                try:
-                    assert self._mic_proc is not None and self._mic_proc.stdout is not None
-                    for raw in self._mic_proc.stdout:
-                        line = raw.rstrip("\r\n")
-                        if not line:
-                            continue
-                        if line.startswith("STT_ERROR:"):
-                            self._mic_queue.put(("error", line[len("STT_ERROR:"):].strip()))
-                        elif line == "__MIC_READY__":
-                            self._mic_queue.put(("ready",))
-                        else:
-                            self._mic_queue.put(("text", line))
-                except Exception:
-                    pass
-                self._mic_queue.put(("done",))
-
-            self._mic_thread = threading.Thread(target=reader, daemon=True)
-            self._mic_thread.start()
-            self.set_status(
-                f"🎤 Starting microphone… dictation will go to {target_name}.")
-
+        # Whisper-only: capture audio + transcribe with faster-whisper.
+        self._whisper_stop = threading.Event()
+        self._mic_thread = threading.Thread(
+            target=self._whisper_record_loop, daemon=True)
+        self._mic_thread.start()
+        self.set_status(
+            f"🎤 Starting Whisper… dictation will go to {target_name}.")
         self._mic_poll_after_id = self.root.after(50, self._mic_poll_queue)
 
     def _ensure_whisper_model(self):
@@ -13159,10 +12973,7 @@ try {
                           activebackground=ACCENT_SLATE, activeforeground="white",
                           relief=tk.FLAT, padx=6, pady=2, cursor="hand2",
                           borderwidth=0).pack(side=tk.LEFT)
-                tk.Button(chip, text="🔊", command=lambda w=word: self._speak_word(w),
-                          font=("Segoe UI", 9), bg=BG_PANEL, fg=ACCENT_GREEN,
-                          activebackground=BG_PANEL, relief=tk.FLAT, padx=3, pady=2,
-                          cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+                # (🔊 chip removed — read-aloud feature was taken out.)
 
         def _on_key(ev=None):
             _show_picture(sound_var.get().strip())
@@ -13174,11 +12985,7 @@ try {
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
                   activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=8, pady=2,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(sh_head, text="🔊 Hear",
-                  command=lambda: self._speak_word(sound_var.get()),
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(6, 0))
+        # (🔊 Hear removed — read-aloud feature was taken out.)
         tk.Checkbutton(sh_head, text="say letters", variable=say_letters,
                        bg=BG_DARK, fg=FG_MUTED, selectcolor=BG_INPUT,
                        activebackground=BG_DARK, activeforeground=FG_TEXT,
@@ -13226,7 +13033,7 @@ try {
         # debounce-save to disk. Reader writes are session-only.
 
     def _stop_mic(self, error: str | None = None) -> None:
-        """Tear down dictation (Whisper thread or PowerShell) and reset UI."""
+        """Tear down the Whisper capture thread and reset the mic UI."""
         self.is_listening = False
         if self._mic_poll_after_id is not None:
             try: self.root.after_cancel(self._mic_poll_after_id)
@@ -13261,14 +13068,6 @@ try {
                     except Exception:
                         pass
                     break
-        if self._mic_proc is not None:
-            try: self._mic_proc.terminate()
-            except Exception: pass
-            try: self._mic_proc.wait(timeout=2)
-            except Exception:
-                try: self._mic_proc.kill()
-                except Exception: pass
-            self._mic_proc = None
         # Restore the idle button.
         try:
             self.mic_btn.configure(text="🎤  Voice note", bg=ACCENT_MIC,
@@ -13461,11 +13260,7 @@ try {
         prow.pack(fill=tk.X, padx=10, pady=(10, 2))
         tk.Label(prow, text="Prompt  (your message)", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
-        tk.Button(prow, text="🔊 Listen",
-                  command=lambda: self._prompt_lib_read("prompt"),
-                  bg=ACCENT_GREEN, fg="white", font=("Segoe UI", 9, "bold"),
-                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.RIGHT)
+        # (🔊 Listen removed — read-aloud feature was taken out.)
         pt_frame = tk.Frame(right, bg=BG_DARK)
         pt_frame.pack(fill=tk.BOTH, expand=True, padx=10)
         pt = tk.Text(pt_frame, height=8, bg=BG_INPUT, fg=FG_TEXT,
@@ -13484,11 +13279,7 @@ try {
         rrow.pack(fill=tk.X, padx=10, pady=(10, 2))
         tk.Label(rrow, text="Response  (the reply)", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
-        tk.Button(rrow, text="🔊 Listen",
-                  command=lambda: self._prompt_lib_read("response"),
-                  bg=ACCENT_GREEN, fg="white", font=("Segoe UI", 9, "bold"),
-                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.RIGHT)
+        # (🔊 Listen removed — read-aloud feature was taken out.)
         rt_frame = tk.Frame(right, bg=BG_DARK)
         rt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 6))
         rt = tk.Text(rt_frame, height=10, bg=BG_INPUT, fg=FG_TEXT,
@@ -13512,10 +13303,9 @@ try {
                       padx=12, pady=6, cursor="hand2", borderwidth=0
                       ).pack(side=tk.LEFT, padx=(0, 6))
 
-        _mk("💾 Save",            self._prompt_lib_save_current,  ACCENT_GREEN)
+        # (Prompts library 💾 Save removed — Save widgets were taken out.)
         _mk("+ New",             self._prompt_lib_new,           ACCENT_CYAN)
         _mk("📋 Paste → Response", self._prompt_lib_paste_response, ACCENT_AMBER)
-        _mk("■ Stop",            self.stop_reading,              ACCENT_SLATE)
         _mk("🗑 Delete",          self._prompt_lib_delete_current, ACCENT_RED)
         panes.add(right, minsize=380, stretch="always")
 
@@ -14424,11 +14214,7 @@ try {
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=10)
         row.pack(fill=tk.X)
-        tk.Button(row, text="Save", command=save,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT,
-                  padx=14, pady=6, cursor="hand2", borderwidth=0,
-                  ).pack(side=tk.RIGHT, padx=(6, 0))
+        # (Save removed — Save widgets were taken out of the project.)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
@@ -16065,12 +15851,7 @@ try {
         # Button row reserved at the bottom: Clear (empties this entry) + Save.
         rtbtn = tk.Frame(right, bg=BG_DARK, pady=4)
         rtbtn.pack(side=tk.BOTTOM, fill=tk.X)
-        tk.Button(rtbtn, text="Save entry",
-                  command=self._save_current_journal_entry,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-                  relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (Save entry removed — Save widgets were taken out of the project.)
         tk.Button(rtbtn, text="🧹 Clear",
                   command=self._clear_current_journal_entry,
                   font=("Segoe UI", 11, "bold"),
@@ -16078,25 +15859,13 @@ try {
                   relief=tk.FLAT, padx=14, pady=6,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
         # 🎤 Voice dictation into the journal entry.
-        self._journal_mic_btn = tk.Button(
-            rtbtn, text="🎤 Voice", command=self._journal_toggle_mic,
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_MIC, fg="white", activebackground=ACCENT_MIC,
-            relief=tk.FLAT, padx=14, pady=6, cursor="hand2", borderwidth=0)
-        self._journal_mic_btn.pack(side=tk.LEFT, padx=(6, 0))
-        # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
-        self._journal_read_btn = tk.Button(
-            rtbtn, text="🔊 Read", command=self._journal_read_toggle,
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-            relief=tk.FLAT, padx=14, pady=6, cursor="hand2", borderwidth=0)
-        self._journal_read_btn.pack(side=tk.LEFT, padx=(6, 0))
+        # (Journal 🎤 Voice button removed — microphone feature was
+        #  taken out of the project.)
+        self._journal_mic_btn = None
+        # (Journal 🔊 Read button + read color picker removed —
+        #  read-aloud feature was taken out of the project.)
+        self._journal_read_btn = None
         self._journal_read_color_var = tk.StringVar(value="Yellow")
-        _j_rc = tk.OptionMenu(rtbtn, self._journal_read_color_var,
-                              "Yellow", "Teal", "Indigo")
-        _style_optionmenu(_j_rc)
-        _j_rc.configure(width=7, font=("Segoe UI", 10, "bold"))
-        _j_rc.pack(side=tk.LEFT, padx=(6, 0))
         self._journal_body = scrolledtext.ScrolledText(
             right, wrap=tk.WORD, font=("Segoe UI", 12),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
@@ -16607,11 +16376,7 @@ try {
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=12)
         row.pack(fill=tk.X, side=tk.BOTTOM)
-        tk.Button(row, text="Save", command=commit,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT,
-                  padx=14, pady=6, cursor="hand2", borderwidth=0,
-                  ).pack(side=tk.RIGHT, padx=(6, 0))
+        # (Save removed — Save widgets were taken out of the project.)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
@@ -16973,80 +16738,12 @@ try {
         bar = tk.Frame(parent, bg=BG_PANEL, padx=10, pady=6)
         bar.pack(side=tk.TOP, fill=tk.X)
 
-        # ---- Row A: Read / Stop · font · size · mic accuracy ----
-        row_a = tk.Frame(bar, bg=BG_PANEL)
-        row_a.pack(fill=tk.X)
-        tk.Button(row_a, text="🔊  Read aloud", command=self.read_aloud,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 6))
-        tk.Button(row_a, text="■  Stop", command=self.stop_reading,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
-
-        tk.Label(row_a, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
-        font_menu = tk.OptionMenu(row_a, self.font_var, *self.available_fonts,
-                                  command=self._on_font_change)
-        _style_optionmenu(font_menu)
-        font_menu.configure(width=14, font=("Segoe UI", 9))
-        font_menu.pack(side=tk.LEFT, padx=(0, 6))
-        tk.Button(row_a, text="A−", command=self.smaller_text, bg=ACCENT_SLATE,
-                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
-                  padx=10, pady=4, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=2)
-        tk.Button(row_a, text="A+", command=self.bigger_text, bg=ACCENT_SLATE,
-                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
-                  padx=10, pady=4, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=2)
-        tk.Label(row_a, text="Mic accuracy:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        # The state block resets this to None after the early StringVar, and
-        # this tab builds at the end of __init__ — so guard like the Planner does.
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        mic_menu = tk.OptionMenu(row_a, self._whisper_quality_var,
-                                 "Fast", "Accurate", "Best",
-                                 command=self._set_mic_quality)
-        _style_optionmenu(mic_menu)
-        mic_menu.configure(width=10, font=("Segoe UI", 9))
-        mic_menu.pack(side=tk.LEFT)
-        tk.Button(row_a, text="🗣 Voice Memory", command=self.open_voice_memory,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
-
-        # ---- Row B: highlight selection · highlight unit · color · voice ----
-        row_b = tk.Frame(bar, bg=BG_PANEL)
-        row_b.pack(fill=tk.X, pady=(6, 0))
-        tk.Button(row_b, text="🖍  Highlight selection",
-                  command=lambda: self.highlight_selection(),
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_AMBER, fg="white",
-                  activebackground=ACCENT_AMBER, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
-        tk.Label(row_b, text="Highlight by:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
-        unit_menu = tk.OptionMenu(row_b, self.highlight_unit_var,
-                                  *self.HIGHLIGHT_UNITS)
-        _style_optionmenu(unit_menu)
-        unit_menu.configure(width=11)
-        unit_menu.pack(side=tk.LEFT, padx=(0, 18))
-        tk.Label(row_b, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
-        color_menu = tk.OptionMenu(
-            row_b, self.highlight_color_var, *list(self.HIGHLIGHT_COLORS.keys()),
-            command=self._on_highlight_color_change)
-        _style_optionmenu(color_menu)
-        color_menu.configure(width=8)
-        color_menu.pack(side=tk.LEFT)
-        tk.Label(row_b, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        voice_menu = tk.OptionMenu(row_b, self.voice_var, *self.available_voices,
-                                   command=self._on_voice_change)
-        _style_optionmenu(voice_menu)
-        voice_menu.configure(width=16)
-        voice_menu.pack(side=tk.LEFT)
+        # (Reader control bar removed — Text/font picker, A−/A+, 🖍
+        #  Highlight selection, Highlight by: unit picker, Color:
+        #  highlight-color picker, and Voice: TTS-voice picker were all
+        #  taken out at the user's request alongside the read-aloud and
+        #  microphone feature removals. Underlying StringVars are still
+        #  set in __init__ so any code that reads them keeps working.)
 
     def _build_tab_reader(self, parent: tk.Frame) -> None:
         """📖 Reader — the book itself: full text on the left, a chapter
@@ -17132,13 +16829,8 @@ try {
             font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white", relief=tk.FLAT,
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=4)
-        self._notes_save_btn = tk.Button(
-            notes_header, text="💾  Save", command=self._save_notes_manually,
-            font=("Segoe UI", 10, "bold"),
-            bg=ACCENT_GREEN, fg="white", relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._notes_save_btn.pack(side=tk.RIGHT, padx=4)
+        # (Notes header 💾 Save removed — Save widgets were taken out.)
+        self._notes_save_btn = None
         self._notes_to_matrix_btn = tk.Button(
             notes_header, text="🎯  →  Matrix  ▾",
             command=self._show_notes_to_matrix_menu,
@@ -17257,51 +16949,20 @@ try {
                  text="Save each note as its own entry — they archive on the left.",
                  bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
-        tk.Button(
-            head, text="💾 Save", command=self._save_study_notes,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-            activebackground=ACCENT_GREEN, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT)
+        # (Study Notes header 💾 Save removed — Save widgets were taken out.)
         tk.Button(
             head, text="＋ New", command=self._new_study_note,
             font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
             activebackground=ACCENT_SLATE, relief=tk.FLAT,
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=4)
-        # 🎤 Voice dictation into the study notes.
-        self._study_notes_mic_btn = tk.Button(
-            head, text="🎤 Voice", command=self._study_notes_toggle_mic,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-            activebackground=ACCENT_MIC, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._study_notes_mic_btn.pack(side=tk.RIGHT, padx=4)
-        # Mic accuracy mode (Fast / Accurate / Best) — shared app-wide setting.
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _snq = tk.OptionMenu(head, self._whisper_quality_var,
-                             "Fast", "Accurate", "Best",
-                             command=self._set_mic_quality)
-        _style_optionmenu(_snq)
-        _snq.configure(width=9, font=("Segoe UI", 9))
-        _snq.pack(side=tk.RIGHT, padx=(8, 2))
-        tk.Label(head, text="mode:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.RIGHT, padx=(8, 2))
-        # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
-        self._study_notes_read_btn = tk.Button(
-            head, text="🔊 Read", command=self._study_notes_read_toggle,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-            activebackground=ACCENT_GREEN, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._study_notes_read_btn.pack(side=tk.RIGHT, padx=4)
+        # (Study Notes 🎤 Voice button + Mic accuracy mode removed —
+        #  microphone feature was taken out of the project.)
+        self._study_notes_mic_btn = None
+        # (Study Notes 🔊 Read button + color picker removed —
+        #  read-aloud feature was taken out of the project.)
+        self._study_notes_read_btn = None
         self._study_notes_read_color_var = tk.StringVar(value="Yellow")
-        _sn_rc = tk.OptionMenu(head, self._study_notes_read_color_var,
-                               "Yellow", "Teal", "Indigo")
-        _style_optionmenu(_sn_rc)
-        _sn_rc.configure(width=7, font=("Segoe UI", 10, "bold"))
-        _sn_rc.pack(side=tk.RIGHT, padx=4)
 
         body_frame = tk.Frame(parent, bg=BG_DARK, padx=8, pady=8)
         body_frame.pack(fill=tk.BOTH, expand=True)
@@ -18035,12 +17696,9 @@ try {
         _pmq.pack(side=tk.RIGHT, padx=(0, 10))
         # One 🎤 Voice button up here, beside the nav buttons. It dictates into
         # the day you last clicked (or today's), and auto-adds the note on Stop.
-        self._planner_mic_btn = tk.Button(
-            head, text="🎤 Voice", command=self._planner_toggle_mic,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-            activebackground=ACCENT_MIC, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0)
-        self._planner_mic_btn.pack(side=tk.RIGHT, padx=(0, 6))
+        # (Planner header 🎤 Voice button removed — microphone feature
+        #  was taken out of the project.)
+        self._planner_mic_btn = None
         self._planner_week_var = tk.StringVar(value="")
         tk.Label(head, textvariable=self._planner_week_var, bg=BG_PANEL,
                  fg=FG_TEXT, font=("Segoe UI", 11, "bold")
@@ -18417,10 +18075,7 @@ try {
             except Exception as e:
                 messagebox.showerror("Could not save", str(e))
 
-        tk.Button(foot, text="💾 Save snapshot", command=_save,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=(6, 0))
+        # (💾 Save snapshot removed — Save widgets were taken out.)
         if goto_goals is not None:
             tk.Button(foot, text="🎯 Set goals on weak areas",
                       command=goto_goals,
@@ -18746,27 +18401,10 @@ try {
                 self._speak_word(title_e.get().strip()); return
             self.set_status("Nothing to read yet — type or dictate some text first.")
 
-        self._goals_mic_btn = tk.Button(
-            head, text="🎤 Voice", command=_goal_mic,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=10, pady=4,
-            cursor="hand2", borderwidth=0)
-        self._goals_mic_btn.pack(side=tk.LEFT, padx=(14, 4))
-        tk.Button(head, text="🔊 Read", command=_goal_read,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
-        # Mic accuracy mode (Fast / Accurate / Best) — shared app-wide setting.
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        tk.Label(head, text="mode:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(8, 2))
-        _gmq = tk.OptionMenu(head, self._whisper_quality_var,
-                             "Fast", "Accurate", "Best",
-                             command=self._set_mic_quality)
-        _style_optionmenu(_gmq)
-        _gmq.configure(width=9, font=("Segoe UI", 9))
-        _gmq.pack(side=tk.LEFT)
+        # (Goals 🎤 Voice + Mic accuracy mode removed — microphone
+        #  feature was taken out of the project.)
+        self._goals_mic_btn = None
+        # (Goals 🔊 Read button removed — read-aloud feature was taken out.)
 
         # Calendar tie-in (pinned bottom).
         tk.Label(tie, text="📅 Add next step to calendar on:", bg=BG_PANEL,
@@ -18960,10 +18598,7 @@ try {
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
                   activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
                   cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
-        tk.Button(savebar, text="💾 Save goal", command=_save_goal,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # (💾 Save goal removed — Save widgets were taken out of the project.)
 
         _refresh_list()
         _clear_form()
@@ -19066,16 +18701,7 @@ try {
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
                   cursor="hand2", borderwidth=0).pack(fill=tk.X)
 
-        def _mic():
-            try:
-                entry.focus_set(); self._set_mic_target(entry)
-            except tk.TclError:
-                pass
-            self.toggle_mic()
-        tk.Button(capbtn, text="🎤 Dictate", command=_mic,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=10, pady=4,
-                  cursor="hand2", borderwidth=0).pack(fill=tk.X, pady=(4, 0))
+        # (🎤 Dictate button removed — microphone feature was taken out.)
 
         # ---- controls: schedule-day + legend + 'A first' banner ----
         ctl = tk.Frame(win, bg=BG_DARK, padx=12)
@@ -19751,10 +19377,7 @@ try {
 
         br_ = tk.Frame(win, bg=BG_DARK)
         br_.pack(fill=tk.X, padx=14, pady=14)
-        tk.Button(br_, text="💾 Save", command=_save,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # (💾 Save removed — Save widgets were taken out of the project.)
         tk.Button(br_, text="Cancel", command=_close,
                   font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=14, pady=5,
@@ -20620,10 +20243,7 @@ try {
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=10, pady=4,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(foot, text="💾 Save", command=_save,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save removed — Save widgets were taken out of the project.)
         tk.Button(foot, text="Next ▶", command=lambda: _go(1),
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=4,
@@ -20715,19 +20335,13 @@ try {
         _tbtn(tools, "⏱ Time Log", self.open_time_log,
               ACCENT_CYAN).pack(side=tk.LEFT, padx=(GROUP, GAP))
 
-        # --- Right cluster: [colour] 🔊 Read · 🎤 Voice · 💾 Save ---
-        # Read sits directly to the LEFT of Voice (Read then Voice).
-        _tbtn(tools, "💾 Save", self._save_all_eisenhower,
-              ACCENT_GREEN).pack(side=tk.RIGHT)
-        self._matrix_mic_btn = _tbtn(tools, "🎤 Voice", self._matrix_toggle_mic,
-                                     ACCENT_MIC)
-        self._matrix_mic_btn.pack(side=tk.RIGHT, padx=(0, GAP))
-        self._matrix_read_btn = _tbtn(tools, "🔊 Read",
-                                      self._matrix_read_toggle, ACCENT_GREEN)
-        self._matrix_read_btn.pack(side=tk.RIGHT, padx=(0, GAP))
+        # --- Right cluster: 💾 Save ---
+        # (Matrix 🎤 Voice removed earlier; Matrix 🔊 Read + color picker
+        #  removed now — read-aloud feature was taken out of the project.)
+        # (Matrix 💾 Save removed — Save widgets were taken out of the project.)
+        self._matrix_mic_btn = None
+        self._matrix_read_btn = None
         self._matrix_read_color_var = tk.StringVar(value="Yellow")
-        _tmenu(tools, self._matrix_read_color_var,
-               "Yellow", "Teal", "Indigo").pack(side=tk.RIGHT, padx=(0, GAP))
 
         # The whole 2×2 grid lives inside a scrollable canvas with one BIG
         # vertical scrollbar on the right — its ▲ / ▼ arrows and draggable
@@ -21679,12 +21293,7 @@ try {
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=10)
         row.pack(fill=tk.X)
-        tk.Button(row, text="Save", command=commit,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-                  relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0,
-                  ).pack(side=tk.RIGHT, padx=(6, 0))
+        # (Save removed — Save widgets were taken out of the project.)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"),
                   bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
