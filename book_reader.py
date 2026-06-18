@@ -1053,22 +1053,9 @@ class BookReader:
         mic_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.mic_btn = mic_btn
 
-        # Installed: 🖍 Highlight selection + the 3-color (Yellow/Teal/
-        # Indigo) picker bound to self.highlight_color_var. Click 🖍 to
-        # highlight the current selection in whichever color is picked.
-        tk.Button(
-            body, text="🖍 Highlight",
-            command=lambda: self.highlight_selection(),
-            font=("Segoe UI", 9, "bold"),
-            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
-            relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.LEFT, padx=(12, 4))
-        _ftb_color = tk.OptionMenu(
-            body, self.highlight_color_var,
-            *list(self.HIGHLIGHT_COLORS.keys()))
-        _style_optionmenu(_ftb_color)
-        _ftb_color.configure(width=7, font=("Segoe UI", 9, "bold"))
-        _ftb_color.pack(side=tk.LEFT)
+        # (🖍 Highlight + color picker removed from the toolbar.
+        #  Highlight now lives in the right-click menu of every text
+        #  widget via _attach_clipboard_menu — Yellow / Teal / Indigo.)
 
         # Dock/Undock toggle (part of the toolbar shell, not a feature).
         dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock"
@@ -1719,6 +1706,10 @@ class BookReader:
         select-all and, when ``track_for_mic`` is set, a <FocusIn> hook
         so the mic dictates into whichever pane was clicked last.
 
+        For ``tk.Text`` widgets, a 🖍 Highlight selection cascade with
+        Yellow / Teal / Indigo is added so the user can paint the
+        selection in any part of the app via right-click.
+
         Used by every editable Text widget in the app — Notes, the four
         Eisenhower quadrants, and anywhere else this menu makes sense."""
         m = tk.Menu(widget, tearoff=0,
@@ -1733,6 +1724,18 @@ class BookReader:
         m.add_separator()
         m.add_command(label="Select all",
                       command=lambda w=widget: self._select_all_in(w))
+        if isinstance(widget, tk.Text):
+            hl = tk.Menu(m, tearoff=0,
+                         bg=BG_PANEL, fg=FG_TEXT,
+                         activebackground=ACCENT_SLATE,
+                         activeforeground="white")
+            for _color in self.HIGHLIGHT_COLORS:
+                hl.add_command(
+                    label=_color,
+                    command=lambda w=widget, c=_color:
+                        self._highlight_widget_selection(w, c))
+            m.add_separator()
+            m.add_cascade(label="🖍  Highlight selection", menu=hl)
         if clear_cmd is not None:
             m.add_separator()
             m.add_command(label=clear_label, command=clear_cmd)
@@ -13665,6 +13668,27 @@ class BookReader:
         except tk.TclError:
             pass
         return tag
+
+    def _highlight_widget_selection(self, widget, color_name: str) -> None:
+        """Paint the current selection of any tk.Text widget with the
+        chosen color tag. Works app-wide via the right-click cascade
+        attached in _attach_clipboard_menu. No-ops on non-Text widgets
+        (e.g. tk.Entry doesn't support tag overlays)."""
+        if not isinstance(widget, tk.Text):
+            return
+        try:
+            s_idx = widget.index(tk.SEL_FIRST)
+            e_idx = widget.index(tk.SEL_LAST)
+        except tk.TclError:
+            return
+        color_hex = self.HIGHLIGHT_COLORS.get(color_name, "#fde047")
+        tag = f"hl_{color_name.lower()}"
+        try:
+            widget.tag_configure(tag, background=color_hex,
+                                 foreground="#0f172a")
+            widget.tag_add(tag, s_idx, e_idx)
+        except tk.TclError:
+            pass
 
     def highlight_selection(self, color_name: str | None = None) -> None:
         """Apply a persistent color highlight to the current selection."""
