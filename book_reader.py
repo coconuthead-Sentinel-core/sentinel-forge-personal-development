@@ -977,6 +977,8 @@ class BookReader:
         self._ftb_body = None
         self._ftb_dock_btn = None
         self._ftb_grip = None
+        self._ftb_read_btn = None
+        self._ftb_speak_proc = None
         self._ftb_drag_x = 0
         self._ftb_drag_y = 0
         self._ftb_is_docked = True
@@ -1053,9 +1055,22 @@ class BookReader:
         mic_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.mic_btn = mic_btn
 
-        # (🖍 Highlight + color picker removed from the toolbar.
-        #  Highlight now lives in the right-click menu of every text
-        #  widget via _attach_clipboard_menu — Yellow / Teal / Indigo.)
+        # Installed: 🔊 Read toggle for proofreading dictated text.
+        # Reads the widget the user was last typing/dictating into
+        # (self._mic_target); if there's a selection, only the selection
+        # is spoken. Click again to stop. self._ftb_read_btn keeps a
+        # reference so the handler can flip its label.
+        read_btn = tk.Button(
+            body, text="🔊 Read", command=self._ftb_read_toggle,
+            font=("Segoe UI", 9, "bold"),
+            bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
+            relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0)
+        read_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self._ftb_read_btn = read_btn
+
+        # (🖍 Highlight + color picker NOT in the toolbar by design —
+        #  highlight is on the right-click menu of every text widget
+        #  via _attach_clipboard_menu — Yellow / Teal / Indigo.)
 
         # Dock/Undock toggle (part of the toolbar shell, not a feature).
         dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock"
@@ -1131,6 +1146,114 @@ class BookReader:
             y = self._ftb_win.winfo_y() + dy
             self._ftb_win.geometry(f"+{x}+{y}")
             self._ftb_float_xy = (x, y)
+        except tk.TclError:
+            pass
+
+    def _ftb_read_button_idle(self) -> None:
+        """Restore the toolbar Read button to its idle 🔊 Read look."""
+        try:
+            if self._ftb_read_btn is not None:
+                self._ftb_read_btn.configure(
+                    text="🔊 Read", bg=ACCENT_GREEN,
+                    activebackground=ACCENT_GREEN)
+        except tk.TclError:
+            pass
+
+    def _ftb_read_toggle(self) -> None:
+        """🔊 Read toggle for the floating toolbar. Reads the widget the
+        user was last typing/dictating into (the mic target). If the
+        widget has a text selection, only that selection is spoken.
+        Click again to stop.
+
+        Uses its own fire-and-forget PowerShell SAPI subprocess so the
+        proofread path is independent of the main read_aloud() reading
+        session (which is tied to the Reader's text_area)."""
+        proc = getattr(self, "_ftb_speak_proc", None)
+        # Stop case
+        if proc is not None and proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            self._ftb_speak_proc = None
+            self._ftb_read_button_idle()
+            return
+
+        # Start case: pick what to read
+        target = getattr(self, "_mic_target", None)
+        if target is None:
+            target = getattr(self, "notes_area", None) or self.text_area
+        try:
+            if not target.winfo_exists():
+                target = self.text_area
+        except (tk.TclError, AttributeError):
+            target = self.text_area
+
+        text = ""
+        try:
+            if isinstance(target, tk.Text):
+                try:
+                    text = target.get(tk.SEL_FIRST, tk.SEL_LAST)
+                except tk.TclError:
+                    text = target.get("1.0", tk.END)
+            elif isinstance(target, (tk.Entry, ttk.Entry)):
+                text = target.get()
+        except tk.TclError:
+            text = ""
+        text = (text or "").strip()
+        if not text:
+            try:
+                self.set_status("Nothing to read — type or dictate "
+                                "something first.")
+            except Exception:
+                pass
+            return
+
+        # Flip the button to ■ Stop while speaking.
+        try:
+            if self._ftb_read_btn is not None:
+                self._ftb_read_btn.configure(
+                    text="■ Stop", bg=ACCENT_RED,
+                    activebackground=ACCENT_RED)
+        except tk.TclError:
+            pass
+
+        # Speak via PowerShell System.Speech.Synthesis (the canonical
+        # SAPI5 fallback path already used by _speak_word elsewhere).
+        safe = text.replace("'", "''")
+        ps = ("Add-Type -AssemblyName System.Speech; "
+              "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+              f"$s.Speak('{safe}')")
+        try:
+            self._ftb_speak_proc = subprocess.Popen(
+                ["powershell", "-NoProfile", "-Command", ps],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except Exception as e:
+            self._ftb_speak_proc = None
+            try:
+                self.set_status(f"Read aloud failed: {e}")
+            except Exception:
+                pass
+            self._ftb_read_button_idle()
+            return
+
+        # Poll until the subprocess exits so the button auto-returns to idle.
+        def _watch():
+            p = getattr(self, "_ftb_speak_proc", None)
+            if p is None:
+                self._ftb_read_button_idle()
+                return
+            if p.poll() is not None:
+                self._ftb_speak_proc = None
+                self._ftb_read_button_idle()
+                return
+            try:
+                self.root.after(200, _watch)
+            except tk.TclError:
+                pass
+        try:
+            self.root.after(200, _watch)
         except tk.TclError:
             pass
 
