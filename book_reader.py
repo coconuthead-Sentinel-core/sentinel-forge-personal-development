@@ -979,6 +979,10 @@ class BookReader:
         self._ftb_grip = None
         self._ftb_read_btn = None
         self._ftb_speak_proc = None
+        # Read-aloud follow-along highlight state.
+        self._ftb_read_color_var = None
+        self._ftb_read_target = None
+        self._ftb_read_range = None     # (start_idx, end_idx) on _ftb_read_target
         self._ftb_drag_x = 0
         self._ftb_drag_y = 0
         self._ftb_is_docked = True
@@ -1068,6 +1072,18 @@ class BookReader:
         read_btn.pack(side=tk.LEFT, padx=(6, 0))
         self._ftb_read_btn = read_btn
 
+        # Follow-along highlight picker for 🔊 Read. While the toolbar
+        # is reading, the spoken region is painted with this color
+        # (temporary — the highlight is cleared when reading ends).
+        if self._ftb_read_color_var is None:
+            self._ftb_read_color_var = tk.StringVar(value="Yellow")
+        _ftb_rc = tk.OptionMenu(
+            body, self._ftb_read_color_var,
+            *list(self.HIGHLIGHT_COLORS.keys()))
+        _style_optionmenu(_ftb_rc)
+        _ftb_rc.configure(width=7, font=("Segoe UI", 9, "bold"))
+        _ftb_rc.pack(side=tk.LEFT, padx=(4, 0))
+
         # (🖍 Highlight + color picker NOT in the toolbar by design —
         #  highlight is on the right-click menu of every text widget
         #  via _attach_clipboard_menu — Yellow / Teal / Indigo.)
@@ -1150,7 +1166,8 @@ class BookReader:
             pass
 
     def _ftb_read_button_idle(self) -> None:
-        """Restore the toolbar Read button to its idle 🔊 Read look."""
+        """Restore the toolbar Read button to its idle 🔊 Read look and
+        clear the follow-along highlight if one is painted."""
         try:
             if self._ftb_read_btn is not None:
                 self._ftb_read_btn.configure(
@@ -1158,6 +1175,43 @@ class BookReader:
                     activebackground=ACCENT_GREEN)
         except tk.TclError:
             pass
+        self._ftb_clear_read_highlight()
+
+    def _ftb_clear_read_highlight(self) -> None:
+        """Remove the follow-along highlight tag from the last-read widget."""
+        target = self._ftb_read_target
+        rng = self._ftb_read_range
+        if target is None or rng is None:
+            return
+        try:
+            if isinstance(target, tk.Text) and target.winfo_exists():
+                target.tag_remove("ftb_reading", rng[0], rng[1])
+        except tk.TclError:
+            pass
+        self._ftb_read_target = None
+        self._ftb_read_range = None
+
+    def _ftb_paint_read_highlight(self, target, start_idx, end_idx) -> None:
+        """Paint the spoken region with the current Yellow/Teal/Indigo
+        color so the user can see what's being read."""
+        if not isinstance(target, tk.Text):
+            self._ftb_read_target = None
+            self._ftb_read_range = None
+            return
+        color_name = "Yellow"
+        if self._ftb_read_color_var is not None:
+            color_name = self._ftb_read_color_var.get() or "Yellow"
+        color_hex = self.HIGHLIGHT_COLORS.get(color_name, "#fde047")
+        try:
+            target.tag_configure("ftb_reading",
+                                 background=color_hex,
+                                 foreground="#0f172a")
+            target.tag_add("ftb_reading", start_idx, end_idx)
+            target.see(start_idx)
+        except tk.TclError:
+            return
+        self._ftb_read_target = target
+        self._ftb_read_range = (start_idx, end_idx)
 
     def _ftb_read_toggle(self) -> None:
         """🔊 Read toggle for the floating toolbar. Reads the widget the
@@ -1190,12 +1244,18 @@ class BookReader:
             target = self.text_area
 
         text = ""
+        span_start = None
+        span_end = None
         try:
             if isinstance(target, tk.Text):
                 try:
-                    text = target.get(tk.SEL_FIRST, tk.SEL_LAST)
+                    span_start = target.index(tk.SEL_FIRST)
+                    span_end = target.index(tk.SEL_LAST)
+                    text = target.get(span_start, span_end)
                 except tk.TclError:
-                    text = target.get("1.0", tk.END)
+                    span_start = "1.0"
+                    span_end = target.index("end-1c")
+                    text = target.get(span_start, span_end)
             elif isinstance(target, (tk.Entry, ttk.Entry)):
                 text = target.get()
         except tk.TclError:
@@ -1217,6 +1277,11 @@ class BookReader:
                     activebackground=ACCENT_RED)
         except tk.TclError:
             pass
+
+        # Paint the follow-along highlight over the spoken region.
+        if (isinstance(target, tk.Text)
+                and span_start is not None and span_end is not None):
+            self._ftb_paint_read_highlight(target, span_start, span_end)
 
         # Speak via PowerShell System.Speech.Synthesis (the canonical
         # SAPI5 fallback path already used by _speak_word elsewhere).
