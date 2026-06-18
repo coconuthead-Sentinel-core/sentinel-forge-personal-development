@@ -1020,10 +1020,26 @@ class BookReader:
         grip.bind("<B1-Motion>", self._floating_toolbar_drag_motion)
         self._ftb_grip = grip
 
-        # Blank content area — no features by design.
+        # Content area inside the toolbar.
         body = tk.Frame(parent, bg=BG_PANEL)
         body.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
         self._ftb_body = body
+
+        # Installed widget: Fast / Accurate / Best picker (re-homed from
+        # the old per-tab mic-accuracy dropdowns into the floating toolbar).
+        # The microphone feature itself is removed, so this is a shell —
+        # selecting an option updates the bound var and the status line.
+        if self._whisper_quality_var is None:
+            self._whisper_quality_var = tk.StringVar(value="Accurate")
+        tk.Label(body, text="Quality:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")
+                 ).pack(side=tk.LEFT, padx=(2, 4))
+        _ftb_q = tk.OptionMenu(body, self._whisper_quality_var,
+                               "Fast", "Accurate", "Best",
+                               command=self._ftb_quality_change)
+        _style_optionmenu(_ftb_q)
+        _ftb_q.configure(width=9, font=("Segoe UI", 9, "bold"))
+        _ftb_q.pack(side=tk.LEFT)
 
         # Dock/Undock toggle (part of the toolbar shell, not a feature).
         dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock"
@@ -1100,6 +1116,16 @@ class BookReader:
             self._ftb_win.geometry(f"+{x}+{y}")
             self._ftb_float_xy = (x, y)
         except tk.TclError:
+            pass
+
+    def _ftb_quality_change(self, val: str) -> None:
+        """Handler for the Fast/Accurate/Best picker installed inside
+        the floating toolbar. The microphone feature is removed, so we
+        just acknowledge the selection on the status line — no model
+        load, no audio capture."""
+        try:
+            self.set_status(f"Quality: {val}")
+        except Exception:
             pass
 
     def _save_floating_toolbar_state(self) -> None:
