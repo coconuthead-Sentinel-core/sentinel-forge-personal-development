@@ -10420,6 +10420,14 @@ class BookReader:
         btn_row = tk.Frame(body, bg=BG_DARK)
         btn_row.pack(fill=tk.X, pady=(12, 0))
 
+        # Session timer duration dropdown
+        session_len_var = tk.StringVar(value="25")
+        tk.Label(btn_row, text="Timer (min):", bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9)).pack(side=tk.LEFT, padx=(0, 4))
+        len_opt = tk.OptionMenu(btn_row, session_len_var, "10", "15", "20", "25", "30", "45", "60")
+        _style_optionmenu(len_opt)
+        len_opt.configure(width=3, bg=BG_INPUT, fg=FG_TEXT)
+        len_opt.pack(side=tk.LEFT, padx=(0, 16))
+
         def _begin():
             cur = self._load_handoff_state() or {}
             cur["session_start_iso"]   = datetime.now().isoformat(timespec="seconds")
@@ -10444,6 +10452,22 @@ class BookReader:
                     w.focus_set()
             except Exception:
                 pass
+
+        def _do_now():
+            """Runs the normal _begin() logic, then immediately starts the Pomodoro timer."""
+            _begin()
+            try:
+                duration = int(session_len_var.get())
+            except ValueError:
+                duration = 25
+            self._start_timer(duration_min=duration)
+
+        tk.Button(btn_row, text="🔥 Do Now", command=_do_now,
+                  bg=ACCENT_ORANGE, fg="white",
+                  font=("Segoe UI", 11, "bold"),
+                  relief=tk.FLAT, padx=18, pady=8,
+                  cursor="hand2", borderwidth=0
+                  ).pack(side=tk.LEFT, padx=(0, 8))
 
         tk.Button(btn_row, text="Begin Session  ▶", command=_begin,
                   bg=ACCENT_GREEN, fg="white",
