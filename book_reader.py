@@ -17655,11 +17655,8 @@ class BookReader:
 
             btnrow = tk.Frame(col, bg=BG_DARK)
             btnrow.pack(side=tk.TOP, fill=tk.X, padx=3, pady=(0, 3))
-            tk.Button(btnrow, text="➕ Add",
-                      command=lambda ds=dstr: self._planner_add_task(ds),
-                      font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
-                      activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6,
-                      pady=1, cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(3, 0))
+            # (➕ Add button removed from each day column. The Enter
+            #  key still triggers add via the input keybinding.)
             # (🗑 Planner-day delete removed — Delete/Remove widgets were taken out.)
 
             # Notes display: word-wrapped read-only Text so long notes show in
