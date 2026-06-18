@@ -17,6 +17,7 @@
 - **Open** any book (`.docx`, `.pdf`, `.md`, `.txt`, `.rtf`, `.html`) and
   read it in a big, readable single-window UI
 - **Highlight by sentence, word, or paragraph** with 8 colour swatches
+- **Session Start**: Pre-commit to a single task, write a brief handoff note, and start your session with standard Pomodoro intervals (e.g. 25 minutes) using the **🔥 Do Now** feature.
 - **Save excerpts** — click Save, the selected (or whole) passage is
   written as a `.md` with YAML front-matter recording zone, cognitive
   load, source book, and timestamp
