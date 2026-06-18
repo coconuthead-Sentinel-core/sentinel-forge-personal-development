@@ -17594,15 +17594,8 @@ class BookReader:
         _nv("Next ▶", self._planner_next_week).pack(side=tk.RIGHT, padx=(6, 0))
         _nv("Today", self._planner_this_week).pack(side=tk.RIGHT, padx=6)
         _nv("◀ Prev", self._planner_prev_week).pack(side=tk.RIGHT)
-        # Mic accuracy (shares the main toolbar's setting): Fast/Accurate/Best.
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _pmq = tk.OptionMenu(head, self._whisper_quality_var,
-                             "Fast", "Accurate", "Best",
-                             command=self._set_mic_quality)
-        _style_optionmenu(_pmq)
-        _pmq.configure(width=8, font=("Segoe UI", 10, "bold"))
-        _pmq.pack(side=tk.RIGHT, padx=(0, 10))
+        # (Planner Fast/Accurate/Best Mic accuracy picker removed —
+        #  microphone feature is gone from the project.)
         # One 🎤 Voice button up here, beside the nav buttons. It dictates into
         # the day you last clicked (or today's), and auto-adds the note on Stop.
         # (Planner header 🎤 Voice button removed — microphone feature
