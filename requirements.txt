@@ -16,6 +16,5 @@ beautifulsoup4>=4.12.0     # .html / .htm books
 
 # --- Optional niceties ----------------------------------------------------
 tkinterdnd2>=0.4.0         # drag-and-drop files into the Library/Study windows
-pyttsx3>=2.90              # fallback text-to-speech (SAPI) if Piper isn't present
 send2trash>=1.8.0          # recoverable deletes from the Library
 pyspellchecker>=0.8.0      # offline spelling suggestions for the Voice Memory Spelling Helper

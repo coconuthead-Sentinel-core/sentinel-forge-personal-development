@@ -653,8 +653,6 @@ class BookReader:
             ("📋 Planning", self.open_planning_hub,    ACCENT_PURPLE),
             ("📊 Track",    self.open_track_hub,        ACCENT_INDIGO),
             ("💰 Money",    self.open_money_panel,      ACCENT_GOLD),
-            ("🔊 Read",     self.read_aloud,            ACCENT_GREEN),
-            ("■ Stop",      self.stop_reading,          ACCENT_SLATE),
             ("💾 Save",     self.save_excerpt,          ACCENT_PINK),
             ("📓 Study",    self.open_study_workspace,  ACCENT_RED),
         ]
@@ -2661,10 +2659,7 @@ class BookReader:
             box.pack(fill=tk.BOTH, expand=True, padx=2)
             box.bind("<FocusIn>",
                      lambda _e, b=box: self._set_mic_target(b), add="+")
-            tk.Button(right, text="🔊 Listen", command=lambda b=box: self._review_read_widget(b),
-                      font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
-                      activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10,
-                      pady=2, cursor="hand2", borderwidth=0).pack(anchor="e", padx=2, pady=(2, 0))
+            # (🔊 Listen removed — read-aloud feature was taken out.)
             return box
 
         box1 = _q_box("✅  What did I do right today?")
@@ -10488,10 +10483,8 @@ class BookReader:
                 relief=tk.FLAT, padx=10, pady=5, cursor="hand2", borderwidth=0,
             )
 
-        lbtn(btn_row, "🔊  Read aloud", self._library_read_aloud,
-             ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
-        lbtn(btn_row, "■  Stop",        self.stop_reading,
-             ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, 14))
+        # (Library 🔊 Read aloud + ■ Stop removed — read-aloud feature
+        #  was taken out of the project.)
         lbtn(btn_row, "+  Add files…",  self._library_add_files,
              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
         lbtn(btn_row, "🗑  Remove",      self._library_remove_selected,
@@ -13015,10 +13008,7 @@ class BookReader:
                           activebackground=ACCENT_SLATE, activeforeground="white",
                           relief=tk.FLAT, padx=6, pady=2, cursor="hand2",
                           borderwidth=0).pack(side=tk.LEFT)
-                tk.Button(chip, text="🔊", command=lambda w=word: self._speak_word(w),
-                          font=("Segoe UI", 9), bg=BG_PANEL, fg=ACCENT_GREEN,
-                          activebackground=BG_PANEL, relief=tk.FLAT, padx=3, pady=2,
-                          cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+                # (🔊 chip removed — read-aloud feature was taken out.)
 
         def _on_key(ev=None):
             _show_picture(sound_var.get().strip())
@@ -13030,11 +13020,7 @@ class BookReader:
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
                   activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=8, pady=2,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(sh_head, text="🔊 Hear",
-                  command=lambda: self._speak_word(sound_var.get()),
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(6, 0))
+        # (🔊 Hear removed — read-aloud feature was taken out.)
         tk.Checkbutton(sh_head, text="say letters", variable=say_letters,
                        bg=BG_DARK, fg=FG_MUTED, selectcolor=BG_INPUT,
                        activebackground=BG_DARK, activeforeground=FG_TEXT,
@@ -13309,11 +13295,7 @@ class BookReader:
         prow.pack(fill=tk.X, padx=10, pady=(10, 2))
         tk.Label(prow, text="Prompt  (your message)", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
-        tk.Button(prow, text="🔊 Listen",
-                  command=lambda: self._prompt_lib_read("prompt"),
-                  bg=ACCENT_GREEN, fg="white", font=("Segoe UI", 9, "bold"),
-                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.RIGHT)
+        # (🔊 Listen removed — read-aloud feature was taken out.)
         pt_frame = tk.Frame(right, bg=BG_DARK)
         pt_frame.pack(fill=tk.BOTH, expand=True, padx=10)
         pt = tk.Text(pt_frame, height=8, bg=BG_INPUT, fg=FG_TEXT,
@@ -13332,11 +13314,7 @@ class BookReader:
         rrow.pack(fill=tk.X, padx=10, pady=(10, 2))
         tk.Label(rrow, text="Response  (the reply)", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
-        tk.Button(rrow, text="🔊 Listen",
-                  command=lambda: self._prompt_lib_read("response"),
-                  bg=ACCENT_GREEN, fg="white", font=("Segoe UI", 9, "bold"),
-                  relief=tk.FLAT, padx=8, pady=2, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.RIGHT)
+        # (🔊 Listen removed — read-aloud feature was taken out.)
         rt_frame = tk.Frame(right, bg=BG_DARK)
         rt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 6))
         rt = tk.Text(rt_frame, height=10, bg=BG_INPUT, fg=FG_TEXT,
@@ -15929,19 +15907,10 @@ class BookReader:
         # (Journal 🎤 Voice button removed — microphone feature was
         #  taken out of the project.)
         self._journal_mic_btn = None
-        # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
-        self._journal_read_btn = tk.Button(
-            rtbtn, text="🔊 Read", command=self._journal_read_toggle,
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-            relief=tk.FLAT, padx=14, pady=6, cursor="hand2", borderwidth=0)
-        self._journal_read_btn.pack(side=tk.LEFT, padx=(6, 0))
+        # (Journal 🔊 Read button + read color picker removed —
+        #  read-aloud feature was taken out of the project.)
+        self._journal_read_btn = None
         self._journal_read_color_var = tk.StringVar(value="Yellow")
-        _j_rc = tk.OptionMenu(rtbtn, self._journal_read_color_var,
-                              "Yellow", "Teal", "Indigo")
-        _style_optionmenu(_j_rc)
-        _j_rc.configure(width=7, font=("Segoe UI", 10, "bold"))
-        _j_rc.pack(side=tk.LEFT, padx=(6, 0))
         self._journal_body = scrolledtext.ScrolledText(
             right, wrap=tk.WORD, font=("Segoe UI", 12),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
@@ -16821,14 +16790,7 @@ class BookReader:
         # ---- Row A: Read / Stop · font · size · mic accuracy ----
         row_a = tk.Frame(bar, bg=BG_PANEL)
         row_a.pack(fill=tk.X)
-        tk.Button(row_a, text="🔊  Read aloud", command=self.read_aloud,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 6))
-        tk.Button(row_a, text="■  Stop", command=self.stop_reading,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
+        # (🔊 Read aloud + ■ Stop removed — read-aloud feature was taken out.)
 
         tk.Label(row_a, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
@@ -17103,20 +17065,10 @@ class BookReader:
         # (Study Notes 🎤 Voice button + Mic accuracy mode removed —
         #  microphone feature was taken out of the project.)
         self._study_notes_mic_btn = None
-        # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
-        self._study_notes_read_btn = tk.Button(
-            head, text="🔊 Read", command=self._study_notes_read_toggle,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-            activebackground=ACCENT_GREEN, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._study_notes_read_btn.pack(side=tk.RIGHT, padx=4)
+        # (Study Notes 🔊 Read button + color picker removed —
+        #  read-aloud feature was taken out of the project.)
+        self._study_notes_read_btn = None
         self._study_notes_read_color_var = tk.StringVar(value="Yellow")
-        _sn_rc = tk.OptionMenu(head, self._study_notes_read_color_var,
-                               "Yellow", "Teal", "Indigo")
-        _style_optionmenu(_sn_rc)
-        _sn_rc.configure(width=7, font=("Segoe UI", 10, "bold"))
-        _sn_rc.pack(side=tk.RIGHT, padx=4)
 
         body_frame = tk.Frame(parent, bg=BG_DARK, padx=8, pady=8)
         body_frame.pack(fill=tk.BOTH, expand=True)
@@ -18561,10 +18513,7 @@ class BookReader:
         # (Goals 🎤 Voice + Mic accuracy mode removed — microphone
         #  feature was taken out of the project.)
         self._goals_mic_btn = None
-        tk.Button(head, text="🔊 Read", command=_goal_read,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
+        # (Goals 🔊 Read button removed — read-aloud feature was taken out.)
 
         # Calendar tie-in (pinned bottom).
         tk.Label(tie, text="📅 Add next step to calendar on:", bg=BG_PANEL,
@@ -20504,17 +20453,14 @@ class BookReader:
         _tbtn(tools, "⏱ Time Log", self.open_time_log,
               ACCENT_CYAN).pack(side=tk.LEFT, padx=(GROUP, GAP))
 
-        # --- Right cluster: [colour] 🔊 Read · 💾 Save ---
-        # (Matrix 🎤 Voice removed — microphone feature was taken out.)
+        # --- Right cluster: 💾 Save ---
+        # (Matrix 🎤 Voice removed earlier; Matrix 🔊 Read + color picker
+        #  removed now — read-aloud feature was taken out of the project.)
         _tbtn(tools, "💾 Save", self._save_all_eisenhower,
               ACCENT_GREEN).pack(side=tk.RIGHT)
         self._matrix_mic_btn = None
-        self._matrix_read_btn = _tbtn(tools, "🔊 Read",
-                                      self._matrix_read_toggle, ACCENT_GREEN)
-        self._matrix_read_btn.pack(side=tk.RIGHT, padx=(0, GAP))
+        self._matrix_read_btn = None
         self._matrix_read_color_var = tk.StringVar(value="Yellow")
-        _tmenu(tools, self._matrix_read_color_var,
-               "Yellow", "Teal", "Indigo").pack(side=tk.RIGHT, padx=(0, GAP))
 
         # The whole 2×2 grid lives inside a scrollable canvas with one BIG
         # vertical scrollbar on the right — its ▲ / ▼ arrows and draggable
