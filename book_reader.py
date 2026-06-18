@@ -816,7 +816,6 @@ class BookReader:
         self._tts_speech_start_idx: str = "1.0"
         # Microphone / dictation state
         self.is_listening: bool = False
-        self._mic_proc: subprocess.Popen | None = None
         self._mic_queue: queue.Queue | None = None
         self._mic_thread: threading.Thread | None = None
         self._mic_poll_after_id: str | None = None
@@ -12385,65 +12384,10 @@ class BookReader:
         self.set_status("Stopped.")
 
     # ---- Microphone / voice note ---------------------------------------
-    # The mic uses Windows' built-in offline speech recognition
-    # (System.Speech in PowerShell). Recognized phrases stream out on
-    # the PS process's stdout and get appended to the Notes panel on
-    # the main thread.
-    #
-    # IMPORTANT: we use the SYNCHRONOUS Recognize() API rather than the
-    # async event-handler pattern. When PowerShell is launched with
-    # `-Command`, .NET event callbacks registered via add_X() can fail
-    # to dispatch because the script-block runspace has no message
-    # pump — speech is "heard" but the callback never fires. Synchronous
-    # Recognize() blocks the script thread until a phrase is recognized
-    # (or an initial-silence timeout elapses), so no event pump is needed.
-    # A diagnostic log is written to %TEMP%\bookreader_mic.log to make
-    # future failures easy to triage.
-    _MIC_PS_SCRIPT = r"""
-$ErrorActionPreference = 'Stop'
-$logPath = Join-Path $env:TEMP 'bookreader_mic.log'
-function _Log($m) {
-    try {
-        Add-Content -Path $logPath -Encoding UTF8 -Value (
-            '[' + ([DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss.fff')) + '] ' + $m)
-    } catch {}
-}
-# Truncate the log at start so each session is easy to read.
-try { Set-Content -Path $logPath -Value '' -Encoding UTF8 } catch {}
-_Log '=== mic script start (sync Recognize mode) ==='
-try {
-    Add-Type -AssemblyName System.Speech
-    _Log 'System.Speech assembly loaded'
-    $rec = New-Object System.Speech.Recognition.SpeechRecognitionEngine
-    _Log ('Recognizer: ' + $rec.RecognizerInfo.Name + ' / ' + $rec.RecognizerInfo.Culture)
-    $rec.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
-    _Log 'Dictation grammar loaded'
-    $rec.SetInputToDefaultAudioDevice()
-    _Log 'Audio input set to default device'
-    [Console]::Out.WriteLine('__MIC_READY__')
-    [Console]::Out.Flush()
-    _Log '__MIC_READY__ written'
-    while ($true) {
-        try {
-            # 10s initial-silence timeout. If the user is quiet for that
-            # long, Recognize returns $null and we loop again — keeps
-            # the script alive without burning CPU.
-            $result = $rec.Recognize([TimeSpan]::FromSeconds(10))
-            if ($result -and $result.Text) {
-                _Log ('recognized: ' + $result.Text)
-                [Console]::Out.WriteLine($result.Text)
-                [Console]::Out.Flush()
-            }
-        } catch {
-            _Log ('recognize-loop error: ' + $_.Exception.Message)
-        }
-    }
-} catch {
-    _Log ('FATAL: ' + $_.Exception.Message)
-    Write-Output ('STT_ERROR: ' + $_.Exception.Message)
-    exit 1
-}
-"""
+    # Single mic stack: on-device faster-whisper (Whisper STT) fed by
+    # sounddevice for capture and noisereduce for noise suppression.
+    # See requirements.txt and the README's "Voice dictation (Whisper)"
+    # section — this is the canonical and only dictation path.
 
     def toggle_mic(self) -> None:
         """Mic button handler — start listening if off, stop if on."""
@@ -12461,8 +12405,18 @@ try {
         self._start_mic()
 
     def _start_mic(self) -> None:
-        """Start dictation. Uses faster-whisper (modern STT) when available,
-        otherwise falls back to Windows System.Speech via PowerShell."""
+        """Start dictation. Whisper-only — on-device faster-whisper with
+        sounddevice capture. If Whisper isn't installed, we tell the user
+        how to install it instead of silently falling back to a worse mic."""
+        if not HAS_WHISPER:
+            messagebox.showerror(
+                "Voice dictation unavailable",
+                "Voice dictation needs the Whisper stack:\n\n"
+                "    py -3 -m pip install faster-whisper sounddevice "
+                "numpy noisereduce\n\n"
+                "(See requirements.txt — these are the only supported "
+                "microphone components.)")
+            return
         self._mic_queue = queue.Queue()
         self.is_listening = True
 
@@ -12510,52 +12464,13 @@ try {
         target_name = self._mic_target_label(target)
         self._mic_target_name = target_name
 
-        if HAS_WHISPER:
-            # Modern path: capture audio + transcribe with faster-whisper.
-            self._whisper_stop = threading.Event()
-            self._mic_thread = threading.Thread(
-                target=self._whisper_record_loop, daemon=True)
-            self._mic_thread.start()
-            self.set_status(
-                f"🎤 Starting Whisper… dictation will go to {target_name}.")
-        else:
-            # Fallback: Windows System.Speech via PowerShell.
-            try:
-                self._mic_proc = subprocess.Popen(
-                    ["powershell", "-NoProfile", "-Command", self._MIC_PS_SCRIPT],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    stdin=subprocess.DEVNULL,
-                    text=True, encoding="utf-8", errors="replace", bufsize=1,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                )
-            except Exception as e:
-                self.is_listening = False
-                messagebox.showerror("Microphone could not start", str(e))
-                self._stop_mic()
-                return
-
-            def reader() -> None:
-                try:
-                    assert self._mic_proc is not None and self._mic_proc.stdout is not None
-                    for raw in self._mic_proc.stdout:
-                        line = raw.rstrip("\r\n")
-                        if not line:
-                            continue
-                        if line.startswith("STT_ERROR:"):
-                            self._mic_queue.put(("error", line[len("STT_ERROR:"):].strip()))
-                        elif line == "__MIC_READY__":
-                            self._mic_queue.put(("ready",))
-                        else:
-                            self._mic_queue.put(("text", line))
-                except Exception:
-                    pass
-                self._mic_queue.put(("done",))
-
-            self._mic_thread = threading.Thread(target=reader, daemon=True)
-            self._mic_thread.start()
-            self.set_status(
-                f"🎤 Starting microphone… dictation will go to {target_name}.")
-
+        # Whisper-only: capture audio + transcribe with faster-whisper.
+        self._whisper_stop = threading.Event()
+        self._mic_thread = threading.Thread(
+            target=self._whisper_record_loop, daemon=True)
+        self._mic_thread.start()
+        self.set_status(
+            f"🎤 Starting Whisper… dictation will go to {target_name}.")
         self._mic_poll_after_id = self.root.after(50, self._mic_poll_queue)
 
     def _ensure_whisper_model(self):
@@ -13226,7 +13141,7 @@ try {
         # debounce-save to disk. Reader writes are session-only.
 
     def _stop_mic(self, error: str | None = None) -> None:
-        """Tear down dictation (Whisper thread or PowerShell) and reset UI."""
+        """Tear down the Whisper capture thread and reset the mic UI."""
         self.is_listening = False
         if self._mic_poll_after_id is not None:
             try: self.root.after_cancel(self._mic_poll_after_id)
@@ -13261,14 +13176,6 @@ try {
                     except Exception:
                         pass
                     break
-        if self._mic_proc is not None:
-            try: self._mic_proc.terminate()
-            except Exception: pass
-            try: self._mic_proc.wait(timeout=2)
-            except Exception:
-                try: self._mic_proc.kill()
-                except Exception: pass
-            self._mic_proc = None
         # Restore the idle button.
         try:
             self.mic_btn.configure(text="🎤  Voice note", bg=ACCENT_MIC,
