@@ -956,6 +956,164 @@ class BookReader:
         except Exception as e:
             print(f"[init] voice corrections load: {e}", file=sys.stderr)
 
+        # Blank floating toolbar (dockable to the main window). Built last so
+        # the dock host can sit at the very top of the already-packed dashboard.
+        try:
+            self._init_floating_toolbar()
+        except Exception as e:
+            print(f"[init] floating toolbar: {e}", file=sys.stderr)
+
+    # ---- Blank floating toolbar (dockable) ------------------------------
+    # Intentionally has NO features or functions inside it — just the
+    # shell so future items can be added later. The single ⇱/⇲ button
+    # on the bar is the dock/undock control, not a feature; that's how
+    # the bar itself works.
+    def _init_floating_toolbar(self) -> None:
+        self._ftb_win = None
+        self._ftb_body = None
+        self._ftb_dock_btn = None
+        self._ftb_grip = None
+        self._ftb_drag_x = 0
+        self._ftb_drag_y = 0
+        self._ftb_is_docked = True
+        self._ftb_float_xy: tuple[int, int] | None = None
+
+        # Restore persisted state from HANDOFF_STATE.
+        st = self._load_handoff_state() or {}
+        saved = st.get("floating_toolbar") or {}
+        self._ftb_is_docked = bool(saved.get("docked", True))
+        xy = saved.get("xy")
+        if isinstance(xy, list) and len(xy) == 2:
+            try:
+                self._ftb_float_xy = (int(xy[0]), int(xy[1]))
+            except (TypeError, ValueError):
+                self._ftb_float_xy = None
+
+        # Persistent host frame at the top of the main window. Empty when
+        # the bar is undocked; populated when docked.
+        self._ftb_dock_host = tk.Frame(
+            self.root, bg=BG_PANEL, height=34,
+            highlightbackground=BG_DARK, highlightthickness=1)
+        try:
+            children = list(self.root.pack_slaves())
+            if children:
+                self._ftb_dock_host.pack(side=tk.TOP, fill=tk.X,
+                                         before=children[0])
+            else:
+                self._ftb_dock_host.pack(side=tk.TOP, fill=tk.X)
+        except tk.TclError:
+            self._ftb_dock_host.pack(side=tk.TOP, fill=tk.X)
+        self._ftb_dock_host.pack_propagate(False)
+
+        if self._ftb_is_docked:
+            self._floating_toolbar_dock()
+        else:
+            self._floating_toolbar_undock()
+
+    def _build_floating_toolbar_widgets(self, parent) -> None:
+        # Drag grip on the left — drag to move the floating Toplevel.
+        grip = tk.Label(parent, text="⋮⋮", bg=BG_PANEL, fg=FG_MUTED,
+                        font=("Segoe UI", 10, "bold"), padx=8,
+                        cursor="fleur")
+        grip.pack(side=tk.LEFT, fill=tk.Y)
+        grip.bind("<ButtonPress-1>", self._floating_toolbar_drag_start)
+        grip.bind("<B1-Motion>", self._floating_toolbar_drag_motion)
+        self._ftb_grip = grip
+
+        # Blank content area — no features by design.
+        body = tk.Frame(parent, bg=BG_PANEL)
+        body.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        self._ftb_body = body
+
+        # Dock/Undock toggle (part of the toolbar shell, not a feature).
+        dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock"
+        self._ftb_dock_btn = tk.Button(
+            parent, text=dock_text,
+            command=self._floating_toolbar_toggle,
+            font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
+            activebackground=ACCENT_SLATE, relief=tk.FLAT,
+            padx=8, pady=2, cursor="hand2", borderwidth=0)
+        self._ftb_dock_btn.pack(side=tk.RIGHT, padx=4, pady=3)
+
+    def _floating_toolbar_dock(self) -> None:
+        if self._ftb_win is not None:
+            try:
+                self._ftb_win.destroy()
+            except tk.TclError:
+                pass
+            self._ftb_win = None
+        for ch in self._ftb_dock_host.winfo_children():
+            try:
+                ch.destroy()
+            except tk.TclError:
+                pass
+        self._ftb_is_docked = True
+        self._build_floating_toolbar_widgets(self._ftb_dock_host)
+        self._save_floating_toolbar_state()
+
+    def _floating_toolbar_undock(self) -> None:
+        for ch in self._ftb_dock_host.winfo_children():
+            try:
+                ch.destroy()
+            except tk.TclError:
+                pass
+        win = tk.Toplevel(self.root)
+        win.title("Toolbar")
+        win.configure(bg=BG_PANEL)
+        if self._ftb_float_xy:
+            geo = f"420x36+{self._ftb_float_xy[0]}+{self._ftb_float_xy[1]}"
+        else:
+            geo = "420x36+240+180"
+        win.geometry(geo)
+        win.minsize(160, 30)
+        win.protocol("WM_DELETE_WINDOW", self._floating_toolbar_dock)
+        self._ftb_win = win
+        self._ftb_is_docked = False
+        self._build_floating_toolbar_widgets(win)
+        self._save_floating_toolbar_state()
+
+    def _floating_toolbar_toggle(self) -> None:
+        if self._ftb_is_docked:
+            self._floating_toolbar_undock()
+        else:
+            self._floating_toolbar_dock()
+
+    def _floating_toolbar_drag_start(self, event) -> None:
+        self._ftb_drag_x = event.x_root
+        self._ftb_drag_y = event.y_root
+
+    def _floating_toolbar_drag_motion(self, event) -> None:
+        if self._ftb_win is None:
+            return
+        try:
+            if not self._ftb_win.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        dx = event.x_root - self._ftb_drag_x
+        dy = event.y_root - self._ftb_drag_y
+        self._ftb_drag_x = event.x_root
+        self._ftb_drag_y = event.y_root
+        try:
+            x = self._ftb_win.winfo_x() + dx
+            y = self._ftb_win.winfo_y() + dy
+            self._ftb_win.geometry(f"+{x}+{y}")
+            self._ftb_float_xy = (x, y)
+        except tk.TclError:
+            pass
+
+    def _save_floating_toolbar_state(self) -> None:
+        try:
+            st = self._load_handoff_state() or {}
+            st["floating_toolbar"] = {
+                "docked": bool(self._ftb_is_docked),
+                "xy": (list(self._ftb_float_xy)
+                       if self._ftb_float_xy else None),
+            }
+            self._save_handoff_state(st)
+        except Exception:
+            pass
+
     # ---- Helpers --------------------------------------------------------
     def set_status(self, msg: str) -> None:
         self.status_var.set(msg)
