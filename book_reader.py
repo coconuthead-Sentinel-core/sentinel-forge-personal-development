@@ -16735,30 +16735,12 @@ class BookReader:
         notes_header.pack(fill=tk.X)
         tk.Label(notes_header, text="📝 Notes", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
-        tk.Button(
-            notes_header, text="←  From Reader",
-            command=self._copy_selection_to_notes,
-            font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white", relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=4)
+        # (Notes header buttons ← From Reader, 🎯 → Matrix ▾, and
+        #  📓 → Study ▾ removed from the Study workspace.)
         # (Notes header 💾 Save removed — Save widgets were taken out.)
         self._notes_save_btn = None
-        self._notes_to_matrix_btn = tk.Button(
-            notes_header, text="🎯  →  Matrix  ▾",
-            command=self._show_notes_to_matrix_menu,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_RED, fg="white",
-            activebackground=ACCENT_RED, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._notes_to_matrix_btn.pack(side=tk.RIGHT, padx=4)
-        self._notes_to_study_btn = tk.Button(
-            notes_header, text="📓  →  Study  ▾",
-            command=self._show_notes_to_study_menu,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_PURPLE, fg="white",
-            activebackground=ACCENT_PURPLE, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._notes_to_study_btn.pack(side=tk.RIGHT, padx=4)
+        self._notes_to_matrix_btn = None
+        self._notes_to_study_btn = None
         self.notes_area = scrolledtext.ScrolledText(
             notes_frame, wrap=tk.WORD,
             font=(self.font_family, 13),
