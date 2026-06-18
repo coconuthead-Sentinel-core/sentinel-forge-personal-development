@@ -1089,7 +1089,7 @@ class BookReader:
         #  via _attach_clipboard_menu — Yellow / Teal / Indigo.)
 
         # Dock/Undock toggle (part of the toolbar shell, not a feature).
-        dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock"
+        dock_text = "⇱ Undock" if self._ftb_is_docked else "⇲ Dock ▼"
         self._ftb_dock_btn = tk.Button(
             parent, text=dock_text,
             command=self._floating_toolbar_toggle,
@@ -1098,28 +1098,61 @@ class BookReader:
             padx=8, pady=2, cursor="hand2", borderwidth=0)
         self._ftb_dock_btn.pack(side=tk.RIGHT, padx=4, pady=3)
 
-    def _floating_toolbar_dock(self) -> None:
+    def _floating_toolbar_dock_to(self, target_host: str) -> None:
+        """Docks the floating toolbar to a specific parent host."""
         if self._ftb_win is not None:
             try:
                 self._ftb_win.destroy()
             except tk.TclError:
                 pass
             self._ftb_win = None
-        for ch in self._ftb_dock_host.winfo_children():
-            try:
-                ch.destroy()
-            except tk.TclError:
-                pass
+            
+        # Clean current host 
+        if hasattr(self, "_ftb_current_host") and self._ftb_current_host:
+            for ch in self._ftb_current_host.winfo_children():
+                try:
+                    ch.destroy()
+                except tk.TclError:
+                    pass
+        else:
+            for ch in self._ftb_dock_host.winfo_children():
+                try:
+                    ch.destroy()
+                except tk.TclError:
+                    pass
+                    
+        # Apply new host
+        host_map = {
+            "main": self._ftb_dock_host,
+            "study": getattr(self, "_ftb_study_dock_host", self._ftb_dock_host)
+        }
+        
+        self._ftb_current_host = host_map.get(target_host, self._ftb_dock_host)
         self._ftb_is_docked = True
-        self._build_floating_toolbar_widgets(self._ftb_dock_host)
-        self._save_floating_toolbar_state()
+        self._build_floating_toolbar_widgets(self._ftb_current_host)
+        self._save_floating_toolbar_state(target_host=target_host)
+
+    def _floating_toolbar_dock(self) -> None:
+        """Default dock action (goes to the last used host or main)."""
+        st = self._load_handoff_state() or {}
+        saved = st.get("floating_toolbar") or {}
+        target = saved.get("host", "main")
+        self._floating_toolbar_dock_to(target)
 
     def _floating_toolbar_undock(self) -> None:
-        for ch in self._ftb_dock_host.winfo_children():
-            try:
-                ch.destroy()
-            except tk.TclError:
-                pass
+        if hasattr(self, "_ftb_current_host") and self._ftb_current_host:
+            for ch in self._ftb_current_host.winfo_children():
+                try:
+                    ch.destroy()
+                except tk.TclError:
+                    pass
+        else:
+            for ch in self._ftb_dock_host.winfo_children():
+                try:
+                    ch.destroy()
+                except tk.TclError:
+                    pass
+                    
         win = tk.Toplevel(self.root)
         win.title("Toolbar")
         win.configure(bg=BG_PANEL)
@@ -1139,7 +1172,16 @@ class BookReader:
         if self._ftb_is_docked:
             self._floating_toolbar_undock()
         else:
-            self._floating_toolbar_dock()
+            # If floating, popping up a menu to ask where to dock
+            menu = tk.Menu(self.root, tearoff=0, bg=BG_DARK, fg=FG_TEXT)
+            menu.add_command(label="Dock to Main Dashboard", command=lambda: self._floating_toolbar_dock_to("main"))
+            # Only allow docking to Study Workspace if it exists
+            if self._study_win is not None and self._study_win.winfo_exists():
+                menu.add_command(label="Dock to Study Workspace", command=lambda: self._floating_toolbar_dock_to("study"))
+                
+            btn_x = self._ftb_dock_btn.winfo_rootx()
+            btn_y = self._ftb_dock_btn.winfo_rooty() + self._ftb_dock_btn.winfo_height()
+            menu.tk_popup(btn_x, btn_y)
 
     def _floating_toolbar_drag_start(self, event) -> None:
         self._ftb_drag_x = event.x_root
@@ -1332,11 +1374,12 @@ class BookReader:
         except Exception:
             pass
 
-    def _save_floating_toolbar_state(self) -> None:
+    def _save_floating_toolbar_state(self, target_host: str = "main") -> None:
         try:
             st = self._load_handoff_state() or {}
             st["floating_toolbar"] = {
                 "docked": bool(self._ftb_is_docked),
+                "host": target_host,
                 "xy": (list(self._ftb_float_xy)
                        if self._ftb_float_xy else None),
             }
@@ -14632,6 +14675,21 @@ class BookReader:
         win.geometry(f"{w}x{h}+{x}+{y}")
         win.minsize(560, 380)
         win.configure(bg=BG_DARK)
+        
+        # Add dock host for floating toolbar
+        self._ftb_study_dock_host = tk.Frame(win, bg=BG_PANEL, height=34, highlightbackground=BG_DARK, highlightthickness=1)
+        self._ftb_study_dock_host.pack(side=tk.TOP, fill=tk.X)
+        self._ftb_study_dock_host.pack_propagate(False)
+        
+        # Re-apply dock target if applicable
+        if hasattr(self, "_ftb_is_docked") and self._ftb_is_docked:
+            st = self._load_handoff_state() or {}
+            saved = st.get("floating_toolbar") or {}
+            target = saved.get("host", "main")
+            if target == "study":
+                # Delay re-dock to let window initialize
+                self.root.after(50, lambda: self._floating_toolbar_dock_to("study"))
+
         # NOTE: do NOT call # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows here. A transient
         # window on Windows doesn't get its own taskbar entry, so once
         # it's iconified there's no way for the user to restore it from
