@@ -5,12 +5,9 @@
 # Every parser/feature is imported try/except — the app still runs if any of
 # these are missing, with the matching capability disabled.
 
-# --- Speech-to-text (modern voice input) ---------------------------------
-# Whisper-class dictation. faster-whisper downloads its model on first use.
-faster-whisper>=1.2.0      # Whisper STT engine (CTranslate2-backed)
-sounddevice>=0.5.0         # microphone audio capture
-numpy>=1.24                # audio buffers
-noisereduce>=3.0.0         # mic noise suppression before transcription
+# --- Speech-to-text --------------------------------------------------------
+# (Removed.) Voice dictation has been taken out of this project; no
+# microphone / STT dependency is required.
 
 # --- Document loading -----------------------------------------------------
 python-docx>=1.1.0         # .docx books

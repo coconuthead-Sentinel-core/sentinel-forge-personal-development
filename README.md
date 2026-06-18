@@ -2,8 +2,8 @@
 
 > **A native Windows desktop personal-development workstation: read `.docx`,
 > `.pdf`, `.md`, `.txt`, `.rtf`, and `.html` with neural read-aloud and
-> highlight-by-sentence; capture by voice dictation; and run focused sessions
-> with goals, accountability tracking, and a zone-tagged Library.**
+> highlight-by-sentence, and run focused sessions with goals, accountability
+> tracking, and a zone-tagged Library.**
 
 ![Status](https://img.shields.io/badge/status-MVP-success)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -91,10 +91,7 @@ Beyond reading, the app is a study and focus workstation:
   best streak, and month navigation.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
-  Sunsama-style weekly **Planner** — each with 🎤 dictation and 🔊
-  read-aloud.
-- **🎤 Voice dictation (Whisper)** — on-device, offline speech-to-text
-  with a Fast / Accurate / Best accuracy selector.
+  Sunsama-style weekly **Planner** — each with 🔊 read-aloud.
 - **🚀 Performance dashboard** (4DX + Ziglar): a **🏆 Compelling
   Scoreboard** of daily lead measures with streaks, a **🧠 Idea
   Warehouse** (ABCDE priorities, Big-Three, schedule-to-planner,
@@ -278,8 +275,6 @@ powershell -ExecutionPolicy Bypass -File scripts\install_book_reader_shortcut.ps
 
 | Package | Why |
 |---|---|
-| `faster-whisper` | on-device Whisper voice dictation (downloads its model on first use) |
-| `sounddevice` · `numpy` · `noisereduce` | mic capture, audio buffers, and noise suppression for dictation |
 | `python-docx` | parse `.docx` |
 | `pypdf` | parse `.pdf` |
 | `beautifulsoup4` | parse `.html` |
