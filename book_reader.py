@@ -10407,22 +10407,10 @@ class BookReader:
         # share the reader's variables so the two stay in sync.
         lib_tools = tk.Frame(win, bg=BG_PANEL, padx=10, pady=5)
         lib_tools.pack(fill=tk.X)
-        tk.Label(lib_tools, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(0, 4))
-        lib_color_menu = tk.OptionMenu(
-            lib_tools, self.highlight_color_var,
-            *list(self.HIGHLIGHT_COLORS.keys()))
-        _style_optionmenu(lib_color_menu)
-        lib_color_menu.configure(width=7, font=("Segoe UI", 10, "bold"))
-        lib_color_menu.pack(side=tk.LEFT, padx=(0, 8))
-        tk.Button(
-            lib_tools, text="🖍  Highlight selection",
-            command=lambda: self._library_highlight_selection(
-                self.highlight_color_var.get()),
-            font=("Segoe UI", 10, "bold"),
-            bg=ACCENT_AMBER, fg="white", activebackground=ACCENT_AMBER,
-            relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.LEFT, padx=(0, 6))
+        # (Library Color: picker, 🖍 Highlight selection button, and
+        #  Voice: picker removed — same widget family as the reader
+        #  control bar that was taken out. ✕ Unhighlight kept so users
+        #  can still clear highlights they made via the right-click menu.)
         tk.Button(
             lib_tools, text="✕ Unhighlight",
             command=self._library_remove_highlight,
@@ -10430,14 +10418,6 @@ class BookReader:
             bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
             relief=tk.FLAT, padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.LEFT, padx=(0, 10))
-        tk.Label(lib_tools, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(4, 4))
-        lib_voice_menu = tk.OptionMenu(
-            lib_tools, self.voice_var, *self.available_voices,
-            command=self._on_voice_change)
-        _style_optionmenu(lib_voice_menu)
-        lib_voice_menu.configure(width=13, font=("Segoe UI", 10, "bold"))
-        lib_voice_menu.pack(side=tk.LEFT, padx=(0, 8))
 
         # Path hint
         path_hint = tk.Label(
@@ -16787,59 +16767,12 @@ class BookReader:
         bar = tk.Frame(parent, bg=BG_PANEL, padx=10, pady=6)
         bar.pack(side=tk.TOP, fill=tk.X)
 
-        # ---- Row A: Read / Stop · font · size · mic accuracy ----
-        row_a = tk.Frame(bar, bg=BG_PANEL)
-        row_a.pack(fill=tk.X)
-        # (🔊 Read aloud + ■ Stop removed — read-aloud feature was taken out.)
-
-        tk.Label(row_a, text="Text:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
-        font_menu = tk.OptionMenu(row_a, self.font_var, *self.available_fonts,
-                                  command=self._on_font_change)
-        _style_optionmenu(font_menu)
-        font_menu.configure(width=14, font=("Segoe UI", 9))
-        font_menu.pack(side=tk.LEFT, padx=(0, 6))
-        tk.Button(row_a, text="A−", command=self.smaller_text, bg=ACCENT_SLATE,
-                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
-                  padx=10, pady=4, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=2)
-        tk.Button(row_a, text="A+", command=self.bigger_text, bg=ACCENT_SLATE,
-                  fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
-                  padx=10, pady=4, cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=2)
-        # (Mic accuracy + Voice Memory removed — microphone feature was
-        #  taken out of the project.)
-
-        # ---- Row B: highlight selection · highlight unit · color · voice ----
-        row_b = tk.Frame(bar, bg=BG_PANEL)
-        row_b.pack(fill=tk.X, pady=(6, 0))
-        tk.Button(row_b, text="🖍  Highlight selection",
-                  command=lambda: self.highlight_selection(),
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_AMBER, fg="white",
-                  activebackground=ACCENT_AMBER, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 18))
-        tk.Label(row_b, text="Highlight by:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
-        unit_menu = tk.OptionMenu(row_b, self.highlight_unit_var,
-                                  *self.HIGHLIGHT_UNITS)
-        _style_optionmenu(unit_menu)
-        unit_menu.configure(width=11)
-        unit_menu.pack(side=tk.LEFT, padx=(0, 18))
-        tk.Label(row_b, text="Color:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(0, 6))
-        color_menu = tk.OptionMenu(
-            row_b, self.highlight_color_var, *list(self.HIGHLIGHT_COLORS.keys()),
-            command=self._on_highlight_color_change)
-        _style_optionmenu(color_menu)
-        color_menu.configure(width=8)
-        color_menu.pack(side=tk.LEFT)
-        tk.Label(row_b, text="Voice:", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        voice_menu = tk.OptionMenu(row_b, self.voice_var, *self.available_voices,
-                                   command=self._on_voice_change)
-        _style_optionmenu(voice_menu)
-        voice_menu.configure(width=16)
-        voice_menu.pack(side=tk.LEFT)
+        # (Reader control bar removed — Text/font picker, A−/A+, 🖍
+        #  Highlight selection, Highlight by: unit picker, Color:
+        #  highlight-color picker, and Voice: TTS-voice picker were all
+        #  taken out at the user's request alongside the read-aloud and
+        #  microphone feature removals. Underlying StringVars are still
+        #  set in __init__ so any code that reads them keeps working.)
 
     def _build_tab_reader(self, parent: tk.Frame) -> None:
         """📖 Reader — the book itself: full text on the left, a chapter
