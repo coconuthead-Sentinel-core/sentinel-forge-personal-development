@@ -17580,10 +17580,10 @@ class BookReader:
         tk.Label(head, text="Plan your week — type a task, add minutes like "
                  "\"Email (15m)\".", bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
-        tk.Button(head, text="🧭 Weekly Roles", command=self.open_weekly_roles,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_PURPLE, fg="white",
-                  activebackground=ACCENT_PURPLE, relief=tk.FLAT, padx=10, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
+        # (🧭 Weekly Roles button removed from the Planner header.
+        #  The Weekly Roles feature itself stays — open_weekly_roles
+        #  is still accessible from the Track hub / wherever else it's
+        #  wired in.)
 
         def _nv(text, cmd):
             return tk.Button(head, text=text, command=cmd,
