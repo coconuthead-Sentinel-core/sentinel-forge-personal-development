@@ -2642,9 +2642,7 @@ class BookReader:
         rmenu = tk.OptionMenu(rrow, rating_var, "—", "1", "2", "3", "4", "5")
         _style_optionmenu(rmenu); rmenu.configure(width=4, font=("Segoe UI", 10, "bold"))
         rmenu.pack(side=tk.LEFT, padx=(6, 0))
-        tk.Label(rrow, text="🎤 Tip: click a box, then the toolbar 🎤 Voice note "
-                 "dictates into it.", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(12, 0))
+        # (Mic tip removed — microphone feature was taken out.)
 
         srow = tk.Frame(right, bg=BG_DARK); srow.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
         tk.Button(srow, text="💾 Save review", command=lambda: _save(False),
@@ -9990,26 +9988,8 @@ class BookReader:
         body = tk.Frame(ss_frames["start"], bg=BG_DARK, padx=18, pady=12)
         body.pack(fill=tk.BOTH, expand=True)
 
-        # ---- Mic accuracy (Fast / Accurate / Best) — sets the dictation
-        # quality for the 🎤 buttons below (and app-wide; it's a shared
-        # setting). Guard the var: the state block resets it to None and this
-        # panel builds at the end of __init__. -----------------------------
-        acc_row = tk.Frame(body, bg=BG_DARK)
-        acc_row.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(acc_row, text="🎤 Mic accuracy:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _ss_acc = tk.OptionMenu(acc_row, self._whisper_quality_var,
-                                "Fast", "Accurate", "Best",
-                                command=self._set_mic_quality)
-        _style_optionmenu(_ss_acc)
-        _ss_acc.configure(width=10, font=("Segoe UI", 9))
-        _ss_acc.pack(side=tk.LEFT, padx=(6, 0))
-        tk.Button(acc_row, text="🗣 Voice Memory", command=self.open_voice_memory,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
+        # (Mic accuracy + Voice Memory row removed — microphone feature
+        #  was taken out of the project.)
 
         # ---- Last session summary — shows the notes you recorded, and
         # refreshes live as you record more (see auto-save below). ----------
@@ -10028,23 +10008,8 @@ class BookReader:
             except tk.TclError:
                 pass
 
-        # 🎤 Voice dictation: clicking a field makes it the mic target
-        # (FocusIn), and its 🎤 button focuses it and starts/stops listening —
-        # same pattern as Study Notes. The buttons are registered in
-        # self._session_start_mic_btns so _start_mic/_stop_mic flip them to a
-        # red "■ Stop" while listening (the feedback every other mic gives).
+        # (Per-field 🎤 dictation buttons removed with the mic feature.)
         self._session_start_mic_btns = []
-
-        def _ss_mic(widget):
-            if self.is_listening:
-                self.toggle_mic()
-                return
-            try:
-                widget.focus_set()
-            except tk.TclError:
-                pass
-            self._set_mic_target(widget)
-            self.toggle_mic()
 
         # ---- Primary task -----
         pt_head = tk.Frame(body, bg=BG_DARK)
@@ -10052,12 +10017,6 @@ class BookReader:
         tk.Label(pt_head, text="One primary task for this session",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
                  ).pack(side=tk.LEFT)
-        _pt_mic = tk.Button(pt_head, text="🎤", command=lambda: _ss_mic(task_entry),
-                            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
-                            cursor="hand2", borderwidth=0)
-        _pt_mic.pack(side=tk.RIGHT)
-        self._session_start_mic_btns.append(_pt_mic)
         tk.Label(body,
                  text="(The Sentinel spec is strict — pick ONE focus.)",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic")
@@ -10083,12 +10042,6 @@ class BookReader:
         tk.Label(sn_head, text="Session notes",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold")
                  ).pack(side=tk.LEFT)
-        _sn_mic = tk.Button(sn_head, text="🎤", command=lambda: _ss_mic(notes_text),
-                            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=8, pady=2,
-                            cursor="hand2", borderwidth=0)
-        _sn_mic.pack(side=tk.RIGHT)
-        self._session_start_mic_btns.append(_sn_mic)
         tk.Label(body,
                  text="(Anything you want to remember for this session — "
                       "saved with your handoff.)",
@@ -15973,12 +15926,9 @@ class BookReader:
                   relief=tk.FLAT, padx=14, pady=6,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
         # 🎤 Voice dictation into the journal entry.
-        self._journal_mic_btn = tk.Button(
-            rtbtn, text="🎤 Voice", command=self._journal_toggle_mic,
-            font=("Segoe UI", 11, "bold"),
-            bg=ACCENT_MIC, fg="white", activebackground=ACCENT_MIC,
-            relief=tk.FLAT, padx=14, pady=6, cursor="hand2", borderwidth=0)
-        self._journal_mic_btn.pack(side=tk.LEFT, padx=(6, 0))
+        # (Journal 🎤 Voice button removed — microphone feature was
+        #  taken out of the project.)
+        self._journal_mic_btn = None
         # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
         self._journal_read_btn = tk.Button(
             rtbtn, text="🔊 Read", command=self._journal_read_toggle,
@@ -16895,22 +16845,8 @@ class BookReader:
                   fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
                   padx=10, pady=4, cursor="hand2", borderwidth=0
                   ).pack(side=tk.LEFT, padx=2)
-        tk.Label(row_a, text="Mic accuracy:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(18, 4))
-        # The state block resets this to None after the early StringVar, and
-        # this tab builds at the end of __init__ — so guard like the Planner does.
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        mic_menu = tk.OptionMenu(row_a, self._whisper_quality_var,
-                                 "Fast", "Accurate", "Best",
-                                 command=self._set_mic_quality)
-        _style_optionmenu(mic_menu)
-        mic_menu.configure(width=10, font=("Segoe UI", 9))
-        mic_menu.pack(side=tk.LEFT)
-        tk.Button(row_a, text="🗣 Voice Memory", command=self.open_voice_memory,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
+        # (Mic accuracy + Voice Memory removed — microphone feature was
+        #  taken out of the project.)
 
         # ---- Row B: highlight selection · highlight unit · color · voice ----
         row_b = tk.Frame(bar, bg=BG_PANEL)
@@ -17164,25 +17100,9 @@ class BookReader:
             activebackground=ACCENT_SLATE, relief=tk.FLAT,
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=4)
-        # 🎤 Voice dictation into the study notes.
-        self._study_notes_mic_btn = tk.Button(
-            head, text="🎤 Voice", command=self._study_notes_toggle_mic,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-            activebackground=ACCENT_MIC, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._study_notes_mic_btn.pack(side=tk.RIGHT, padx=4)
-        # Mic accuracy mode (Fast / Accurate / Best) — shared app-wide setting.
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        _snq = tk.OptionMenu(head, self._whisper_quality_var,
-                             "Fast", "Accurate", "Best",
-                             command=self._set_mic_quality)
-        _style_optionmenu(_snq)
-        _snq.configure(width=9, font=("Segoe UI", 9))
-        _snq.pack(side=tk.RIGHT, padx=(8, 2))
-        tk.Label(head, text="mode:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.RIGHT, padx=(8, 2))
+        # (Study Notes 🎤 Voice button + Mic accuracy mode removed —
+        #  microphone feature was taken out of the project.)
+        self._study_notes_mic_btn = None
         # 🔊 Read aloud (toggles to Stop) with a Yellow/Teal/Indigo highlight.
         self._study_notes_read_btn = tk.Button(
             head, text="🔊 Read", command=self._study_notes_read_toggle,
@@ -17930,12 +17850,9 @@ class BookReader:
         _pmq.pack(side=tk.RIGHT, padx=(0, 10))
         # One 🎤 Voice button up here, beside the nav buttons. It dictates into
         # the day you last clicked (or today's), and auto-adds the note on Stop.
-        self._planner_mic_btn = tk.Button(
-            head, text="🎤 Voice", command=self._planner_toggle_mic,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-            activebackground=ACCENT_MIC, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0)
-        self._planner_mic_btn.pack(side=tk.RIGHT, padx=(0, 6))
+        # (Planner header 🎤 Voice button removed — microphone feature
+        #  was taken out of the project.)
+        self._planner_mic_btn = None
         self._planner_week_var = tk.StringVar(value="")
         tk.Label(head, textvariable=self._planner_week_var, bg=BG_PANEL,
                  fg=FG_TEXT, font=("Segoe UI", 11, "bold")
@@ -18641,27 +18558,13 @@ class BookReader:
                 self._speak_word(title_e.get().strip()); return
             self.set_status("Nothing to read yet — type or dictate some text first.")
 
-        self._goals_mic_btn = tk.Button(
-            head, text="🎤 Voice", command=_goal_mic,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-            activebackground=ACCENT_MIC, relief=tk.FLAT, padx=10, pady=4,
-            cursor="hand2", borderwidth=0)
-        self._goals_mic_btn.pack(side=tk.LEFT, padx=(14, 4))
+        # (Goals 🎤 Voice + Mic accuracy mode removed — microphone
+        #  feature was taken out of the project.)
+        self._goals_mic_btn = None
         tk.Button(head, text="🔊 Read", command=_goal_read,
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
-        # Mic accuracy mode (Fast / Accurate / Best) — shared app-wide setting.
-        if self._whisper_quality_var is None:
-            self._whisper_quality_var = tk.StringVar(value="Accurate")
-        tk.Label(head, text="mode:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(8, 2))
-        _gmq = tk.OptionMenu(head, self._whisper_quality_var,
-                             "Fast", "Accurate", "Best",
-                             command=self._set_mic_quality)
-        _style_optionmenu(_gmq)
-        _gmq.configure(width=9, font=("Segoe UI", 9))
-        _gmq.pack(side=tk.LEFT)
 
         # Calendar tie-in (pinned bottom).
         tk.Label(tie, text="📅 Add next step to calendar on:", bg=BG_PANEL,
@@ -18961,16 +18864,7 @@ class BookReader:
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=10, pady=4,
                   cursor="hand2", borderwidth=0).pack(fill=tk.X)
 
-        def _mic():
-            try:
-                entry.focus_set(); self._set_mic_target(entry)
-            except tk.TclError:
-                pass
-            self.toggle_mic()
-        tk.Button(capbtn, text="🎤 Dictate", command=_mic,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_MIC, fg="white",
-                  activebackground=ACCENT_MIC, relief=tk.FLAT, padx=10, pady=4,
-                  cursor="hand2", borderwidth=0).pack(fill=tk.X, pady=(4, 0))
+        # (🎤 Dictate button removed — microphone feature was taken out.)
 
         # ---- controls: schedule-day + legend + 'A first' banner ----
         ctl = tk.Frame(win, bg=BG_DARK, padx=12)
@@ -20610,13 +20504,11 @@ class BookReader:
         _tbtn(tools, "⏱ Time Log", self.open_time_log,
               ACCENT_CYAN).pack(side=tk.LEFT, padx=(GROUP, GAP))
 
-        # --- Right cluster: [colour] 🔊 Read · 🎤 Voice · 💾 Save ---
-        # Read sits directly to the LEFT of Voice (Read then Voice).
+        # --- Right cluster: [colour] 🔊 Read · 💾 Save ---
+        # (Matrix 🎤 Voice removed — microphone feature was taken out.)
         _tbtn(tools, "💾 Save", self._save_all_eisenhower,
               ACCENT_GREEN).pack(side=tk.RIGHT)
-        self._matrix_mic_btn = _tbtn(tools, "🎤 Voice", self._matrix_toggle_mic,
-                                     ACCENT_MIC)
-        self._matrix_mic_btn.pack(side=tk.RIGHT, padx=(0, GAP))
+        self._matrix_mic_btn = None
         self._matrix_read_btn = _tbtn(tools, "🔊 Read",
                                       self._matrix_read_toggle, ACCENT_GREEN)
         self._matrix_read_btn.pack(side=tk.RIGHT, padx=(0, GAP))
