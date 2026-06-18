@@ -1108,7 +1108,7 @@ class BookReader:
             self._ftb_win = None
             
         # Clean current host 
-        if hasattr(self, "_ftb_current_host") and self._ftb_current_host:
+        if hasattr(self, "_ftb_current_host") and getattr(self, "_ftb_current_host", None):
             for ch in self._ftb_current_host.winfo_children():
                 try:
                     ch.destroy()
@@ -1121,13 +1121,43 @@ class BookReader:
                 except tk.TclError:
                     pass
                     
-        # Apply new host
-        host_map = {
-            "main": self._ftb_dock_host,
-            "study": getattr(self, "_ftb_study_dock_host", self._ftb_dock_host)
+        # Apply new host dynamically
+        window_map = {
+            "main": self.root,
+            "study": getattr(self, "_study_win", None),
+            "session_start": getattr(self, "_session_start_win", None),
+            "session_end": getattr(self, "_session_end_win", None),
+            "library": getattr(self, "_library_win", None),
+            "planning": getattr(self, "_planning_win", None)
         }
         
-        self._ftb_current_host = host_map.get(target_host, self._ftb_dock_host)
+        target_win = window_map.get(target_host, self.root)
+        if target_win is None or not target_win.winfo_exists():
+            target_win = self.root
+            target_host = "main"
+
+        # Find or create a dock host frame on the target window
+        host_attr_name = f"_ftb_host_{target_host}"
+        
+        # We always keep "_ftb_dock_host" around for "main", so handle that:
+        if target_host == "main":
+            self._ftb_current_host = self._ftb_dock_host
+        elif hasattr(self, host_attr_name) and getattr(self, host_attr_name, None) and getattr(self, host_attr_name).winfo_exists():
+            self._ftb_current_host = getattr(self, host_attr_name)
+        else:
+            host_frame = tk.Frame(target_win, bg=BG_PANEL, height=34, highlightbackground=BG_DARK, highlightthickness=1)
+            try:
+                children = list(target_win.pack_slaves())
+                if children:
+                    host_frame.pack(side=tk.TOP, fill=tk.X, before=children[0])
+                else:
+                    host_frame.pack(side=tk.TOP, fill=tk.X)
+            except tk.TclError:
+                host_frame.pack(side=tk.TOP, fill=tk.X)
+            host_frame.pack_propagate(False)
+            setattr(self, host_attr_name, host_frame)
+            self._ftb_current_host = host_frame
+            
         self._ftb_is_docked = True
         self._build_floating_toolbar_widgets(self._ftb_current_host)
         self._save_floating_toolbar_state(target_host=target_host)
@@ -1140,7 +1170,7 @@ class BookReader:
         self._floating_toolbar_dock_to(target)
 
     def _floating_toolbar_undock(self) -> None:
-        if hasattr(self, "_ftb_current_host") and self._ftb_current_host:
+        if hasattr(self, "_ftb_current_host") and getattr(self, "_ftb_current_host", None):
             for ch in self._ftb_current_host.winfo_children():
                 try:
                     ch.destroy()
@@ -1166,18 +1196,36 @@ class BookReader:
         self._ftb_win = win
         self._ftb_is_docked = False
         self._build_floating_toolbar_widgets(win)
-        self._save_floating_toolbar_state()
+        self._save_floating_toolbar_state(target_host=getattr(self._load_handoff_state() or {}, "floating_toolbar", {}).get("host", "main"))
 
     def _floating_toolbar_toggle(self) -> None:
         if self._ftb_is_docked:
             self._floating_toolbar_undock()
         else:
-            # If floating, popping up a menu to ask where to dock
+            # If floating, pop up a menu to ask where to dock
             menu = tk.Menu(self.root, tearoff=0, bg=BG_DARK, fg=FG_TEXT)
             menu.add_command(label="Dock to Main Dashboard", command=lambda: self._floating_toolbar_dock_to("main"))
-            # Only allow docking to Study Workspace if it exists
-            if self._study_win is not None and self._study_win.winfo_exists():
-                menu.add_command(label="Dock to Study Workspace", command=lambda: self._floating_toolbar_dock_to("study"))
+            
+            # Map of panel names to their underlying attributes to check if they're open
+            panels = {
+                "Study Workspace": "_study_win",
+                "Session Start": "_session_start_win",
+                "Session End": "_session_end_win",
+                "Library": "_library_win",
+                "Planning Hub": "_planning_win"
+            }
+            
+            for label, attr in panels.items():
+                win_obj = getattr(self, attr, None)
+                if win_obj is not None and win_obj.winfo_exists():
+                    target_key = label.lower().replace(" ", "_")
+                    if label == "Session Start": target_key = "session_start"
+                    elif label == "Session End": target_key = "session_end"
+                    elif label == "Study Workspace": target_key = "study"
+                    elif label == "Planning Hub": target_key = "planning"
+                    elif label == "Library": target_key = "library"
+                    
+                    menu.add_command(label=f"Dock to {label}", command=lambda tk=target_key: self._floating_toolbar_dock_to(tk))
                 
             btn_x = self._ftb_dock_btn.winfo_rootx()
             btn_y = self._ftb_dock_btn.winfo_rooty() + self._ftb_dock_btn.winfo_height()
