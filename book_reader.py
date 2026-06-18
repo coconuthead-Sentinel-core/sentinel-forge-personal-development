@@ -653,7 +653,6 @@ class BookReader:
             ("📋 Planning", self.open_planning_hub,    ACCENT_PURPLE),
             ("📊 Track",    self.open_track_hub,        ACCENT_INDIGO),
             ("💰 Money",    self.open_money_panel,      ACCENT_GOLD),
-            ("💾 Save",     self.save_excerpt,          ACCENT_PINK),
             ("📓 Study",    self.open_study_workspace,  ACCENT_RED),
         ]
         self._topbar_buttons = {}
@@ -1387,7 +1386,7 @@ class BookReader:
                       command=lambda: self.lookup_selected_in_glossary(
                           source_widget=self.notes_area))
         m.add_separator()
-        m.add_command(label="💾  Save notes now", command=self._save_notes)
+        # (💾 Save notes now menu item removed — Save widgets were taken out.)
         m.add_command(label="Clear notes…",        command=self._clear_notes)
         self._notes_menu = m
         self.notes_area.bind("<Button-3>", self._show_notes_context_menu)
@@ -2643,10 +2642,7 @@ class BookReader:
         # (Mic tip removed — microphone feature was taken out.)
 
         srow = tk.Frame(right, bg=BG_DARK); srow.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
-        tk.Button(srow, text="💾 Save review", command=lambda: _save(False),
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save review removed — Save widgets were taken out of the project.)
 
         def _q_box(label_text):
             tk.Label(right, text=label_text, bg=BG_DARK, fg=FG_TEXT,
@@ -6032,10 +6028,7 @@ class BookReader:
                 return
             self._v2mom_delete(gid)
             _new(); _refresh_list()
-        tk.Button(srow, text="💾 Save goal", command=_save,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_CYAN, fg="white",
-                  activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save goal removed — Save widgets were taken out of the project.)
         tk.Button(srow, text="🗑 Delete", command=_delete,
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_RED, relief=tk.FLAT, padx=10, pady=6,
@@ -6244,10 +6237,7 @@ class BookReader:
             self.set_status(f"✍ {len(lines)} goals written into your "
                             "subconscious. See you tomorrow.")
             _refresh_streak()
-        tk.Button(srow, text="💾 Save today's goals", command=_save,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_PINK, fg="white",
-                  activebackground=ACCENT_PINK, relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save today's goals removed — Save widgets were taken out of the project.)
 
         _refresh_streak()
         entries[0][1].focus_set()
@@ -10244,12 +10234,7 @@ class BookReader:
             self.set_status(f"⏹ Handoff saved — next task: {nxt}")
             _close()
 
-        tk.Button(btn_row, text="Save Handoff  ✓", command=_save,
-                  bg=ACCENT_GREEN, fg="white",
-                  font=("Segoe UI", 11, "bold"),
-                  relief=tk.FLAT, padx=18, pady=8,
-                  cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=(0, 8))
+        # (Save Handoff ✓ removed — Save widgets were taken out of the project.)
         tk.Button(btn_row, text="Cancel", command=_close,
                   bg=ACCENT_SLATE, fg="white",
                   font=("Segoe UI", 10),
@@ -13318,10 +13303,9 @@ class BookReader:
                       padx=12, pady=6, cursor="hand2", borderwidth=0
                       ).pack(side=tk.LEFT, padx=(0, 6))
 
-        _mk("💾 Save",            self._prompt_lib_save_current,  ACCENT_GREEN)
+        # (Prompts library 💾 Save removed — Save widgets were taken out.)
         _mk("+ New",             self._prompt_lib_new,           ACCENT_CYAN)
         _mk("📋 Paste → Response", self._prompt_lib_paste_response, ACCENT_AMBER)
-        _mk("■ Stop",            self.stop_reading,              ACCENT_SLATE)
         _mk("🗑 Delete",          self._prompt_lib_delete_current, ACCENT_RED)
         panes.add(right, minsize=380, stretch="always")
 
@@ -14230,11 +14214,7 @@ class BookReader:
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=10)
         row.pack(fill=tk.X)
-        tk.Button(row, text="Save", command=save,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT,
-                  padx=14, pady=6, cursor="hand2", borderwidth=0,
-                  ).pack(side=tk.RIGHT, padx=(6, 0))
+        # (Save removed — Save widgets were taken out of the project.)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
@@ -15871,12 +15851,7 @@ class BookReader:
         # Button row reserved at the bottom: Clear (empties this entry) + Save.
         rtbtn = tk.Frame(right, bg=BG_DARK, pady=4)
         rtbtn.pack(side=tk.BOTTOM, fill=tk.X)
-        tk.Button(rtbtn, text="Save entry",
-                  command=self._save_current_journal_entry,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-                  relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (Save entry removed — Save widgets were taken out of the project.)
         tk.Button(rtbtn, text="🧹 Clear",
                   command=self._clear_current_journal_entry,
                   font=("Segoe UI", 11, "bold"),
@@ -16401,11 +16376,7 @@ class BookReader:
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=12)
         row.pack(fill=tk.X, side=tk.BOTTOM)
-        tk.Button(row, text="Save", command=commit,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT,
-                  padx=14, pady=6, cursor="hand2", borderwidth=0,
-                  ).pack(side=tk.RIGHT, padx=(6, 0))
+        # (Save removed — Save widgets were taken out of the project.)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
@@ -16858,13 +16829,8 @@ class BookReader:
             font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white", relief=tk.FLAT,
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=4)
-        self._notes_save_btn = tk.Button(
-            notes_header, text="💾  Save", command=self._save_notes_manually,
-            font=("Segoe UI", 10, "bold"),
-            bg=ACCENT_GREEN, fg="white", relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        )
-        self._notes_save_btn.pack(side=tk.RIGHT, padx=4)
+        # (Notes header 💾 Save removed — Save widgets were taken out.)
+        self._notes_save_btn = None
         self._notes_to_matrix_btn = tk.Button(
             notes_header, text="🎯  →  Matrix  ▾",
             command=self._show_notes_to_matrix_menu,
@@ -16983,12 +16949,7 @@ class BookReader:
                  text="Save each note as its own entry — they archive on the left.",
                  bg=BG_PANEL, fg=FG_MUTED,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(12, 0))
-        tk.Button(
-            head, text="💾 Save", command=self._save_study_notes,
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-            activebackground=ACCENT_GREEN, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT)
+        # (Study Notes header 💾 Save removed — Save widgets were taken out.)
         tk.Button(
             head, text="＋ New", command=self._new_study_note,
             font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
@@ -18114,10 +18075,7 @@ class BookReader:
             except Exception as e:
                 messagebox.showerror("Could not save", str(e))
 
-        tk.Button(foot, text="💾 Save snapshot", command=_save,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=(6, 0))
+        # (💾 Save snapshot removed — Save widgets were taken out.)
         if goto_goals is not None:
             tk.Button(foot, text="🎯 Set goals on weak areas",
                       command=goto_goals,
@@ -18640,10 +18598,7 @@ class BookReader:
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_RED, fg="white",
                   activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
                   cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
-        tk.Button(savebar, text="💾 Save goal", command=_save_goal,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # (💾 Save goal removed — Save widgets were taken out of the project.)
 
         _refresh_list()
         _clear_form()
@@ -19422,10 +19377,7 @@ class BookReader:
 
         br_ = tk.Frame(win, bg=BG_DARK)
         br_.pack(fill=tk.X, padx=14, pady=14)
-        tk.Button(br_, text="💾 Save", command=_save,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        # (💾 Save removed — Save widgets were taken out of the project.)
         tk.Button(br_, text="Cancel", command=_close,
                   font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=14, pady=5,
@@ -20291,10 +20243,7 @@ class BookReader:
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=10, pady=4,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(foot, text="💾 Save", command=_save,
-                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
-                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        # (💾 Save removed — Save widgets were taken out of the project.)
         tk.Button(foot, text="Next ▶", command=lambda: _go(1),
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=4,
@@ -20389,8 +20338,7 @@ class BookReader:
         # --- Right cluster: 💾 Save ---
         # (Matrix 🎤 Voice removed earlier; Matrix 🔊 Read + color picker
         #  removed now — read-aloud feature was taken out of the project.)
-        _tbtn(tools, "💾 Save", self._save_all_eisenhower,
-              ACCENT_GREEN).pack(side=tk.RIGHT)
+        # (Matrix 💾 Save removed — Save widgets were taken out of the project.)
         self._matrix_mic_btn = None
         self._matrix_read_btn = None
         self._matrix_read_color_var = tk.StringVar(value="Yellow")
@@ -21345,12 +21293,7 @@ class BookReader:
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=10)
         row.pack(fill=tk.X)
-        tk.Button(row, text="Save", command=commit,
-                  font=("Segoe UI", 11, "bold"),
-                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-                  relief=tk.FLAT, padx=14, pady=6,
-                  cursor="hand2", borderwidth=0,
-                  ).pack(side=tk.RIGHT, padx=(6, 0))
+        # (Save removed — Save widgets were taken out of the project.)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"),
                   bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
