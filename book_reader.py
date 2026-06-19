@@ -10523,42 +10523,52 @@ class BookReader:
             cur = self._load_handoff_state() or {}
             cur["session_start_iso"]   = datetime.now().isoformat(timespec="seconds")
             cur["session_start_date"]  = date.today().isoformat()
-            cur["session_primary_task"] = primary_task_var.get().strip()
-            cur["session_notes"] = notes_text.get("1.0", tk.END).strip()
+            
+            primary = primary_task_var.get().strip()
+            notes = notes_text.get("1.0", tk.END).strip()
+            
+            cur["session_primary_task"] = primary
+            cur["session_notes"] = notes
             self._save_handoff_state(cur)
             _refresh_summary()
-            task = primary_task_var.get().strip() or "(none)"
-            self.set_status(
-                f"🎯 Session started — {task}. Set your focus timer in Do Now.")
+            
+            task = primary or "(none)"
+            self.set_status(f"🎯 Session started — {task}")
+            
             if dismiss is not None:
                 dismiss()
-            # Open the Study workspace on the 🎯 Matrix tab and land in the
-            # Do Now quadrant, where the focus timer lives — set the timer
-            # there for this session (a gentle flash fires when it ends).
+                
             try:
                 self.open_study_workspace()
                 self._show_study_tab("matrix")
-                w = (getattr(self, "_eisenhower_widgets", {}) or {}).get("do")
-                if w is not None:
-                    w.focus_set()
-            except Exception:
-                pass
-
-        def _do_now():
-            """Runs the normal _begin() logic, then immediately starts the Pomodoro timer."""
-            _begin()
-            try:
-                duration = int(session_len_var.get())
-            except ValueError:
-                duration = 25
-            self._start_timer(duration_min=duration)
-
-        tk.Button(btn_row, text="🔥 Do Now", command=_do_now,
-                  bg=ACCENT_ORANGE, fg="white",
-                  font=("Segoe UI", 11, "bold"),
-                  relief=tk.FLAT, padx=18, pady=8,
-                  cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=(0, 8))
+                
+                do_now_widget = (getattr(self, "_eisenhower_widgets", {}) or {}).get("do")
+                if do_now_widget is not None:
+                    insert_text = ""
+                    if primary:
+                        insert_text += f"\n[ ] {primary}\n"
+                    if notes:
+                        insert_text += f"{notes}\n"
+                        
+                    if insert_text:
+                        do_now_widget.insert(tk.END, insert_text)
+                        
+                        try:
+                            do_now_widget.edit_modified(True)
+                            self._save_eisenhower_quadrant("do")
+                        except Exception:
+                            pass
+                    do_now_widget.focus_set()
+                
+                try:
+                    duration_str = session_len_var.get().strip()
+                    duration = int("".join(filter(str.isdigit, duration_str)) or 25)
+                except ValueError:
+                    duration = 25
+                self._start_timer(duration_min=duration)
+                
+            except Exception as e:
+                print(f"Error starting session: {e}")
 
         tk.Button(btn_row, text="Begin Session  ▶", command=_begin,
                   bg=ACCENT_GREEN, fg="white",
@@ -14784,8 +14794,16 @@ class BookReader:
         self._study_tab_frames = {}
         self._study_tab_buttons = {}
 
+        # The Reader has been "removed" from the UI per user request, but because the
+        # software has massive text_area/notes_area coupling, we build it silently
+        # off-screen so those attributes still exist and won't crash the app.
+        hidden_reader_frame = tk.Frame(content)
+        try:
+            self._build_tab_reader(hidden_reader_frame)
+        except Exception:
+            pass
+
         tabs = [
-            ("reader",      "📖 Reader",      self._build_tab_reader),
             ("study_notes", "📝 Study Notes", self._build_tab_study_notes),
             ("topics",      "📌 Topics",      self._build_tab_topics),
             ("glossary",    "📒 Glossary",    self._build_tab_glossary),
@@ -20725,26 +20743,17 @@ class BookReader:
             m.configure(width=8, font=("Segoe UI", 10, "bold"))
             return m
 
-        # --- Timer group: ⏱ preset · ▶ Start · ■ Stop · 00:00 (all together) ---
+        # Variables tied to background systems, though the timer UI is removed.
         self._mtimer_running = False
         self._mtimer_remaining = 0
         self._mtimer_after_id = None
         self._mtimer_preset_var = tk.StringVar(value="25 min")
         self._mtimer_display_var = tk.StringVar(value="00:00")
+        
         # Completion ticker state — links task logs to the active focus block.
         self._matrix_pomodoro_id = None
         self._matrix_ticker_var = tk.StringVar(value="")
-        tk.Label(tools, text="⏱", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 12)).pack(side=tk.LEFT, padx=(0, 4))
-        _tmenu(tools, self._mtimer_preset_var,
-               *self._timer_presets.keys()).pack(side=tk.LEFT, padx=(0, GAP))
-        tk.Label(tools, textvariable=self._mtimer_display_var, bg=BG_PANEL,
-                 fg=FG_TEXT, font=("Consolas", 13, "bold")
-                 ).pack(side=tk.LEFT, padx=(0, GAP))
-        _tbtn(tools, "▶ Start", self._matrix_timer_start_preset,
-              ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, GAP))
-        _tbtn(tools, "■ Stop", self._matrix_timer_stop,
-              ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, GAP))
+        
         # --- Completion ticker: ✓ Done · live counters · day total · best ---
         _tbtn(tools, "✓ Done line", self._matrix_toggle_done_line,
               ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, GAP))
@@ -20893,158 +20902,6 @@ class BookReader:
                                 activebackground=ACCENT_GREEN)
             except tk.TclError:
                 pass
-
-    # ---- Matrix countdown timer (simple, no Pomodoro auto-cycle) --------
-    def _matrix_timer_start_preset(self) -> None:
-        mins = self._timer_presets.get(self._mtimer_preset_var.get(), 25)
-        self._matrix_timer_start(mins)
-
-    def _matrix_timer_start(self, minutes: int) -> None:
-        # Cancel any existing countdown so Start never double-runs.
-        if self._mtimer_after_id is not None:
-            try:
-                self.root.after_cancel(self._mtimer_after_id)
-            except Exception:
-                pass
-            self._mtimer_after_id = None
-        self._mtimer_remaining = int(minutes) * 60
-        self._mtimer_running = True
-        # Open a Pomodoro row so completions during this block are scoped to it.
-        try:
-            self._matrix_pomodoro_id = self._db_exec(
-                "INSERT INTO matrix_pomodoros (started_at,duration_minutes,"
-                "completed_count) VALUES (?,?,0)",
-                (datetime.now().isoformat(), int(minutes)))
-        except Exception:
-            self._matrix_pomodoro_id = None
-        self._matrix_refresh_ticker()
-        self._matrix_timer_update_display()
-        self._matrix_timer_tick()
-
-    def _matrix_timer_tick(self) -> None:
-        if not self._mtimer_running:
-            return
-        if self._mtimer_remaining <= 0:
-            self._matrix_timer_finished()
-            return
-        self._mtimer_remaining -= 1
-        self._matrix_timer_update_display()
-        self._mtimer_after_id = self.root.after(1000, self._matrix_timer_tick)
-
-    def _matrix_timer_update_display(self) -> None:
-        m, s = divmod(max(0, self._mtimer_remaining), 60)
-        try:
-            self._mtimer_display_var.set(f"{m:02d}:{s:02d}")
-        except (tk.TclError, AttributeError):
-            pass
-
-    def _matrix_timer_reset_button(self) -> None:
-        try:
-            self._mtimer_display_var.set("00:00")
-        except (tk.TclError, AttributeError):
-            pass
-
-    def _matrix_timer_stop(self, announce: bool = True) -> None:
-        self._mtimer_running = False
-        if self._mtimer_after_id is not None:
-            try:
-                self.root.after_cancel(self._mtimer_after_id)
-            except Exception:
-                pass
-            self._mtimer_after_id = None
-        self._matrix_close_pomodoro()
-        self._matrix_timer_reset_button()
-        self._matrix_refresh_ticker()
-        if announce:
-            self.set_status("⏱ Timer stopped.")
-
-    def _session_end_flash(self, headline: str = "⏳ TIME TO STOP",
-                           sub: str = "Your focus session is complete.") -> None:
-        """A GENTLE end-of-session alert (in-app — the app is running when the
-        focus timer ends, so no Windows scheduled task is needed). Unlike the
-        loud appointment siren, this is calm by design: a slow-pulsing
-        OpenDyslexic banner in low-glare deep-teal + one pleasant chime. Loud/
-        clear enough not to miss, but easy on the eyes. Click/any key dismisses;
-        it also auto-closes after a minute."""
-        try:
-            import winsound
-            winsound.MessageBeep(winsound.MB_ICONASTERISK)   # one soft chime
-        except Exception:
-            pass
-        try:
-            win = tk.Toplevel(self.root)
-        except Exception:
-            return
-        win.title("Session")
-        try:
-            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
-        except tk.TclError:
-            sw, sh = 1280, 800
-        w = min(660, max(420, sw - 80)); h = min(300, max(220, sh - 160))
-        win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//3)}")
-        try:
-            win.attributes("-topmost", True)
-        except tk.TclError:
-            pass
-        CALM_A, CALM_B, INK = "#21465A", "#2C5A72", "#EAF4F7"  # low-glare teal
-        win.configure(bg=CALM_A, cursor="hand2")
-        try:
-            fam = ("OpenDyslexic" if "OpenDyslexic" in tkfont.families(win)
-                   else "Verdana")
-        except Exception:
-            fam = "Verdana"
-        wrap = tk.Frame(win, bg=CALM_A)
-        wrap.place(relx=0.5, rely=0.5, anchor="center")
-        tk.Label(wrap, text=headline, bg=CALM_A, fg=INK,
-                 font=(fam, max(26, int(h * 0.16)), "bold")).pack(pady=(0, 8))
-        tk.Label(wrap, text=sub, bg=CALM_A, fg=INK,
-                 font=(fam, max(13, int(h * 0.07)))).pack()
-        tk.Label(wrap, text="Click or press any key to dismiss", bg=CALM_A,
-                 fg=INK, font=(fam, 11, "italic")).pack(pady=(18, 0))
-
-        state = {"on": True}
-
-        def _pulse():
-            if not win.winfo_exists():
-                return
-            state["on"] = not state["on"]
-            bg = CALM_A if state["on"] else CALM_B
-            win.configure(bg=bg); wrap.configure(bg=bg)
-            for c in wrap.winfo_children():
-                try:
-                    c.configure(bg=bg)
-                except tk.TclError:
-                    pass
-            win.after(1100, _pulse)        # slow, gentle pulse — no harsh strobe
-
-        def _dismiss(*_):
-            try:
-                win.destroy()
-            except tk.TclError:
-                pass
-        win.bind("<Button-1>", _dismiss)
-        win.bind("<Key>", _dismiss)
-        win.after(1100, _pulse)
-        win.after(60000, _dismiss)
-        try:
-            win.focus_force()
-        except tk.TclError:
-            pass
-
-    def _matrix_timer_finished(self) -> None:
-        self._mtimer_running = False
-        self._mtimer_after_id = None
-        # Capture this block's completions BEFORE we close the pomodoro row.
-        block_id = self._matrix_pomodoro_id
-        block_done = self._matrix_block_completions(block_id)
-        new_best = self._matrix_close_pomodoro()
-        self._matrix_timer_reset_button()
-        self._matrix_refresh_ticker()
-        self.set_status("⏱ Time's up — focus session complete.")
-        # Show the block summary + gentle end-of-session alert.
-        self._matrix_pomodoro_summary(block_done, new_best)
-        self._session_end_flash("⏳ TIME TO STOP",
-                                "Your focus session is complete.")
 
     # ---- Eisenhower Matrix completion ticker ---------------------------
     # Markdown-style checkboxes: lines starting with "[ ]" (open) or "[x]"
