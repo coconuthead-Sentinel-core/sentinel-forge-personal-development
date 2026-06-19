@@ -40,6 +40,17 @@ DEFAULT_SYSTEM = (
     "instead of inventing details. When asked for code, return clean, working code."
 )
 
+# Task-specific prompt for "Explain selection". The instruction to stay within
+# the selected text is the anti-hallucination guardrail — the model explains
+# only what it was given, never inventing outside facts.
+EXPLAIN_SYSTEM = (
+    "You are a patient study tutor. Explain the user's selected text in plain, "
+    "clear language a motivated learner can follow. Keep it short (2-4 sentences), "
+    "define any jargon in the selection, and do NOT add facts beyond what the "
+    "selection contains. If the selection is too short or vague to explain, say so "
+    "briefly instead of guessing."
+)
+
 
 class LocalBrain:
     """Local Ollama-backed assistant. Offline, graceful, dependency-optional.
@@ -110,6 +121,15 @@ class LocalBrain:
         except Exception as e:
             self.last_error = f"{type(e).__name__}: {e}"
             return None
+
+    def explain(self, text: str, context: str = "") -> Optional[str]:
+        """Plain-language explanation of a selected passage (grounded in the text)."""
+        return self.ask(
+            f"Explain this selection:\n\n{text}",
+            system=EXPLAIN_SYSTEM,
+            context=context,
+            temperature=0.3,   # low temp: faithful, not creative
+        )
 
 
 # Shared lazy singleton so the whole app talks to one warm model instance.

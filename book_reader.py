@@ -1864,6 +1864,9 @@ class BookReader:
         m.add_command(label="📒  Look up in glossary",
                       command=lambda: self.lookup_selected_in_glossary(
                           source_widget=self.notes_area))
+        m.add_command(label="🤖  Explain selection (AI)",
+                      command=lambda: self._ai_explain_selection(
+                          source_widget=self.notes_area))
         m.add_separator()
         # (💾 Save notes now menu item removed — Save widgets were taken out.)
         m.add_command(label="Clear notes…",        command=self._clear_notes)
@@ -1875,6 +1878,59 @@ class BookReader:
             self._notes_menu.tk_popup(event.x_root, event.y_root)
         finally:
             self._notes_menu.grab_release()
+
+    def _ai_explain_selection(self, source_widget=None) -> None:
+        """Onboard AI: explain the selected text in a small popup. Runs the local
+        model on a background thread so the UI never freezes; degrades gracefully
+        when the model is offline."""
+        import threading
+        widget = source_widget or self.notes_area
+        try:
+            text = widget.get("sel.first", "sel.last").strip()
+        except Exception:
+            text = ""
+        if not text:
+            try:
+                self.set_status("🤖 Select some text first, then choose Explain selection.")
+            except Exception:
+                pass
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("🤖 Explain — Sentinel Forge AI")
+        win.configure(bg=BG_PANEL)
+        win.geometry("540x360")
+        tk.Label(win, text="🤖 Explaining your selection (100% local)",
+                 bg=BG_PANEL, fg=ACCENT_PURPLE,
+                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=14, pady=(12, 6))
+        out = tk.Text(win, wrap="word", bg=BG_DARK, fg=FG_TEXT, relief=tk.FLAT,
+                      font=(getattr(self, "font_family", "Segoe UI"), 12),
+                      padx=10, pady=10)
+        out.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        out.insert("1.0", "Thinking locally…\n(first run loads the model — up to ~1–2 min cold; instant after.)")
+        out.configure(state="disabled")
+
+        def _render(result: str) -> None:
+            if not win.winfo_exists():
+                return
+            out.configure(state="normal")
+            out.delete("1.0", tk.END)
+            out.insert("1.0", result)
+            out.configure(state="disabled")
+
+        def _worker() -> None:
+            try:
+                from ai_brain import get_brain
+                brain = get_brain()
+                if not brain.available:
+                    result = f"[AI offline] {brain.last_error}\n\nThe rest of the app works normally."
+                else:
+                    result = brain.explain(text) or "[no response from the local model]"
+            except Exception as e:
+                result = f"[error] {type(e).__name__}: {e}"
+            self.root.after(0, lambda: _render(result))
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _select_all_notes(self, event=None):
         self.notes_area.tag_add(tk.SEL, "1.0", tk.END)
