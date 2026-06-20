@@ -1420,15 +1420,21 @@ class BookReader:
 
         # Speak via PowerShell System.Speech.Synthesis (the canonical
         # SAPI5 fallback path already used by _speak_word elsewhere).
-        # We replace newlines with spaces to avoid breaking the PowerShell parser
-        # when it receives the string over the command line.
-        safe = text.replace("'", "''").replace("\n", " ").replace("\r", "")
-        ps = ("Add-Type -AssemblyName System.Speech; "
-              "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-              f"$s.Speak('{safe}')")
+        # We write to a temporary file to bypass command-line length limits.
         try:
+            import tempfile, os
+            fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
+            os.close(fd)
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+            ps_cmd = (
+                "Add-Type -AssemblyName System.Speech; "
+                f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
+                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                "$s.Speak($t)"
+            )
             self._ftb_speak_proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-Command", ps],
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except Exception as e:
@@ -13391,11 +13397,19 @@ class BookReader:
         text = (text or "").strip()
         if not text or getattr(self, "is_reading", False):
             return
-        safe = text.replace("'", "''").replace("\n", " ").replace("\r", "")
-        ps = ("Add-Type -AssemblyName System.Speech; "
-              "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-              f"$s.Speak('{safe}')")
+        
         try:
+            import tempfile, os
+            fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
+            os.close(fd)
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+            ps_cmd = (
+                "Add-Type -AssemblyName System.Speech; "
+                f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
+                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                "$s.Speak($t)"
+            )
             prev = getattr(self, "_word_speak_proc", None)
             if prev is not None and prev.poll() is None:
                 try:
@@ -13403,7 +13417,7 @@ class BookReader:
                 except Exception:
                     pass
             self._word_speak_proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-Command", ps],
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except Exception:
