@@ -1324,14 +1324,18 @@ class BookReader:
         session (which is tied to the Reader's text_area)."""
         proc = getattr(self, "_ftb_speak_proc", None)
         # Stop case
-        if proc is not None and proc.poll() is None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
+        if proc is not None and getattr(self, "_ftb_reading", False):
+            self._ftb_reading = False
+            if proc.poll() is None:
+                try: proc.terminate()
+                except Exception: pass
             self._ftb_speak_proc = None
             self._ftb_read_button_idle()
             return
+        self._ftb_reading = False
+        if proc is not None and proc.poll() is None:
+            try: proc.terminate()
+            except Exception: pass
 
         # Start case: pick what to read
         target = getattr(self, "_mic_target", None)
@@ -1343,126 +1347,100 @@ class BookReader:
         except (tk.TclError, AttributeError):
             target = self.text_area
 
-        text = ""
-        span_start = None
-        span_end = None
-        try:
-            if isinstance(target, tk.Text):
-                try:
-                    span_start = target.index(tk.SEL_FIRST)
-                    span_end = target.index(tk.SEL_LAST)
-                    text = target.get(span_start, span_end)
-                except tk.TclError:
-                    # If no selection, check the dropdown scope
-                    scope = getattr(self, "_ftb_read_scope_var", None)
-                    scope_val = scope.get() if scope else "Entire text"
-                    
-                    cursor_idx = target.index(tk.INSERT)
-                    if scope_val == "Word":
-                        span_start = target.index(f"{cursor_idx} wordstart")
-                        span_end = target.index(f"{cursor_idx} wordend")
-                        text = target.get(span_start, span_end)
-                    elif scope_val == "Sentence":
-                        import re
-                        p_start = target.index(f"{cursor_idx} linestart")
-                        p_end = target.index(f"{cursor_idx} lineend")
-                        p_text = target.get(p_start, p_end)
-                        
-                        # Find exactly which character offset the cursor is at
-                        line_num, col_str = cursor_idx.split('.')
-                        col_idx = int(col_str)
-                        
-                        sentences = list(re.finditer(r'[^.!?]+[.!?]*', p_text))
-                        s_start_col, s_end_col = 0, len(p_text)
-                        
-                        for mx in sentences:
-                            if mx.start() <= col_idx <= mx.end():
-                                s_start_col, s_end_col = mx.start(), mx.end()
-                                break
-                        else:
-                            if sentences and col_idx > sentences[-1].end():
-                                s_start_col, s_end_col = sentences[-1].start(), sentences[-1].end()
-                            
-                        span_start = f"{line_num}.{s_start_col}"
-                        span_end = f"{line_num}.{s_end_col}"
-                        text = target.get(span_start, span_end)
-                    else:
-                        span_start = "1.0"
-                        span_end = target.index("end-1c")
-                        text = target.get(span_start, span_end)
-            elif isinstance(target, (tk.Entry, ttk.Entry)):
-                text = target.get()
-        except tk.TclError:
-            text = ""
-        text = (text or "").strip()
-        if not text:
+        if not isinstance(target, tk.Text):
             try:
-                self.set_status("Nothing to read — type or dictate "
-                                "something first.")
-            except Exception:
-                pass
+                text = target.get().strip()
+                if text:
+                    self._speak_word(text)
+            except Exception: pass
+            return
+
+        text = ""
+        speech_start = "1.0"
+        is_selection = False
+        try:
+            speech_start = target.index(tk.SEL_FIRST)
+            speech_end = target.index(tk.SEL_LAST)
+            text = target.get(speech_start, speech_end)
+            is_selection = True
+        except tk.TclError:
+            # If no selection, get from cursor to end
+            try:
+                speech_start = target.index(tk.INSERT)
+                text = target.get(speech_start, tk.END)
+            except tk.TclError: pass
+            
+        if not text.strip():
+            try: self.set_status("Nothing to read.")
+            except Exception: pass
+            return
+
+        scope = getattr(self, "_ftb_read_scope_var", None)
+        scope_val = scope.get() if scope else "Entire text"
+        unit = scope_val if scope_val in ("Word", "Sentence") else "Paragraph"
+        
+        chunks = self._compute_spans(text, speech_start, unit)
+        if not chunks:
             return
 
         # Flip the button to ■ Stop while speaking.
+        self._ftb_reading = True
         try:
-            if self._ftb_read_btn is not None:
-                self._ftb_read_btn.configure(
-                    text="■ Stop", bg=ACCENT_RED,
-                    activebackground=ACCENT_RED)
-        except tk.TclError:
-            pass
+            if getattr(self, "_ftb_read_btn", None) is not None:
+                self._ftb_read_btn.configure(text="■ Stop", bg=ACCENT_RED, activebackground=ACCENT_RED)
+        except getattr(tk, "TclError", Exception): pass
 
-        # Paint the follow-along highlight over the spoken region.
-        if (isinstance(target, tk.Text)
-                and span_start is not None and span_end is not None):
-            self._ftb_paint_read_highlight(target, span_start, span_end)
+        def _worker():
+            for char_s, char_e, tk_s, tk_e in chunks:
+                if not getattr(self, "_ftb_reading", False):
+                    break
+                chunk_text = text[char_s:char_e].strip()
+                if not chunk_text:
+                    continue
+                
+                # Highlight chunk
+                def _highlight(s=tk_s, e=tk_e):
+                    try:
+                        self._ftb_clear_read_highlight()
+                        self._ftb_paint_read_highlight(target, s, e)
+                    except Exception: pass
+                    
+                try: self.root.after(0, _highlight)
+                except Exception: pass
+                
+                # Speak it
+                try:
+                    import tempfile, os, subprocess
+                    fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
+                    os.close(fd)
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        f.write(chunk_text)
+                    ps_cmd = (
+                        "Add-Type -AssemblyName System.Speech; "
+                        f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
+                        "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                        "$s.Speak($t)"
+                    )
+                    proc = subprocess.Popen(
+                        ["powershell", "-NoProfile", "-Command", ps_cmd],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                    self._ftb_speak_proc = proc
+                    proc.wait()
+                except Exception:
+                    pass
+                
+                if is_selection and scope_val in ("Word", "Sentence"):
+                     pass # Keep going, they highlighted a chunk and want it read
+            
+            # Done
+            self._ftb_reading = False
+            try: self.root.after(0, self._ftb_read_button_idle)
+            except Exception: pass
 
-        # Speak via PowerShell System.Speech.Synthesis (the canonical
-        # SAPI5 fallback path already used by _speak_word elsewhere).
-        # We write to a temporary file to bypass command-line length limits.
-        try:
-            import tempfile, os
-            fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
-            os.close(fd)
-            with open(tmp, "w", encoding="utf-8") as f:
-                f.write(text)
-            ps_cmd = (
-                "Add-Type -AssemblyName System.Speech; "
-                f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
-                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-                "$s.Speak($t)"
-            )
-            self._ftb_speak_proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-Command", ps_cmd],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        except Exception as e:
-            self._ftb_speak_proc = None
-            try:
-                self.set_status(f"Read aloud failed: {e}")
-            except Exception:
-                pass
-            self._ftb_read_button_idle()
-            return
-
-        # Poll until the subprocess exits so the button auto-returns to idle.
-        def _watch():
-            p = getattr(self, "_ftb_speak_proc", None)
-            if p is None:
-                self._ftb_read_button_idle()
-                return
-            if p.poll() is not None:
-                self._ftb_speak_proc = None
-                self._ftb_read_button_idle()
-                return
-            try:
-                self.root.after(200, _watch)
-            except tk.TclError:
-                pass
-        try:
-            self.root.after(200, _watch)
-        except tk.TclError:
-            pass
+        import threading
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
 
     def _ftb_quality_change(self, val: str) -> None:
         """Handler for the Fast/Accurate/Best picker installed inside
