@@ -1357,18 +1357,21 @@ class BookReader:
 
         text = ""
         speech_start = "1.0"
-        is_selection = False
         try:
+            # If the user highlighted something, start reading from the beginning of the highlight.
             speech_start = target.index(tk.SEL_FIRST)
-            speech_end = target.index(tk.SEL_LAST)
-            text = target.get(speech_start, speech_end)
-            is_selection = True
+            target.index(tk.SEL_LAST) # Prove selection exists
         except tk.TclError:
-            # If no selection, get from cursor to end
+            # If no selection, get from cursor.
             try:
                 speech_start = target.index(tk.INSERT)
-                text = target.get(speech_start, tk.END)
             except tk.TclError: pass
+            
+        # Always read continuously to the end of the document so it never stops prematurely!
+        try:
+            text = target.get(speech_start, tk.END)
+        except tk.TclError:
+            pass
             
         if not text.strip():
             try: self.set_status("Nothing to read.")
@@ -1379,7 +1382,27 @@ class BookReader:
         scope_val = scope.get() if scope else "Entire text"
         unit = scope_val if scope_val in ("Word", "Sentence") else "Paragraph"
         
-        chunks = self._compute_spans(text, speech_start, unit)
+        # We manually compute spans against the target widget so it never throws TclError
+        import re
+        if unit == "Word":
+            pattern = re.compile(r"\S+")
+        elif unit == "Paragraph":
+            pattern = re.compile(r"[^\n]+(?:\n[^\n]+)*")
+        else:  # Sentence
+            pattern = re.compile(r"\S[^\n]*?(?:[.!?]+[\"')\]]?(?=\s|$)|(?=\n)|$)", re.MULTILINE)
+            
+        chunks = []
+        for m in pattern.finditer(text):
+            s, e = m.span()
+            if not text[s:e].strip():
+                continue
+            try:
+                tk_s = target.index(f"{speech_start} + {s} chars")
+                tk_e = target.index(f"{speech_start} + {e} chars")
+                chunks.append((s, e, tk_s, tk_e))
+            except Exception:
+                continue
+
         if not chunks:
             return
 
@@ -1429,9 +1452,6 @@ class BookReader:
                     proc.wait()
                 except Exception:
                     pass
-                
-                if is_selection and scope_val in ("Word", "Sentence"):
-                     pass # Keep going, they highlighted a chunk and want it read
             
             # Done
             self._ftb_reading = False
