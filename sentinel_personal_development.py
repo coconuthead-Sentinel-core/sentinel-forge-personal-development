@@ -2941,6 +2941,10 @@ class BookReader:
                     chat_history.delete(f"{thinking_idx}-1c", tk.END)
                     chat_history.insert(tk.END, "\n")
                     _append_msg("Sentinel", reply.strip())
+                    try:
+                        self._speak_word(reply.strip())
+                    except Exception:
+                        pass
 
                 # Using parent.after since win doesn't exist here
                 parent.after(0, _replace_thinking)
@@ -13386,7 +13390,7 @@ class BookReader:
         text = (text or "").strip()
         if not text or getattr(self, "is_reading", False):
             return
-        safe = text.replace("'", "''")
+        safe = text.replace("'", "''").replace("\n", " ").replace("\r", "")
         ps = ("Add-Type -AssemblyName System.Speech; "
               "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
               f"$s.Speak('{safe}')")
