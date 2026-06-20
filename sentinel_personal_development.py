@@ -2958,7 +2958,7 @@ class BookReader:
                     
                     # Insert header manually so we can capture the index before the body
                     chat_history.insert(tk.END, "Sentinel:\n", "Sentinel")
-                    read_start = chat_history.index(tk.END)
+                    read_start = chat_history.index("end-1c")
                     chat_history.insert(tk.END, f"{reply.strip()}\n\n")
                     chat_history.see(tk.END)
                     chat_history.config(state=tk.DISABLED)
