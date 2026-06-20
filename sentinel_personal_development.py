@@ -1281,12 +1281,11 @@ class BookReader:
     def _ftb_clear_read_highlight(self) -> None:
         """Remove the follow-along highlight tag from the last-read widget."""
         target = self._ftb_read_target
-        rng = self._ftb_read_range
-        if target is None or rng is None:
+        if target is None:
             return
         try:
             if isinstance(target, tk.Text) and target.winfo_exists():
-                target.tag_remove("ftb_reading", rng[0], rng[1])
+                target.tag_remove("ftb_reading", "1.0", tk.END)
         except tk.TclError:
             pass
         self._ftb_read_target = None
