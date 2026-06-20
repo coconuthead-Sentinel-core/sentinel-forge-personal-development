@@ -1322,6 +1322,9 @@ class BookReader:
         Uses its own fire-and-forget PowerShell SAPI subprocess so the
         proofread path is independent of the main read_aloud() reading
         session (which is tied to the Reader's text_area)."""
+        self._ftb_worker_id = getattr(self, "_ftb_worker_id", 0) + 1
+        current_worker_id = self._ftb_worker_id
+
         proc = getattr(self, "_ftb_speak_proc", None)
         # Stop case
         if proc is not None and getattr(self, "_ftb_reading", False):
@@ -1415,7 +1418,7 @@ class BookReader:
 
         def _worker():
             for char_s, char_e, tk_s, tk_e in chunks:
-                if not getattr(self, "_ftb_reading", False):
+                if self._ftb_worker_id != current_worker_id or not getattr(self, "_ftb_reading", False):
                     break
                 chunk_text = text[char_s:char_e].strip()
                 if not chunk_text:
@@ -1423,6 +1426,8 @@ class BookReader:
                 
                 # Highlight chunk
                 def _highlight(s=tk_s, e=tk_e):
+                    if self._ftb_worker_id != current_worker_id:
+                        return
                     try:
                         self._ftb_clear_read_highlight()
                         self._ftb_paint_read_highlight(target, s, e)
@@ -1448,15 +1453,17 @@ class BookReader:
                         ["powershell", "-NoProfile", "-Command", ps_cmd],
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-                    self._ftb_speak_proc = proc
+                    if self._ftb_worker_id == current_worker_id:
+                        self._ftb_speak_proc = proc
                     proc.wait()
                 except Exception:
                     pass
             
             # Done
-            self._ftb_reading = False
-            try: self.root.after(0, self._ftb_read_button_idle)
-            except Exception: pass
+            if self._ftb_worker_id == current_worker_id:
+                self._ftb_reading = False
+                try: self.root.after(0, self._ftb_read_button_idle)
+                except Exception: pass
 
         import threading
         t = threading.Thread(target=_worker, daemon=True)
