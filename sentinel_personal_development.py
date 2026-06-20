@@ -1380,8 +1380,9 @@ class BookReader:
                             if mx.start() <= col_idx <= mx.end():
                                 s_start_col, s_end_col = mx.start(), mx.end()
                                 break
-                        elif sentences and col_idx > sentences[-1].end():
-                            s_start_col, s_end_col = sentences[-1].start(), sentences[-1].end()
+                        else:
+                            if sentences and col_idx > sentences[-1].end():
+                                s_start_col, s_end_col = sentences[-1].start(), sentences[-1].end()
                             
                         span_start = f"{line_num}.{s_start_col}"
                         span_end = f"{line_num}.{s_end_col}"
