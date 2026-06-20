@@ -2862,6 +2862,16 @@ class BookReader:
         head.pack(side=tk.TOP, fill=tk.X)
         tk.Label(head, text="🤖 AI Chatbot Assistant", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+                 
+        def _clear_chat_screen():
+            if tk.messagebox.askyesno("Clear Chat?", "Are you sure you want to clear the AI Chat conversation?"):
+                self._ai_chat_history.config(state=tk.NORMAL)
+                self._ai_chat_history.delete("1.0", tk.END)
+                self._ai_chat_history.config(state=tk.DISABLED)
+                
+        tk.Button(head, text="🧹 Clear Chat", command=_clear_chat_screen,
+                  bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
+                  font=("Segoe UI", 9, "bold"), relief=tk.FLAT, padx=10).pack(side=tk.RIGHT)
 
         # 1. Input area (packed BOTTOM first so it never gets squeezed out)
         input_frame = tk.Frame(parent, bg=BG_DARK)
@@ -2872,6 +2882,7 @@ class BookReader:
         chat_input.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._ai_chat_input = chat_input
         self._ai_chat_input.bind("<FocusIn>", lambda _e: self._set_mic_target(self._ai_chat_input), add="+")
+        self._attach_clipboard_menu(chat_input, clear_cmd=lambda: self._clear_input(chat_input), clear_label="Clear", track_for_mic=False)
         
         btn_send = tk.Button(input_frame, text="Send", bg=ACCENT_CYAN, fg=BG_DARK,
                              font=("Segoe UI", 10, "bold"), relief=tk.FLAT)
