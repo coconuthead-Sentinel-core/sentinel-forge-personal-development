@@ -2955,9 +2955,28 @@ class BookReader:
                     chat_history.config(state=tk.NORMAL)
                     chat_history.delete(f"{thinking_idx}-1c", tk.END)
                     chat_history.insert(tk.END, "\n")
-                    _append_msg("Sentinel", reply.strip())
+                    
+                    # Insert header manually so we can capture the index before the body
+                    chat_history.insert(tk.END, "Sentinel:\n", "Sentinel")
+                    read_start = chat_history.index(tk.END)
+                    chat_history.insert(tk.END, f"{reply.strip()}\n\n")
+                    chat_history.see(tk.END)
+                    chat_history.config(state=tk.DISABLED)
+                    
                     try:
-                        self._speak_word(reply.strip())
+                        # Clear old selection if any exists
+                        chat_history.tag_remove(tk.SEL, "1.0", tk.END)
+                        # Set cursor to start of actual response text
+                        chat_history.mark_set(tk.INSERT, read_start)
+                        # Ensure the chat history is the target for the floating toolbar
+                        self._mic_target = chat_history
+                        
+                        # Stop any currently active speech
+                        if getattr(self, "_ftb_reading", False):
+                            self._ftb_read_toggle()
+                            
+                        # Toggle on continuous reading with following highlighting
+                        self._ftb_read_toggle()
                     except Exception:
                         pass
 
