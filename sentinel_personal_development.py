@@ -981,6 +981,7 @@ class BookReader:
         self._ftb_speak_proc = None
         # Read-aloud follow-along highlight state.
         self._ftb_read_color_var = None
+        self._ftb_read_scope_var = None
         self._ftb_read_target = None
         self._ftb_read_range = None     # (start_idx, end_idx) on _ftb_read_target
         self._ftb_drag_x = 0
@@ -1071,6 +1072,16 @@ class BookReader:
             relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0)
         read_btn.pack(side=tk.LEFT, padx=(6, 0))
         self._ftb_read_btn = read_btn
+
+        # Scope picker for 🔊 Read.
+        if self._ftb_read_scope_var is None:
+            self._ftb_read_scope_var = tk.StringVar(value="Entire text")
+        _ftb_rs = tk.OptionMenu(
+            body, self._ftb_read_scope_var,
+            "Entire text", "Sentence", "Word")
+        _style_optionmenu(_ftb_rs)
+        _ftb_rs.configure(width=10, font=("Segoe UI", 9, "bold"))
+        _ftb_rs.pack(side=tk.LEFT, padx=(4, 0))
 
         # Follow-along highlight picker for 🔊 Read. While the toolbar
         # is reading, the spoken region is painted with this color
@@ -1343,9 +1354,42 @@ class BookReader:
                     span_end = target.index(tk.SEL_LAST)
                     text = target.get(span_start, span_end)
                 except tk.TclError:
-                    span_start = "1.0"
-                    span_end = target.index("end-1c")
-                    text = target.get(span_start, span_end)
+                    # If no selection, check the dropdown scope
+                    scope = getattr(self, "_ftb_read_scope_var", None)
+                    scope_val = scope.get() if scope else "Entire text"
+                    
+                    cursor_idx = target.index(tk.INSERT)
+                    if scope_val == "Word":
+                        span_start = target.index(f"{cursor_idx} wordstart")
+                        span_end = target.index(f"{cursor_idx} wordend")
+                        text = target.get(span_start, span_end)
+                    elif scope_val == "Sentence":
+                        import re
+                        p_start = target.index(f"{cursor_idx} linestart")
+                        p_end = target.index(f"{cursor_idx} lineend")
+                        p_text = target.get(p_start, p_end)
+                        
+                        # Find exactly which character offset the cursor is at
+                        line_num, col_str = cursor_idx.split('.')
+                        col_idx = int(col_str)
+                        
+                        sentences = list(re.finditer(r'[^.!?]+[.!?]*', p_text))
+                        s_start_col, s_end_col = 0, len(p_text)
+                        
+                        for mx in sentences:
+                            if mx.start() <= col_idx <= mx.end():
+                                s_start_col, s_end_col = mx.start(), mx.end()
+                                break
+                        elif sentences and col_idx > sentences[-1].end():
+                            s_start_col, s_end_col = sentences[-1].start(), sentences[-1].end()
+                            
+                        span_start = f"{line_num}.{s_start_col}"
+                        span_end = f"{line_num}.{s_end_col}"
+                        text = target.get(span_start, span_end)
+                    else:
+                        span_start = "1.0"
+                        span_end = target.index("end-1c")
+                        text = target.get(span_start, span_end)
             elif isinstance(target, (tk.Entry, ttk.Entry)):
                 text = target.get()
         except tk.TclError:
