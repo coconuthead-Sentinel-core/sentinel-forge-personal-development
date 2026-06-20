@@ -1375,7 +1375,9 @@ class BookReader:
 
         # Speak via PowerShell System.Speech.Synthesis (the canonical
         # SAPI5 fallback path already used by _speak_word elsewhere).
-        safe = text.replace("'", "''")
+        # We replace newlines with spaces to avoid breaking the PowerShell parser
+        # when it receives the string over the command line.
+        safe = text.replace("'", "''").replace("\n", " ").replace("\r", "")
         ps = ("Add-Type -AssemblyName System.Speech; "
               "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
               f"$s.Speak('{safe}')")
@@ -1867,6 +1869,8 @@ class BookReader:
         m.add_command(label="🤖  Explain selection (AI)",
                       command=lambda: self._ai_explain_selection(
                           source_widget=self.notes_area))
+        m.add_command(label="💬  Chat with AI Assistant",
+                      command=self.open_ai_chat)
         m.add_separator()
         # (💾 Save notes now menu item removed — Save widgets were taken out.)
         m.add_command(label="Clear notes…",        command=self._clear_notes)
@@ -2106,6 +2110,10 @@ class BookReader:
             return "Reader"
         if widget is self.notes_area:
             return "Notes"
+        if widget is getattr(self, "_ai_chat_input", None):
+            return "AI Chatbot Assistant"
+        if widget is getattr(self, "_ai_chat_history", None):
+            return "AI Chat History"
         if widget is getattr(self, "_journal_body", None):
             return "Journal"
         if widget is getattr(self, "_study_notes_widget", None):
@@ -2794,6 +2802,119 @@ class BookReader:
         except Exception:
             rows = []
         return [(c or "Other", int(m or 0)) for c, m in rows if (m or 0) > 0]
+
+    def open_ai_chat(self) -> None:
+        """Switch the Study Workspace to the AI Chat tab, opening it if needed."""
+        self.open_study_workspace()
+        self._show_study_tab("ai_chat")
+
+    def _build_tab_ai_chat(self, parent: tk.Frame) -> None:
+        """Builds the AI Chat panel into the Study Workspace."""
+        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        head.pack(side=tk.TOP, fill=tk.X)
+        tk.Label(head, text="🤖 AI Chatbot Assistant", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+
+        # 1. Input area (packed BOTTOM first so it never gets squeezed out)
+        input_frame = tk.Frame(parent, bg=BG_DARK)
+        input_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 10))
+
+        chat_input = tk.Text(input_frame, height=4, bg=BG_PANEL, fg=FG_TEXT,
+                             font=("Segoe UI", 10), wrap=tk.WORD, insertbackground=FG_TEXT)
+        chat_input.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._ai_chat_input = chat_input
+        self._ai_chat_input.bind("<FocusIn>", lambda _e: self._set_mic_target(self._ai_chat_input), add="+")
+        
+        btn_send = tk.Button(input_frame, text="Send", bg=ACCENT_CYAN, fg=BG_DARK,
+                             font=("Segoe UI", 10, "bold"), relief=tk.FLAT)
+        btn_send.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        chat_input.focus_set()
+
+        # 2. History area (packed TOP, consumes remaining space)
+        history_frame = tk.Frame(parent, bg=BG_DARK)
+        history_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        chat_history = tk.Text(history_frame, bg=BG_PANEL, fg=FG_TEXT,
+                               font=("Segoe UI", 10), wrap=tk.WORD,
+                               insertbackground=FG_TEXT, state=tk.DISABLED)
+        scroll = tk.Scrollbar(history_frame, command=chat_history.yview)
+        chat_history.configure(yscrollcommand=scroll.set)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        chat_history.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._ai_chat_history = chat_history
+        self._ai_chat_history.bind("<1>", lambda _e: self._set_mic_target(self._ai_chat_history), add="+")
+
+        chat_history.tag_config("You", foreground=ACCENT_CYAN, font=("Segoe UI", 10, "bold"))
+        chat_history.tag_config("Sentinel", foreground=ACCENT_PURPLE, font=("Segoe UI", 10, "bold"))
+        chat_history.tag_config("Error", foreground="#ff6b6b", font=("Segoe UI", 10, "bold"))
+
+        def _append_msg(tag: str, text: str):
+            chat_history.config(state=tk.NORMAL)
+            chat_history.insert(tk.END, f"{tag}:\n", tag)
+            chat_history.insert(tk.END, f"{text}\n\n")
+            chat_history.see(tk.END)
+            chat_history.config(state=tk.DISABLED)
+
+        # 3. Connect to brain
+        try:
+            import ai_brain
+            brain = ai_brain.get_brain()
+            if not brain.available:
+                _append_msg("Sentinel", f"Offline. {brain.last_error}")
+            else:
+                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. How can I help you today?")
+        except Exception as e:
+            brain = None
+            _append_msg("Error", f"Could not load AI module: {e}")
+
+        def _send(event=None):
+            if not brain or not brain.available:
+                return "break"
+                
+            content = chat_input.get("1.0", tk.END).strip()
+            if not content:
+                return "break"
+            
+            chat_input.delete("1.0", tk.END)
+            _append_msg("You", content)
+            
+            # Show temporary thinking indicator
+            chat_history.config(state=tk.NORMAL)
+            thinking_idx = chat_history.index(tk.END)
+            chat_history.insert(tk.END, "Sentinel:\nThinking...\n\n", "Sentinel")
+            chat_history.see(tk.END)
+            chat_history.config(state=tk.DISABLED)
+
+            def _worker():
+                try:
+                    reply = brain.ask(content)
+                    reply = reply if reply else "I'm sorry, I couldn't reach the backend."
+                except Exception as ex:
+                    reply = f"Error: {ex}"
+                
+                def _replace_thinking():
+                    chat_history.config(state=tk.NORMAL)
+                    chat_history.delete(f"{thinking_idx}-1c", tk.END)
+                    chat_history.insert(tk.END, "\n")
+                    _append_msg("Sentinel", reply.strip())
+
+                # Using parent.after since win doesn't exist here
+                parent.after(0, _replace_thinking)
+
+            import threading
+            threading.Thread(target=_worker, daemon=True).start()
+            return "break"
+
+        def _on_keypress(event):
+            if event.keysym == "Return":
+                if event.state & 0x0001:  # Shift pressed
+                    return None  # Allow normal newline
+                else:
+                    return _send()
+
+        chat_input.bind("<KeyPress>", _on_keypress)
+        
+        btn_send.config(command=_send)
 
     def open_time_log(self) -> None:
         """The Winner's Time Log: toggle the recurring check-in, log the
@@ -14861,6 +14982,7 @@ class BookReader:
 
         tabs = [
             ("study_notes", "📝 Study Notes", self._build_tab_study_notes),
+            ("ai_chat",     "🤖 AI Chat",     self._build_tab_ai_chat),
             ("topics",      "📌 Topics",      self._build_tab_topics),
             ("glossary",    "📒 Glossary",    self._build_tab_glossary),
             ("commentary",  "📑 Commentary",  self._build_tab_commentary),
@@ -14903,6 +15025,12 @@ class BookReader:
         tk.Button(tabbar, text="🗒 Prompts", command=self.open_prompt_library,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
+
+        # AI Chatbot Assistant — added to speak directly with the onboard AI
+        tk.Button(tabbar, text="🤖 Chat", command=self.open_ai_chat,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_ORANGE, fg="white",
+                  activebackground=ACCENT_ORANGE, relief=tk.FLAT, padx=6, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
 
         # Minimize button — sends the Study window to the taskbar.
