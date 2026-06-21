@@ -981,6 +981,7 @@ class BookReader:
         self._ftb_speak_proc = None
         # Read-aloud follow-along highlight state.
         self._ftb_read_color_var = None
+        self._ftb_read_scope_var = None
         self._ftb_read_target = None
         self._ftb_read_range = None     # (start_idx, end_idx) on _ftb_read_target
         self._ftb_drag_x = 0
@@ -1071,6 +1072,16 @@ class BookReader:
             relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0)
         read_btn.pack(side=tk.LEFT, padx=(6, 0))
         self._ftb_read_btn = read_btn
+
+        # Scope picker for 🔊 Read.
+        if self._ftb_read_scope_var is None:
+            self._ftb_read_scope_var = tk.StringVar(value="Entire text")
+        _ftb_rs = tk.OptionMenu(
+            body, self._ftb_read_scope_var,
+            "Entire text", "Sentence", "Word")
+        _style_optionmenu(_ftb_rs)
+        _ftb_rs.configure(width=10, font=("Segoe UI", 9, "bold"))
+        _ftb_rs.pack(side=tk.LEFT, padx=(4, 0))
 
         # Follow-along highlight picker for 🔊 Read. While the toolbar
         # is reading, the spoken region is painted with this color
@@ -1270,12 +1281,11 @@ class BookReader:
     def _ftb_clear_read_highlight(self) -> None:
         """Remove the follow-along highlight tag from the last-read widget."""
         target = self._ftb_read_target
-        rng = self._ftb_read_range
-        if target is None or rng is None:
+        if target is None:
             return
         try:
             if isinstance(target, tk.Text) and target.winfo_exists():
-                target.tag_remove("ftb_reading", rng[0], rng[1])
+                target.tag_remove("ftb_reading", "1.0", tk.END)
         except tk.TclError:
             pass
         self._ftb_read_target = None
@@ -1312,16 +1322,23 @@ class BookReader:
         Uses its own fire-and-forget PowerShell SAPI subprocess so the
         proofread path is independent of the main read_aloud() reading
         session (which is tied to the Reader's text_area)."""
+        self._ftb_worker_id = getattr(self, "_ftb_worker_id", 0) + 1
+        current_worker_id = self._ftb_worker_id
+
         proc = getattr(self, "_ftb_speak_proc", None)
         # Stop case
-        if proc is not None and proc.poll() is None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
+        if proc is not None and getattr(self, "_ftb_reading", False):
+            self._ftb_reading = False
+            if proc.poll() is None:
+                try: proc.terminate()
+                except Exception: pass
             self._ftb_speak_proc = None
             self._ftb_read_button_idle()
             return
+        self._ftb_reading = False
+        if proc is not None and proc.poll() is None:
+            try: proc.terminate()
+            except Exception: pass
 
         # Start case: pick what to read
         target = getattr(self, "_mic_target", None)
@@ -1333,84 +1350,124 @@ class BookReader:
         except (tk.TclError, AttributeError):
             target = self.text_area
 
-        text = ""
-        span_start = None
-        span_end = None
-        try:
-            if isinstance(target, tk.Text):
-                try:
-                    span_start = target.index(tk.SEL_FIRST)
-                    span_end = target.index(tk.SEL_LAST)
-                    text = target.get(span_start, span_end)
-                except tk.TclError:
-                    span_start = "1.0"
-                    span_end = target.index("end-1c")
-                    text = target.get(span_start, span_end)
-            elif isinstance(target, (tk.Entry, ttk.Entry)):
-                text = target.get()
-        except tk.TclError:
-            text = ""
-        text = (text or "").strip()
-        if not text:
+        if not isinstance(target, tk.Text):
             try:
-                self.set_status("Nothing to read — type or dictate "
-                                "something first.")
+                text = target.get().strip()
+                if text:
+                    self._speak_word(text)
+            except Exception: pass
+            return
+
+        text = ""
+        speech_start = "1.0"
+        try:
+            # If the user highlighted something, start reading from the beginning of the highlight.
+            speech_start = target.index(tk.SEL_FIRST)
+            target.index(tk.SEL_LAST) # Prove selection exists
+        except tk.TclError:
+            # If no selection, get from cursor.
+            try:
+                speech_start = target.index(tk.INSERT)
+            except tk.TclError: pass
+            
+        # Always read continuously to the end of the document so it never stops prematurely!
+        try:
+            text = target.get(speech_start, tk.END)
+        except tk.TclError:
+            pass
+            
+        if not text.strip():
+            try: self.set_status("Nothing to read.")
+            except Exception: pass
+            return
+
+        scope = getattr(self, "_ftb_read_scope_var", None)
+        scope_val = scope.get() if scope else "Entire text"
+        unit = scope_val if scope_val in ("Word", "Sentence") else "Paragraph"
+        
+        # We manually compute spans against the target widget so it never throws TclError
+        import re
+        if unit == "Word":
+            pattern = re.compile(r"\S+")
+        elif unit == "Paragraph":
+            pattern = re.compile(r"[^\n]+(?:\n[^\n]+)*")
+        else:  # Sentence
+            pattern = re.compile(r"\S[^\n]*?(?:[.!?]+[\"')\]]?(?=\s|$)|(?=\n)|$)", re.MULTILINE)
+            
+        chunks = []
+        for m in pattern.finditer(text):
+            s, e = m.span()
+            if not text[s:e].strip():
+                continue
+            try:
+                tk_s = target.index(f"{speech_start} + {s} chars")
+                tk_e = target.index(f"{speech_start} + {e} chars")
+                chunks.append((s, e, tk_s, tk_e))
             except Exception:
-                pass
+                continue
+
+        if not chunks:
             return
 
         # Flip the button to ■ Stop while speaking.
+        self._ftb_reading = True
         try:
-            if self._ftb_read_btn is not None:
-                self._ftb_read_btn.configure(
-                    text="■ Stop", bg=ACCENT_RED,
-                    activebackground=ACCENT_RED)
-        except tk.TclError:
-            pass
+            if getattr(self, "_ftb_read_btn", None) is not None:
+                self._ftb_read_btn.configure(text="■ Stop", bg=ACCENT_RED, activebackground=ACCENT_RED)
+        except getattr(tk, "TclError", Exception): pass
 
-        # Paint the follow-along highlight over the spoken region.
-        if (isinstance(target, tk.Text)
-                and span_start is not None and span_end is not None):
-            self._ftb_paint_read_highlight(target, span_start, span_end)
+        def _worker():
+            for char_s, char_e, tk_s, tk_e in chunks:
+                if self._ftb_worker_id != current_worker_id or not getattr(self, "_ftb_reading", False):
+                    break
+                chunk_text = text[char_s:char_e].strip()
+                if not chunk_text:
+                    continue
+                
+                # Highlight chunk
+                def _highlight(s=tk_s, e=tk_e):
+                    if self._ftb_worker_id != current_worker_id:
+                        return
+                    try:
+                        self._ftb_clear_read_highlight()
+                        self._ftb_paint_read_highlight(target, s, e)
+                    except Exception: pass
+                    
+                try: self.root.after(0, _highlight)
+                except Exception: pass
+                
+                # Speak it
+                try:
+                    import tempfile, os, subprocess
+                    fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
+                    os.close(fd)
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        f.write(chunk_text)
+                    ps_cmd = (
+                        "Add-Type -AssemblyName System.Speech; "
+                        f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
+                        "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                        "$s.Speak($t)"
+                    )
+                    proc = subprocess.Popen(
+                        ["powershell", "-NoProfile", "-Command", ps_cmd],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                    if self._ftb_worker_id == current_worker_id:
+                        self._ftb_speak_proc = proc
+                    proc.wait()
+                except Exception:
+                    pass
+            
+            # Done
+            if self._ftb_worker_id == current_worker_id:
+                self._ftb_reading = False
+                try: self.root.after(0, self._ftb_read_button_idle)
+                except Exception: pass
 
-        # Speak via PowerShell System.Speech.Synthesis (the canonical
-        # SAPI5 fallback path already used by _speak_word elsewhere).
-        safe = text.replace("'", "''")
-        ps = ("Add-Type -AssemblyName System.Speech; "
-              "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-              f"$s.Speak('{safe}')")
-        try:
-            self._ftb_speak_proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-Command", ps],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        except Exception as e:
-            self._ftb_speak_proc = None
-            try:
-                self.set_status(f"Read aloud failed: {e}")
-            except Exception:
-                pass
-            self._ftb_read_button_idle()
-            return
-
-        # Poll until the subprocess exits so the button auto-returns to idle.
-        def _watch():
-            p = getattr(self, "_ftb_speak_proc", None)
-            if p is None:
-                self._ftb_read_button_idle()
-                return
-            if p.poll() is not None:
-                self._ftb_speak_proc = None
-                self._ftb_read_button_idle()
-                return
-            try:
-                self.root.after(200, _watch)
-            except tk.TclError:
-                pass
-        try:
-            self.root.after(200, _watch)
-        except tk.TclError:
-            pass
+        import threading
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
 
     def _ftb_quality_change(self, val: str) -> None:
         """Handler for the Fast/Accurate/Best picker installed inside
@@ -1864,6 +1921,11 @@ class BookReader:
         m.add_command(label="📒  Look up in glossary",
                       command=lambda: self.lookup_selected_in_glossary(
                           source_widget=self.notes_area))
+        m.add_command(label="🤖  Explain selection (AI)",
+                      command=lambda: self._ai_explain_selection(
+                          source_widget=self.notes_area))
+        m.add_command(label="💬  Chat with AI Assistant",
+                      command=self.open_ai_chat)
         m.add_separator()
         # (💾 Save notes now menu item removed — Save widgets were taken out.)
         m.add_command(label="Clear notes…",        command=self._clear_notes)
@@ -1875,6 +1937,59 @@ class BookReader:
             self._notes_menu.tk_popup(event.x_root, event.y_root)
         finally:
             self._notes_menu.grab_release()
+
+    def _ai_explain_selection(self, source_widget=None) -> None:
+        """Onboard AI: explain the selected text in a small popup. Runs the local
+        model on a background thread so the UI never freezes; degrades gracefully
+        when the model is offline."""
+        import threading
+        widget = source_widget or self.notes_area
+        try:
+            text = widget.get("sel.first", "sel.last").strip()
+        except Exception:
+            text = ""
+        if not text:
+            try:
+                self.set_status("🤖 Select some text first, then choose Explain selection.")
+            except Exception:
+                pass
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("🤖 Explain — Sentinel Forge AI")
+        win.configure(bg=BG_PANEL)
+        win.geometry("540x360")
+        tk.Label(win, text="🤖 Explaining your selection (100% local)",
+                 bg=BG_PANEL, fg=ACCENT_PURPLE,
+                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=14, pady=(12, 6))
+        out = tk.Text(win, wrap="word", bg=BG_DARK, fg=FG_TEXT, relief=tk.FLAT,
+                      font=(getattr(self, "font_family", "Segoe UI"), 12),
+                      padx=10, pady=10)
+        out.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        out.insert("1.0", "Thinking locally…\n(first run loads the model — up to ~1–2 min cold; instant after.)")
+        out.configure(state="disabled")
+
+        def _render(result: str) -> None:
+            if not win.winfo_exists():
+                return
+            out.configure(state="normal")
+            out.delete("1.0", tk.END)
+            out.insert("1.0", result)
+            out.configure(state="disabled")
+
+        def _worker() -> None:
+            try:
+                from ai_brain import get_brain
+                brain = get_brain()
+                if not brain.available:
+                    result = f"[AI offline] {brain.last_error}\n\nThe rest of the app works normally."
+                else:
+                    result = brain.explain(text) or "[no response from the local model]"
+            except Exception as e:
+                result = f"[error] {type(e).__name__}: {e}"
+            self.root.after(0, lambda: _render(result))
+
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _select_all_notes(self, event=None):
         self.notes_area.tag_add(tk.SEL, "1.0", tk.END)
@@ -2050,6 +2165,10 @@ class BookReader:
             return "Reader"
         if widget is self.notes_area:
             return "Notes"
+        if widget is getattr(self, "_ai_chat_input", None):
+            return "AI Chatbot Assistant"
+        if widget is getattr(self, "_ai_chat_history", None):
+            return "AI Chat History"
         if widget is getattr(self, "_journal_body", None):
             return "Journal"
         if widget is getattr(self, "_study_notes_widget", None):
@@ -2738,6 +2857,154 @@ class BookReader:
         except Exception:
             rows = []
         return [(c or "Other", int(m or 0)) for c, m in rows if (m or 0) > 0]
+
+    def open_ai_chat(self) -> None:
+        """Switch the Study Workspace to the AI Chat tab, opening it if needed."""
+        self.open_study_workspace()
+        self._show_study_tab("ai_chat")
+
+    def _build_tab_ai_chat(self, parent: tk.Frame) -> None:
+        """Builds the AI Chat panel into the Study Workspace."""
+        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        head.pack(side=tk.TOP, fill=tk.X)
+        tk.Label(head, text="🤖 AI Chatbot Assistant", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+                 
+        def _clear_chat_screen():
+            if tk.messagebox.askyesno("Clear Chat?", "Are you sure you want to clear the AI Chat conversation?"):
+                self._ai_chat_history.config(state=tk.NORMAL)
+                self._ai_chat_history.delete("1.0", tk.END)
+                self._ai_chat_history.config(state=tk.DISABLED)
+                
+        tk.Button(head, text="🧹 Clear Chat", command=_clear_chat_screen,
+                  bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
+                  font=("Segoe UI", 9, "bold"), relief=tk.FLAT, padx=10).pack(side=tk.RIGHT)
+
+        # 1. Input area (packed BOTTOM first so it never gets squeezed out)
+        input_frame = tk.Frame(parent, bg=BG_DARK)
+        input_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(0, 10))
+
+        chat_input = tk.Text(input_frame, height=4, bg=BG_PANEL, fg=FG_TEXT,
+                             font=("Segoe UI", 10), wrap=tk.WORD, insertbackground=FG_TEXT)
+        chat_input.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._ai_chat_input = chat_input
+        self._ai_chat_input.bind("<FocusIn>", lambda _e: self._set_mic_target(self._ai_chat_input), add="+")
+        self._attach_clipboard_menu(chat_input, clear_cmd=lambda: self._clear_input(chat_input), clear_label="Clear", track_for_mic=False)
+        
+        btn_send = tk.Button(input_frame, text="Send", bg=ACCENT_CYAN, fg=BG_DARK,
+                             font=("Segoe UI", 10, "bold"), relief=tk.FLAT)
+        btn_send.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        chat_input.focus_set()
+
+        # 2. History area (packed TOP, consumes remaining space)
+        history_frame = tk.Frame(parent, bg=BG_DARK)
+        history_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        chat_history = tk.Text(history_frame, bg=BG_PANEL, fg=FG_TEXT,
+                               font=("Segoe UI", 10), wrap=tk.WORD,
+                               insertbackground=FG_TEXT, state=tk.DISABLED)
+        scroll = tk.Scrollbar(history_frame, command=chat_history.yview)
+        chat_history.configure(yscrollcommand=scroll.set)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        chat_history.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._ai_chat_history = chat_history
+        self._ai_chat_history.bind("<1>", lambda _e: self._set_mic_target(self._ai_chat_history), add="+")
+
+        chat_history.tag_config("You", foreground=ACCENT_CYAN, font=("Segoe UI", 10, "bold"))
+        chat_history.tag_config("Sentinel", foreground=ACCENT_PURPLE, font=("Segoe UI", 10, "bold"))
+        chat_history.tag_config("Error", foreground="#ff6b6b", font=("Segoe UI", 10, "bold"))
+
+        def _append_msg(tag: str, text: str):
+            chat_history.config(state=tk.NORMAL)
+            chat_history.insert(tk.END, f"{tag}:\n", tag)
+            chat_history.insert(tk.END, f"{text}\n\n")
+            chat_history.see(tk.END)
+            chat_history.config(state=tk.DISABLED)
+
+        # 3. Connect to brain
+        try:
+            import ai_brain
+            brain = ai_brain.get_brain()
+            if not brain.available:
+                _append_msg("Sentinel", f"Offline. {brain.last_error}")
+            else:
+                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. How can I help you today?")
+        except Exception as e:
+            brain = None
+            _append_msg("Error", f"Could not load AI module: {e}")
+
+        def _send(event=None):
+            if not brain or not brain.available:
+                return "break"
+                
+            content = chat_input.get("1.0", tk.END).strip()
+            if not content:
+                return "break"
+            
+            chat_input.delete("1.0", tk.END)
+            _append_msg("You", content)
+            
+            # Show temporary thinking indicator
+            chat_history.config(state=tk.NORMAL)
+            thinking_idx = chat_history.index(tk.END)
+            chat_history.insert(tk.END, "Sentinel:\nThinking...\n\n", "Sentinel")
+            chat_history.see(tk.END)
+            chat_history.config(state=tk.DISABLED)
+
+            def _worker():
+                try:
+                    reply = brain.ask(content)
+                    reply = reply if reply else "I'm sorry, I couldn't reach the backend."
+                except Exception as ex:
+                    reply = f"Error: {ex}"
+                
+                def _replace_thinking():
+                    print(11111111111)
+                    chat_history.config(state=tk.NORMAL)
+                    chat_history.delete(f"{thinking_idx}-1c", tk.END)
+                    chat_history.insert(tk.END, "\n")
+                    
+                    # Insert header manually so we can capture the index before the body
+                    chat_history.insert(tk.END, "Sentinel:\n", "Sentinel")
+                    read_start = chat_history.index("end-1c")
+                    chat_history.insert(tk.END, f"{reply.strip()}\n\n")
+                    chat_history.see(tk.END)
+                    chat_history.config(state=tk.DISABLED)
+                    
+                    try:
+                        # Clear old selection if any exists
+                        chat_history.tag_remove(tk.SEL, "1.0", tk.END)
+                        # Set cursor to start of actual response text
+                        chat_history.mark_set(tk.INSERT, read_start)
+                        # Ensure the chat history is the target for the floating toolbar
+                        self._mic_target = chat_history
+                        
+                        # Stop any currently active speech
+                        if getattr(self, "_ftb_reading", False):
+                            self._ftb_read_toggle()
+                            
+                        # Toggle on continuous reading with following highlighting
+                        self._ftb_read_toggle()
+                    except Exception:
+                        pass
+
+                # Using parent.after since win doesn't exist here
+                parent.after(0, _replace_thinking)
+
+            import threading
+            threading.Thread(target=_worker, daemon=True).start()
+            return "break"
+
+        def _on_keypress(event):
+            if event.keysym == "Return":
+                if event.state & 0x0001:  # Shift pressed
+                    return None  # Allow normal newline
+                else:
+                    return _send()
+
+        chat_input.bind("<KeyPress>", _on_keypress)
+        
+        btn_send.config(command=_send)
 
     def open_time_log(self) -> None:
         """The Winner's Time Log: toggle the recurring check-in, log the
@@ -10523,42 +10790,52 @@ class BookReader:
             cur = self._load_handoff_state() or {}
             cur["session_start_iso"]   = datetime.now().isoformat(timespec="seconds")
             cur["session_start_date"]  = date.today().isoformat()
-            cur["session_primary_task"] = primary_task_var.get().strip()
-            cur["session_notes"] = notes_text.get("1.0", tk.END).strip()
+            
+            primary = primary_task_var.get().strip()
+            notes = notes_text.get("1.0", tk.END).strip()
+            
+            cur["session_primary_task"] = primary
+            cur["session_notes"] = notes
             self._save_handoff_state(cur)
             _refresh_summary()
-            task = primary_task_var.get().strip() or "(none)"
-            self.set_status(
-                f"🎯 Session started — {task}. Set your focus timer in Do Now.")
+            
+            task = primary or "(none)"
+            self.set_status(f"🎯 Session started — {task}")
+            
             if dismiss is not None:
                 dismiss()
-            # Open the Study workspace on the 🎯 Matrix tab and land in the
-            # Do Now quadrant, where the focus timer lives — set the timer
-            # there for this session (a gentle flash fires when it ends).
+                
             try:
                 self.open_study_workspace()
                 self._show_study_tab("matrix")
-                w = (getattr(self, "_eisenhower_widgets", {}) or {}).get("do")
-                if w is not None:
-                    w.focus_set()
-            except Exception:
-                pass
-
-        def _do_now():
-            """Runs the normal _begin() logic, then immediately starts the Pomodoro timer."""
-            _begin()
-            try:
-                duration = int(session_len_var.get())
-            except ValueError:
-                duration = 25
-            self._start_timer(duration_min=duration)
-
-        tk.Button(btn_row, text="🔥 Do Now", command=_do_now,
-                  bg=ACCENT_ORANGE, fg="white",
-                  font=("Segoe UI", 11, "bold"),
-                  relief=tk.FLAT, padx=18, pady=8,
-                  cursor="hand2", borderwidth=0
-                  ).pack(side=tk.LEFT, padx=(0, 8))
+                
+                do_now_widget = (getattr(self, "_eisenhower_widgets", {}) or {}).get("do")
+                if do_now_widget is not None:
+                    insert_text = ""
+                    if primary:
+                        insert_text += f"\n[ ] {primary}\n"
+                    if notes:
+                        insert_text += f"{notes}\n"
+                        
+                    if insert_text:
+                        do_now_widget.insert(tk.END, insert_text)
+                        
+                        try:
+                            do_now_widget.edit_modified(True)
+                            self._save_eisenhower_quadrant("do")
+                        except Exception:
+                            pass
+                    do_now_widget.focus_set()
+                
+                try:
+                    duration_str = session_len_var.get().strip()
+                    duration = int("".join(filter(str.isdigit, duration_str)) or 25)
+                except ValueError:
+                    duration = 25
+                self._start_timer(duration_min=duration)
+                
+            except Exception as e:
+                print(f"Error starting session: {e}")
 
         tk.Button(btn_row, text="Begin Session  ▶", command=_begin,
                   bg=ACCENT_GREEN, fg="white",
@@ -13155,11 +13432,19 @@ class BookReader:
         text = (text or "").strip()
         if not text or getattr(self, "is_reading", False):
             return
-        safe = text.replace("'", "''")
-        ps = ("Add-Type -AssemblyName System.Speech; "
-              "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-              f"$s.Speak('{safe}')")
+        
         try:
+            import tempfile, os
+            fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
+            os.close(fd)
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+            ps_cmd = (
+                "Add-Type -AssemblyName System.Speech; "
+                f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
+                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                "$s.Speak($t)"
+            )
             prev = getattr(self, "_word_speak_proc", None)
             if prev is not None and prev.poll() is None:
                 try:
@@ -13167,7 +13452,7 @@ class BookReader:
                 except Exception:
                     pass
             self._word_speak_proc = subprocess.Popen(
-                ["powershell", "-NoProfile", "-Command", ps],
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except Exception:
@@ -14784,9 +15069,18 @@ class BookReader:
         self._study_tab_frames = {}
         self._study_tab_buttons = {}
 
+        # The Reader has been "removed" from the UI per user request, but because the
+        # software has massive text_area/notes_area coupling, we build it silently
+        # off-screen so those attributes still exist and won't crash the app.
+        hidden_reader_frame = tk.Frame(content)
+        try:
+            self._build_tab_reader(hidden_reader_frame)
+        except Exception:
+            pass
+
         tabs = [
-            ("reader",      "📖 Reader",      self._build_tab_reader),
             ("study_notes", "📝 Study Notes", self._build_tab_study_notes),
+            ("ai_chat",     "🤖 AI Chat",     self._build_tab_ai_chat),
             ("topics",      "📌 Topics",      self._build_tab_topics),
             ("glossary",    "📒 Glossary",    self._build_tab_glossary),
             ("commentary",  "📑 Commentary",  self._build_tab_commentary),
@@ -14829,6 +15123,12 @@ class BookReader:
         tk.Button(tabbar, text="🗒 Prompts", command=self.open_prompt_library,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
+
+        # AI Chatbot Assistant — added to speak directly with the onboard AI
+        tk.Button(tabbar, text="🤖 Chat", command=self.open_ai_chat,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_ORANGE, fg="white",
+                  activebackground=ACCENT_ORANGE, relief=tk.FLAT, padx=6, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
 
         # Minimize button — sends the Study window to the taskbar.
@@ -20725,26 +21025,17 @@ class BookReader:
             m.configure(width=8, font=("Segoe UI", 10, "bold"))
             return m
 
-        # --- Timer group: ⏱ preset · ▶ Start · ■ Stop · 00:00 (all together) ---
+        # Variables tied to background systems, though the timer UI is removed.
         self._mtimer_running = False
         self._mtimer_remaining = 0
         self._mtimer_after_id = None
         self._mtimer_preset_var = tk.StringVar(value="25 min")
         self._mtimer_display_var = tk.StringVar(value="00:00")
+        
         # Completion ticker state — links task logs to the active focus block.
         self._matrix_pomodoro_id = None
         self._matrix_ticker_var = tk.StringVar(value="")
-        tk.Label(tools, text="⏱", bg=BG_PANEL, fg=FG_TEXT,
-                 font=("Segoe UI", 12)).pack(side=tk.LEFT, padx=(0, 4))
-        _tmenu(tools, self._mtimer_preset_var,
-               *self._timer_presets.keys()).pack(side=tk.LEFT, padx=(0, GAP))
-        tk.Label(tools, textvariable=self._mtimer_display_var, bg=BG_PANEL,
-                 fg=FG_TEXT, font=("Consolas", 13, "bold")
-                 ).pack(side=tk.LEFT, padx=(0, GAP))
-        _tbtn(tools, "▶ Start", self._matrix_timer_start_preset,
-              ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, GAP))
-        _tbtn(tools, "■ Stop", self._matrix_timer_stop,
-              ACCENT_SLATE).pack(side=tk.LEFT, padx=(0, GAP))
+        
         # --- Completion ticker: ✓ Done · live counters · day total · best ---
         _tbtn(tools, "✓ Done line", self._matrix_toggle_done_line,
               ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, GAP))
@@ -20893,158 +21184,6 @@ class BookReader:
                                 activebackground=ACCENT_GREEN)
             except tk.TclError:
                 pass
-
-    # ---- Matrix countdown timer (simple, no Pomodoro auto-cycle) --------
-    def _matrix_timer_start_preset(self) -> None:
-        mins = self._timer_presets.get(self._mtimer_preset_var.get(), 25)
-        self._matrix_timer_start(mins)
-
-    def _matrix_timer_start(self, minutes: int) -> None:
-        # Cancel any existing countdown so Start never double-runs.
-        if self._mtimer_after_id is not None:
-            try:
-                self.root.after_cancel(self._mtimer_after_id)
-            except Exception:
-                pass
-            self._mtimer_after_id = None
-        self._mtimer_remaining = int(minutes) * 60
-        self._mtimer_running = True
-        # Open a Pomodoro row so completions during this block are scoped to it.
-        try:
-            self._matrix_pomodoro_id = self._db_exec(
-                "INSERT INTO matrix_pomodoros (started_at,duration_minutes,"
-                "completed_count) VALUES (?,?,0)",
-                (datetime.now().isoformat(), int(minutes)))
-        except Exception:
-            self._matrix_pomodoro_id = None
-        self._matrix_refresh_ticker()
-        self._matrix_timer_update_display()
-        self._matrix_timer_tick()
-
-    def _matrix_timer_tick(self) -> None:
-        if not self._mtimer_running:
-            return
-        if self._mtimer_remaining <= 0:
-            self._matrix_timer_finished()
-            return
-        self._mtimer_remaining -= 1
-        self._matrix_timer_update_display()
-        self._mtimer_after_id = self.root.after(1000, self._matrix_timer_tick)
-
-    def _matrix_timer_update_display(self) -> None:
-        m, s = divmod(max(0, self._mtimer_remaining), 60)
-        try:
-            self._mtimer_display_var.set(f"{m:02d}:{s:02d}")
-        except (tk.TclError, AttributeError):
-            pass
-
-    def _matrix_timer_reset_button(self) -> None:
-        try:
-            self._mtimer_display_var.set("00:00")
-        except (tk.TclError, AttributeError):
-            pass
-
-    def _matrix_timer_stop(self, announce: bool = True) -> None:
-        self._mtimer_running = False
-        if self._mtimer_after_id is not None:
-            try:
-                self.root.after_cancel(self._mtimer_after_id)
-            except Exception:
-                pass
-            self._mtimer_after_id = None
-        self._matrix_close_pomodoro()
-        self._matrix_timer_reset_button()
-        self._matrix_refresh_ticker()
-        if announce:
-            self.set_status("⏱ Timer stopped.")
-
-    def _session_end_flash(self, headline: str = "⏳ TIME TO STOP",
-                           sub: str = "Your focus session is complete.") -> None:
-        """A GENTLE end-of-session alert (in-app — the app is running when the
-        focus timer ends, so no Windows scheduled task is needed). Unlike the
-        loud appointment siren, this is calm by design: a slow-pulsing
-        OpenDyslexic banner in low-glare deep-teal + one pleasant chime. Loud/
-        clear enough not to miss, but easy on the eyes. Click/any key dismisses;
-        it also auto-closes after a minute."""
-        try:
-            import winsound
-            winsound.MessageBeep(winsound.MB_ICONASTERISK)   # one soft chime
-        except Exception:
-            pass
-        try:
-            win = tk.Toplevel(self.root)
-        except Exception:
-            return
-        win.title("Session")
-        try:
-            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
-        except tk.TclError:
-            sw, sh = 1280, 800
-        w = min(660, max(420, sw - 80)); h = min(300, max(220, sh - 160))
-        win.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//3)}")
-        try:
-            win.attributes("-topmost", True)
-        except tk.TclError:
-            pass
-        CALM_A, CALM_B, INK = "#21465A", "#2C5A72", "#EAF4F7"  # low-glare teal
-        win.configure(bg=CALM_A, cursor="hand2")
-        try:
-            fam = ("OpenDyslexic" if "OpenDyslexic" in tkfont.families(win)
-                   else "Verdana")
-        except Exception:
-            fam = "Verdana"
-        wrap = tk.Frame(win, bg=CALM_A)
-        wrap.place(relx=0.5, rely=0.5, anchor="center")
-        tk.Label(wrap, text=headline, bg=CALM_A, fg=INK,
-                 font=(fam, max(26, int(h * 0.16)), "bold")).pack(pady=(0, 8))
-        tk.Label(wrap, text=sub, bg=CALM_A, fg=INK,
-                 font=(fam, max(13, int(h * 0.07)))).pack()
-        tk.Label(wrap, text="Click or press any key to dismiss", bg=CALM_A,
-                 fg=INK, font=(fam, 11, "italic")).pack(pady=(18, 0))
-
-        state = {"on": True}
-
-        def _pulse():
-            if not win.winfo_exists():
-                return
-            state["on"] = not state["on"]
-            bg = CALM_A if state["on"] else CALM_B
-            win.configure(bg=bg); wrap.configure(bg=bg)
-            for c in wrap.winfo_children():
-                try:
-                    c.configure(bg=bg)
-                except tk.TclError:
-                    pass
-            win.after(1100, _pulse)        # slow, gentle pulse — no harsh strobe
-
-        def _dismiss(*_):
-            try:
-                win.destroy()
-            except tk.TclError:
-                pass
-        win.bind("<Button-1>", _dismiss)
-        win.bind("<Key>", _dismiss)
-        win.after(1100, _pulse)
-        win.after(60000, _dismiss)
-        try:
-            win.focus_force()
-        except tk.TclError:
-            pass
-
-    def _matrix_timer_finished(self) -> None:
-        self._mtimer_running = False
-        self._mtimer_after_id = None
-        # Capture this block's completions BEFORE we close the pomodoro row.
-        block_id = self._matrix_pomodoro_id
-        block_done = self._matrix_block_completions(block_id)
-        new_best = self._matrix_close_pomodoro()
-        self._matrix_timer_reset_button()
-        self._matrix_refresh_ticker()
-        self.set_status("⏱ Time's up — focus session complete.")
-        # Show the block summary + gentle end-of-session alert.
-        self._matrix_pomodoro_summary(block_done, new_best)
-        self._session_end_flash("⏳ TIME TO STOP",
-                                "Your focus session is complete.")
 
     # ---- Eisenhower Matrix completion ticker ---------------------------
     # Markdown-style checkboxes: lines starting with "[ ]" (open) or "[x]"
