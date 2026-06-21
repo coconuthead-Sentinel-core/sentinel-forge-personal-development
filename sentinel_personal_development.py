@@ -702,6 +702,7 @@ class BookReader:
         # Voice picker
         self.available_voices = []
         self._voice_paths = {}
+        self._sapi_voice_names = {}
         if HAS_PIPER:
             vd = os.path.join(_BR_BASE, "tts", "voices")
             if os.path.isdir(vd):
@@ -710,6 +711,10 @@ class BookReader:
                         label = f.replace(".onnx", "").replace("en_US-", "").title()
                         self.available_voices.append(label)
                         self._voice_paths[label] = os.path.join(vd, f)
+        for name in self._installed_sapi_voice_names():
+            label = f"Windows: {name}"
+            self.available_voices.append(label)
+            self._sapi_voice_names[label] = name
         self.available_voices.append("Microsoft System")
         self.voice_var = tk.StringVar(value=self.available_voices[0])
 
@@ -893,6 +898,7 @@ class BookReader:
         self._glossary_records: list = []
         self._journal_records: list = []
         self._journal_current_id: int | None = None
+        self._journal_save_after_id: str | None = None
         # Eisenhower matrix — one autosaving editor per quadrant. With
         # the calendar redesign only the bottom two (delegate, eliminate)
         # remain as text editors; "do" and "schedule" are now driven by
@@ -988,6 +994,7 @@ class BookReader:
         self._ftb_drag_y = 0
         self._ftb_is_docked = True
         self._ftb_float_xy: tuple[int, int] | None = None
+        self._ftb_last_focus_target = None
 
         # Restore persisted state from HANDOFF_STATE.
         st = self._load_handoff_state() or {}
@@ -1020,6 +1027,10 @@ class BookReader:
             self._floating_toolbar_dock()
         else:
             self._floating_toolbar_undock()
+        try:
+            self.root.bind_all("<FocusIn>", self._ftb_remember_focus, add="+")
+        except tk.TclError:
+            pass
 
     def _build_floating_toolbar_widgets(self, parent) -> None:
         # Drag grip on the left — drag to move the floating Toplevel.
@@ -1094,6 +1105,30 @@ class BookReader:
         _style_optionmenu(_ftb_rc)
         _ftb_rc.configure(width=7, font=("Segoe UI", 9, "bold"))
         _ftb_rc.pack(side=tk.LEFT, padx=(4, 0))
+
+        # Re-installed: TTS Voice picker (to switch between Piper options and Windows SAPI)
+        _ftb_voice = tk.OptionMenu(
+            body, self.voice_var,
+            *self.available_voices,
+            command=self._on_voice_change)
+        _style_optionmenu(_ftb_voice)
+        _ftb_voice.configure(width=12, font=("Segoe UI", 9, "bold"))
+        _ftb_voice.pack(side=tk.LEFT, padx=(6, 0))
+
+        # Universal Add/Remove buttons
+        add_btn = tk.Button(
+            body, text="➕ Add", command=self._ftb_action_add,
+            font=("Segoe UI", 9, "bold"), bg="#3b82f6", fg="white",
+            activebackground="#2563eb", relief=tk.FLAT,
+            padx=10, pady=2, cursor="hand2", borderwidth=0)
+        add_btn.pack(side=tk.LEFT, padx=(8, 2))
+
+        rem_btn = tk.Button(
+            body, text="➖ Remove", command=self._ftb_action_remove,
+            font=("Segoe UI", 9, "bold"), bg="#ef4444", fg="white",
+            activebackground="#dc2626", relief=tk.FLAT,
+            padx=10, pady=2, cursor="hand2", borderwidth=0)
+        rem_btn.pack(side=tk.LEFT, padx=(2, 0))
 
         # (🖍 Highlight + color picker NOT in the toolbar by design —
         #  highlight is on the right-click menu of every text widget
@@ -1198,9 +1233,9 @@ class BookReader:
         win.title("Toolbar")
         win.configure(bg=BG_PANEL)
         if self._ftb_float_xy:
-            geo = f"420x36+{self._ftb_float_xy[0]}+{self._ftb_float_xy[1]}"
+            geo = f"720x36+{self._ftb_float_xy[0]}+{self._ftb_float_xy[1]}"
         else:
-            geo = "420x36+240+180"
+            geo = "720x36+240+180"
         win.geometry(geo)
         win.minsize(160, 30)
         win.protocol("WM_DELETE_WINDOW", self._floating_toolbar_dock)
@@ -1265,6 +1300,191 @@ class BookReader:
             self._ftb_float_xy = (x, y)
         except tk.TclError:
             pass
+
+    def _ftb_action_add(self) -> None:
+        """Context-aware Add button from the floating toolbar."""
+        dstr = self._ftb_planner_day_for_target()
+        if dstr is not None:
+            self._planner_add_task(dstr)
+            return
+        if self._matrix_add_task_line():
+            return
+        if self._journal_add_entry_from_toolbar():
+            return
+        if self._ftb_generate_bound_event("<Return>"):
+            return
+        if self._ftb_invoke_context_button(("add", "new", "create", "upload")):
+            return
+        self.set_status("Click into an add field or list, then use Add.")
+
+    def _ftb_action_remove(self) -> None:
+        """Context-aware Remove button from the floating toolbar."""
+        dstr = self._ftb_planner_day_for_target()
+        if dstr is not None:
+            self._planner_delete_selected(dstr)
+            return
+        if self._matrix_remove_task_line():
+            return
+        if self._journal_remove_entry_from_toolbar():
+            return
+        if self._study_notes_remove_from_toolbar():
+            return
+        if self._topics_remove_from_toolbar():
+            return
+        if self._ftb_invoke_context_button(("remove", "delete", "clear", "🗑")):
+            return
+        if self._ftb_generate_bound_event("<Delete>"):
+            return
+        self.set_status("Click or select something removable, then use Remove.")
+
+    def _ftb_remember_focus(self, event) -> None:
+        widget = getattr(event, "widget", None)
+        if widget is None or self._ftb_is_toolbar_widget(widget):
+            return
+        try:
+            if widget.winfo_exists():
+                self._ftb_last_focus_target = widget
+        except tk.TclError:
+            pass
+
+    def _ftb_action_targets(self) -> list:
+        targets = []
+        try:
+            targets.append(self.root.focus_get())
+        except Exception:
+            pass
+        targets.append(getattr(self, "_ftb_last_focus_target", None))
+        targets.append(getattr(self, "_mic_target", None))
+
+        out = []
+        seen = set()
+        for target in targets:
+            if target is None or self._ftb_is_toolbar_widget(target):
+                continue
+            try:
+                if not target.winfo_exists():
+                    continue
+            except tk.TclError:
+                continue
+            marker = str(target)
+            if marker not in seen:
+                seen.add(marker)
+                out.append(target)
+        return out
+
+    def _ftb_generate_bound_event(self, sequence: str) -> bool:
+        for target in self._ftb_action_targets():
+            try:
+                if target.bind(sequence):
+                    target.event_generate(sequence)
+                    return True
+            except tk.TclError:
+                continue
+        return False
+
+    def _ftb_invoke_context_button(self, keywords: tuple[str, ...]) -> bool:
+        lowered = tuple(k.lower() for k in keywords)
+        for target in self._ftb_action_targets():
+            for ancestor in self._ftb_widget_lineage(target):
+                if isinstance(ancestor, (tk.Tk, tk.Toplevel)):
+                    continue
+                if self._ftb_descendant_count(ancestor, limit=80) >= 80:
+                    continue
+                button = self._ftb_find_action_button(ancestor, lowered)
+                if button is None:
+                    continue
+                try:
+                    button.invoke()
+                    return True
+                except tk.TclError:
+                    continue
+        return False
+
+    def _ftb_find_action_button(self, parent, keywords: tuple[str, ...]):
+        stack = list(parent.winfo_children())
+        while stack:
+            widget = stack.pop(0)
+            if self._ftb_is_toolbar_widget(widget):
+                continue
+            if isinstance(widget, (tk.Button, ttk.Button)):
+                try:
+                    state = str(widget.cget("state"))
+                    text = str(widget.cget("text")).strip().lower()
+                except tk.TclError:
+                    state = "normal"
+                    text = ""
+                if state != tk.DISABLED and any(k in text for k in keywords):
+                    return widget
+            try:
+                stack.extend(widget.winfo_children())
+            except tk.TclError:
+                pass
+        return None
+
+    def _ftb_widget_lineage(self, widget):
+        cur = widget
+        while cur is not None:
+            yield cur
+            try:
+                parent_name = cur.winfo_parent()
+                if not parent_name:
+                    return
+                cur = cur.nametowidget(parent_name)
+            except tk.TclError:
+                return
+
+    def _ftb_descendant_count(self, widget, limit: int = 80) -> int:
+        count = 0
+        stack = [widget]
+        while stack:
+            cur = stack.pop()
+            try:
+                children = cur.winfo_children()
+            except tk.TclError:
+                children = []
+            count += len(children)
+            if count >= limit:
+                return count
+            stack.extend(children)
+        return count
+
+    def _ftb_is_toolbar_widget(self, widget) -> bool:
+        hosts = [
+            getattr(self, "_ftb_win", None),
+            getattr(self, "_ftb_body", None),
+            getattr(self, "_ftb_dock_host", None),
+            getattr(self, "_ftb_current_host", None),
+        ]
+        return any(self._ftb_widget_is_descendant(widget, host)
+                   for host in hosts if host is not None)
+
+    def _ftb_widget_is_descendant(self, widget, parent) -> bool:
+        try:
+            if widget is parent:
+                return True
+            cur = widget
+            while True:
+                parent_name = cur.winfo_parent()
+                if not parent_name:
+                    return False
+                cur = cur.nametowidget(parent_name)
+                if cur is parent:
+                    return True
+        except tk.TclError:
+            return False
+
+    def _ftb_planner_day_for_target(self) -> str | None:
+        """Return the Planner day for the widget the toolbar should act on."""
+        entries = getattr(self, "_planner_entries", {}) or {}
+        displays = getattr(self, "_planner_listboxes", {}) or {}
+        for target in self._ftb_action_targets():
+            for dstr, widget in entries.items():
+                if target is widget:
+                    return dstr
+            for dstr, widget in displays.items():
+                if target is widget:
+                    return dstr
+        return None
 
     def _ftb_read_button_idle(self) -> None:
         """Restore the toolbar Read button to its idle 🔊 Read look and
@@ -1332,6 +1552,12 @@ class BookReader:
             if proc.poll() is None:
                 try: proc.terminate()
                 except Exception: pass
+            if getattr(self, "tts_mode", "") == "piper":
+                try:
+                    import winsound
+                    winsound.PlaySound(None, winsound.SND_PURGE)
+                except Exception:
+                    pass
             self._ftb_speak_proc = None
             self._ftb_read_button_idle()
             return
@@ -1439,23 +1665,55 @@ class BookReader:
                 # Speak it
                 try:
                     import tempfile, os, subprocess
-                    fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
-                    os.close(fd)
-                    with open(tmp, "w", encoding="utf-8") as f:
-                        f.write(chunk_text)
-                    ps_cmd = (
-                        "Add-Type -AssemblyName System.Speech; "
-                        f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
-                        "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-                        "$s.Speak($t)"
-                    )
-                    proc = subprocess.Popen(
-                        ["powershell", "-NoProfile", "-Command", ps_cmd],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-                    if self._ftb_worker_id == current_worker_id:
-                        self._ftb_speak_proc = proc
-                    proc.wait()
+                    if (getattr(self, "tts_mode", "") == "piper"
+                            and getattr(self, "current_piper_voice", None)):
+                        import winsound
+                        fd, wav_path = tempfile.mkstemp(suffix=".wav")
+                        os.close(fd)
+                        try:
+                            proc = subprocess.Popen(
+                                [PIPER_EXE, "--model", self.current_piper_voice,
+                                 "--output_file", wav_path],
+                                stdin=subprocess.PIPE,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                            if self._ftb_worker_id == current_worker_id:
+                                self._ftb_speak_proc = proc
+                            proc.communicate(input=chunk_text.encode("utf-8"), timeout=60)
+                            if (proc.returncode == 0 and os.path.exists(wav_path)
+                                    and os.path.getsize(wav_path) > 44):
+                                winsound.PlaySound(
+                                    wav_path,
+                                    winsound.SND_FILENAME | winsound.SND_NODEFAULT)
+                        finally:
+                            if os.path.exists(wav_path):
+                                try: os.unlink(wav_path)
+                                except Exception: pass
+                    else:
+                        fd, tmp = tempfile.mkstemp(suffix=".txt", text=False)
+                        os.close(fd)
+                        try:
+                            with open(tmp, "w", encoding="utf-8") as f:
+                                f.write(chunk_text)
+                            ps_cmd = (
+                                "Add-Type -AssemblyName System.Speech; "
+                                f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
+                                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                f"{self._sapi_select_voice_ps()}"
+                                "$s.Speak($t)"
+                            )
+                            proc = subprocess.Popen(
+                                ["powershell", "-NoProfile", "-Command", ps_cmd],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                            if self._ftb_worker_id == current_worker_id:
+                                self._ftb_speak_proc = proc
+                            proc.wait()
+                        finally:
+                            if os.path.exists(tmp):
+                                try: os.unlink(tmp)
+                                except Exception: pass
                 except Exception:
                     pass
             
@@ -1515,6 +1773,46 @@ class BookReader:
         try: self.notes_area.configure(font=(self.font_family, 13))
         except Exception: pass
 
+    @staticmethod
+    def _ps_single_quote(value: str) -> str:
+        return "'" + (value or "").replace("'", "''") + "'"
+
+    def _installed_sapi_voice_names(self) -> list[str]:
+        try:
+            ps_cmd = (
+                "Add-Type -AssemblyName System.Speech; "
+                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                "$s.GetInstalledVoices() | ForEach-Object { $_.VoiceInfo.Name }"
+            )
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
+                check=True, timeout=5, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except Exception:
+            return []
+        names = []
+        seen = set()
+        for line in result.stdout.splitlines():
+            name = line.strip()
+            key = name.lower()
+            if name and key not in seen:
+                seen.add(key)
+                names.append(name)
+        return names
+
+    def _selected_sapi_voice_name(self) -> str | None:
+        label = self.voice_var.get() if hasattr(self, "voice_var") else ""
+        return (getattr(self, "_sapi_voice_names", {}) or {}).get(label)
+
+    def _sapi_select_voice_ps(self) -> str:
+        voice = self._selected_sapi_voice_name()
+        if not voice:
+            return ""
+        quoted = self._ps_single_quote(voice)
+        return f"try {{ $s.SelectVoice({quoted}) }} catch {{ }} "
+
     def _on_voice_change(self, value=None) -> None:
         voice = self.voice_var.get()
         _vlog(f"_on_voice_change ENTER  value_arg={value!r}  voice_var.get()={voice!r}  is_reading={getattr(self, 'is_reading', False)}")
@@ -1526,15 +1824,30 @@ class BookReader:
                 self.stop_reading()
             except Exception:
                 pass
+        if getattr(self, "_ftb_reading", False):
+            try:
+                self._ftb_read_toggle()
+            except Exception:
+                pass
         if voice == "Microsoft System":
             self.tts_mode = "powershell"
             self.current_piper_voice = None
+            self.current_sapi_voice = None
             self.set_status(
                 f"Voice: Microsoft System (Windows SAPI). "
                 "Click 🔊 Read aloud to test."
             )
+        elif voice in getattr(self, "_sapi_voice_names", {}):
+            self.tts_mode = "powershell"
+            self.current_piper_voice = None
+            self.current_sapi_voice = self._sapi_voice_names[voice]
+            self.set_status(
+                f"Voice: {self.current_sapi_voice} (Windows SAPI). "
+                "Click 🔊 Read aloud to test."
+            )
         else:
             self.tts_mode = "piper"
+            self.current_sapi_voice = None
             self.current_piper_voice = self._voice_paths.get(voice)
             voice_path = self.current_piper_voice or "(no path)"
             self.set_status(
@@ -2953,7 +3266,21 @@ class BookReader:
 
             def _worker():
                 try:
-                    reply = brain.ask(content)
+                    # Gather day planner context
+                    planner_context = ""
+                    pents = getattr(self, "_planner_entries", {}) or {}
+                    if pents:
+                        planner_lines = []
+                        for time_slot, text_widget in pents.items():
+                            try:
+                                txt = text_widget.get("1.0", tk.END).strip()
+                                if txt:
+                                    planner_lines.append(f"{time_slot}: {txt}")
+                            except Exception: pass
+                        if planner_lines:
+                            planner_context = "User's current day planner entries:\n" + "\n".join(planner_lines)
+
+                    reply = brain.ask(content, context=planner_context)
                     reply = reply if reply else "I'm sorry, I couldn't reach the backend."
                 except Exception as ex:
                     reply = f"Error: {ex}"
@@ -2978,12 +3305,12 @@ class BookReader:
                         # Ensure the chat history is the target for the floating toolbar
                         self._mic_target = chat_history
                         
-                        # Stop any currently active speech
+                        # Stop any currently active speech safely
                         if getattr(self, "_ftb_reading", False):
                             self._ftb_read_toggle()
                             
                         # Toggle on continuous reading with following highlighting
-                        self._ftb_read_toggle()
+                        chat_history.after(100, lambda: self._ftb_read_toggle() if not getattr(self, "_ftb_reading", False) else None)
                     except Exception:
                         pass
 
@@ -12888,8 +13215,9 @@ class BookReader:
                         f.write(chunk_text)
                     ps_cmd = (
                         "Add-Type -AssemblyName System.Speech; "
-                        f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
+                        f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                        f"{self._sapi_select_voice_ps()}"
                         "$s.Speak($t)"
                     )
                     _vlog(f"  SAPI.Popen   chunk_len={len(chunk_text)}  tmp={tmp!r}")
@@ -13440,8 +13768,9 @@ class BookReader:
                 f.write(text)
             ps_cmd = (
                 "Add-Type -AssemblyName System.Speech; "
-                f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath '{tmp}'; "
+                f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                f"{self._sapi_select_voice_ps()}"
                 "$s.Speak($t)"
             )
             prev = getattr(self, "_word_speak_proc", None)
@@ -15941,6 +16270,7 @@ class BookReader:
         self.set_status(f"💬 Exported {len(rows)} prompts → {os.path.basename(out)}")
 
     def _show_study_tab(self, key: str) -> None:
+        self._study_active_tab = key
         for k, frame in self._study_tab_frames.items():
             frame.pack_forget()
             self._study_tab_buttons[k].configure(bg=BG_INPUT, fg=FG_TEXT)
@@ -16242,6 +16572,51 @@ class BookReader:
             self._topic_entries_listbox.insert(tk.END, f" {snippet}{src}")
         self._topic_entries_label_var.set(f"Entries in '{title}'")
 
+    def _topics_context_active(self) -> bool:
+        topics = getattr(self, "_topics_listbox", None)
+        entries = getattr(self, "_topic_entries_listbox", None)
+        if getattr(self, "_study_active_tab", None) == "topics":
+            return True
+        if hasattr(self, "_ftb_action_targets"):
+            for target in self._ftb_action_targets():
+                if target is topics or target is entries:
+                    return True
+        return False
+
+    def _topics_remove_from_toolbar(self) -> bool:
+        if not self._topics_context_active():
+            return False
+        topics = getattr(self, "_topics_listbox", None)
+        entries = getattr(self, "_topic_entries_listbox", None)
+        targets = self._ftb_action_targets() if hasattr(self, "_ftb_action_targets") else []
+
+        try:
+            if entries is not None and entries in targets and entries.curselection():
+                self._delete_topic_entry()
+                return True
+        except tk.TclError:
+            pass
+        try:
+            if topics is not None and topics in targets and topics.curselection():
+                self._delete_selected_topic()
+                return True
+        except tk.TclError:
+            pass
+        try:
+            if entries is not None and entries.curselection():
+                self._delete_topic_entry()
+                return True
+        except tk.TclError:
+            pass
+        try:
+            if topics is not None and topics.curselection():
+                self._delete_selected_topic()
+                return True
+        except tk.TclError:
+            pass
+        self.set_status("📌 Select a topic or topic entry, then Remove.")
+        return True
+
     def _create_new_topic(self) -> None:
         name = self._prompt_for_text("New topic", "Topic name:")
         if not name:
@@ -16335,13 +16710,26 @@ class BookReader:
         sel = self._topic_entries_listbox.curselection()
         if not sel:
             return
+        topic_sel = self._topics_listbox.curselection()
+        topic_id = None
+        if topic_sel:
+            try:
+                topic_id = self._topics_records[topic_sel[0]][0]
+            except (IndexError, TypeError):
+                topic_id = None
         eid, _t, _b, _o, _ts = self._topic_entries_records[sel[0]]
         if not messagebox.askyesno("Delete entry?",
                                      "Remove this entry from the topic?"):
             return
         self._db_exec("DELETE FROM topic_entries WHERE id=?", (eid,))
-        self._show_topic_entries()
         self._refresh_tab_topics()
+        if topic_id is not None:
+            for idx, row in enumerate(self._topics_records):
+                if row[0] == topic_id:
+                    self._topics_listbox.selection_set(idx)
+                    self._topics_listbox.activate(idx)
+                    self._show_topic_entries()
+                    break
 
     # ---- Workspace tab: Bookmarks --------------------------------------
     def _build_tab_bookmarks(self, parent: tk.Frame) -> None:
@@ -16651,6 +17039,7 @@ class BookReader:
             clear_cmd=self._clear_current_journal_entry,
             clear_label="Clear this entry",
         )
+        self._journal_body.bind("<<Modified>>", self._on_journal_modified, add="+")
 
         paned.add(left,  minsize=200, stretch="never")
         paned.add(right, minsize=320, stretch="always")
@@ -16670,17 +17059,115 @@ class BookReader:
         self._journal_stats_var.set(
             f"{len(rows)} entr{'ies' if len(rows) != 1 else 'y'}")
 
+    def _journal_context_active(self) -> bool:
+        body = getattr(self, "_journal_body", None)
+        listbox = getattr(self, "_journal_listbox", None)
+        if getattr(self, "_study_active_tab", None) == "journal":
+            return True
+        if hasattr(self, "_ftb_action_targets"):
+            for target in self._ftb_action_targets():
+                if target is body or target is listbox:
+                    return True
+        return False
+
+    def _journal_add_entry_from_toolbar(self) -> bool:
+        if not self._journal_context_active():
+            return False
+        draft = ""
+        if self._journal_current_id is None:
+            try:
+                draft = self._journal_body.get("1.0", tk.END).rstrip()
+            except tk.TclError:
+                draft = ""
+        if self._journal_current_id is not None:
+            try:
+                self._save_current_journal_entry()
+            except Exception:
+                pass
+        self._new_today_journal_entry()
+        if draft and self._journal_current_id is not None:
+            try:
+                self._journal_body.delete("1.0", tk.END)
+                self._journal_body.insert("1.0", draft)
+                self._journal_body.edit_modified(False)
+                self._save_current_journal_entry()
+            except tk.TclError:
+                pass
+        self.set_status("📅 Journal ready for today's entry.")
+        return True
+
+    def _journal_remove_entry_from_toolbar(self) -> bool:
+        if not self._journal_context_active():
+            return False
+        listbox = getattr(self, "_journal_listbox", None)
+        if listbox is not None:
+            try:
+                if listbox.curselection():
+                    self._delete_selected_journal()
+                    return True
+            except tk.TclError:
+                pass
+        jid = self._journal_current_id
+        if jid is None:
+            self.set_status("📅 Select a journal entry, then Remove.")
+            return True
+        dstr = self._journal_date_var.get().strip() or "this entry"
+        if not messagebox.askyesno("Delete entry?",
+                                   f"Delete journal entry from {dstr}?"):
+            return True
+        if self._journal_save_after_id is not None:
+            try:
+                self.root.after_cancel(self._journal_save_after_id)
+            except Exception:
+                pass
+            self._journal_save_after_id = None
+        try:
+            self._db_exec("DELETE FROM journal WHERE id=?", (jid,))
+        except Exception as e:
+            messagebox.showerror("Delete failed", str(e))
+            return True
+        self._journal_current_id = None
+        self._journal_date_var.set("")
+        try:
+            self._journal_body.delete("1.0", tk.END)
+            self._journal_body.edit_modified(False)
+        except tk.TclError:
+            pass
+        self._refresh_tab_journal()
+        self.set_status("📅 Journal entry removed.")
+        return True
+
     def _load_selected_journal_entry(self) -> None:
         sel = self._journal_listbox.curselection()
         if not sel:
             return
+        if self._journal_save_after_id is not None:
+            try:
+                self.root.after_cancel(self._journal_save_after_id)
+            except Exception:
+                pass
+            self._journal_save_after_id = None
+            if self._journal_current_id is not None:
+                self._save_current_journal_entry()
         jid, dstr, body = self._journal_records[sel[0]]
         self._journal_current_id = jid
         self._journal_date_var.set(dstr)
         self._journal_body.delete("1.0", tk.END)
         self._journal_body.insert("1.0", body)
+        self._journal_body.edit_modified(False)
 
     def _new_today_journal_entry(self) -> None:
+        if self._journal_current_id is not None and hasattr(self, "_journal_body"):
+            if self._journal_save_after_id is not None:
+                try:
+                    self.root.after_cancel(self._journal_save_after_id)
+                except Exception:
+                    pass
+                self._journal_save_after_id = None
+            try:
+                self._save_current_journal_entry()
+            except Exception:
+                pass
         today = datetime.now().strftime("%Y-%m-%d")
         # If today already has an entry, load and focus it.
         rows = self._db_query(
@@ -16693,6 +17180,7 @@ class BookReader:
             self._journal_date_var.set(dstr)
             self._journal_body.delete("1.0", tk.END)
             self._journal_body.insert("1.0", body)
+            self._journal_body.edit_modified(False)
             self._journal_body.focus_set()
             return
         now = datetime.now().isoformat()
@@ -16702,8 +17190,30 @@ class BookReader:
         self._journal_current_id = jid
         self._journal_date_var.set(today)
         self._journal_body.delete("1.0", tk.END)
+        self._journal_body.edit_modified(False)
         self._journal_body.focus_set()
         self._refresh_tab_journal()
+
+    def _on_journal_modified(self, _event=None) -> None:
+        if self._journal_current_id is None:
+            try:
+                self._journal_body.edit_modified(False)
+            except tk.TclError:
+                pass
+            return
+        try:
+            if not self._journal_body.edit_modified():
+                return
+            self._journal_body.edit_modified(False)
+        except tk.TclError:
+            return
+        if self._journal_save_after_id is not None:
+            try:
+                self.root.after_cancel(self._journal_save_after_id)
+            except Exception:
+                pass
+        self._journal_save_after_id = self.root.after(
+            1200, self._save_current_journal_entry)
 
     def _save_current_journal_entry(self) -> None:
         if self._journal_current_id is None:
@@ -16715,6 +17225,7 @@ class BookReader:
         self._db_exec(
             "UPDATE journal SET body=?, updated_at=? WHERE id=?",
             (body, datetime.now().isoformat(), self._journal_current_id))
+        self._journal_save_after_id = None
         self.set_status("Journal entry saved.")
         self._refresh_tab_journal()
 
@@ -16798,6 +17309,12 @@ class BookReader:
         if not messagebox.askyesno("Delete entry?",
                                      f"Delete journal entry from {dstr}?"):
             return
+        if self._journal_save_after_id is not None:
+            try:
+                self.root.after_cancel(self._journal_save_after_id)
+            except Exception:
+                pass
+            self._journal_save_after_id = None
         self._db_exec("DELETE FROM journal WHERE id=?", (jid,))
         if self._journal_current_id == jid:
             self._journal_current_id = None
@@ -17909,6 +18426,7 @@ class BookReader:
     def _new_study_note(self) -> None:
         """Blank the editor for a fresh entry and auto-stamp the title with the
         current date + time (metadata tag) — user types their own label after."""
+        self._cancel_study_notes_autosave()
         self._study_notes_entry_id = None
         stamp = datetime.now().strftime("%a %b %d, %Y · %H:%M — ")
         tv = getattr(self, "_study_notes_title_var", None)
@@ -17940,6 +18458,7 @@ class BookReader:
             return
         if not messagebox.askyesno("Delete note", "Delete this saved note?"):
             return
+        self._cancel_study_notes_autosave()
         try:
             self._db_exec("DELETE FROM study_note_entries WHERE id=?", (eid,))
         except Exception as e:
@@ -17947,6 +18466,71 @@ class BookReader:
             return
         self._new_study_note()
         self._refresh_study_notes_list()
+
+    def _cancel_study_notes_autosave(self) -> None:
+        after_id = getattr(self, "_study_notes_save_after_id", None)
+        if after_id is None:
+            return
+        try:
+            self.root.after_cancel(after_id)
+        except Exception:
+            pass
+        self._study_notes_save_after_id = None
+
+    def _study_notes_context_active(self) -> bool:
+        editor = getattr(self, "_study_notes_widget", None)
+        title = getattr(self, "_study_notes_title_entry", None)
+        listbox = getattr(self, "_study_notes_listbox", None)
+        if getattr(self, "_study_active_tab", None) == "study_notes":
+            return True
+        if hasattr(self, "_ftb_action_targets"):
+            for target in self._ftb_action_targets():
+                if target is editor or target is title or target is listbox:
+                    return True
+        return False
+
+    def _study_notes_remove_from_toolbar(self) -> bool:
+        if not self._study_notes_context_active():
+            return False
+        editor = getattr(self, "_study_notes_widget", None)
+        title = getattr(self, "_study_notes_title_entry", None)
+        listbox = getattr(self, "_study_notes_listbox", None)
+        targets = self._ftb_action_targets() if hasattr(self, "_ftb_action_targets") else []
+
+        if editor is not None and editor in targets:
+            try:
+                ranges = editor.tag_ranges(tk.SEL)
+                if ranges:
+                    editor.delete(ranges[0], ranges[1])
+                    editor.edit_modified(True)
+                    editor.event_generate("<<Modified>>")
+                    self.set_status("📝 Removed selected Study Notes text.")
+                    return True
+            except tk.TclError:
+                pass
+        if title is not None and title in targets:
+            try:
+                if title.selection_present():
+                    title.delete(tk.SEL_FIRST, tk.SEL_LAST)
+                    self._save_study_notes()
+                    self.set_status("📝 Removed selected Study Notes title text.")
+                    return True
+            except tk.TclError:
+                pass
+        if listbox is not None:
+            try:
+                sel = listbox.curselection()
+                if sel and 0 <= sel[0] < len(self._study_notes_ids):
+                    self._study_notes_entry_id = self._study_notes_ids[sel[0]]
+                    self._delete_study_note()
+                    return True
+            except tk.TclError:
+                pass
+        if getattr(self, "_study_notes_entry_id", None) is not None:
+            self._delete_study_note()
+            return True
+        self.set_status("📝 Select a saved note or note text, then Remove.")
+        return True
 
     def _on_study_notes_modified(self) -> None:
         """Debounced autosave on every edit — same 1.5 s timer the
@@ -21030,14 +21614,18 @@ class BookReader:
         self._mtimer_after_id = None
         self._mtimer_preset_var = tk.StringVar(value="25 min")
         self._mtimer_display_var = tk.StringVar(value="00:00")
-        
+
         # Completion ticker state — links task logs to the active focus block.
         self._matrix_pomodoro_id = None
         self._matrix_ticker_var = tk.StringVar(value="")
-        
-        # --- Completion ticker: ✓ Done · live counters · day total · best ---
-        _tbtn(tools, "✓ Done line", self._matrix_toggle_done_line,
+
+        # --- Task commands: Add · Remove · Done · live counters ---
+        _tbtn(tools, "+ Add line", lambda: self._matrix_add_task_line(default_to_do=True),
               ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, GAP))
+        _tbtn(tools, "− Remove line", lambda: self._matrix_remove_task_line(default_to_do=True),
+              ACCENT_RED).pack(side=tk.LEFT, padx=(0, GAP))
+        _tbtn(tools, "✓ Done line", self._matrix_toggle_done_line,
+              ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, GAP))
         tk.Label(tools, textvariable=self._matrix_ticker_var, bg=BG_PANEL,
                  fg=FG_TEXT, font=("Segoe UI", 10, "bold")
                  ).pack(side=tk.LEFT, padx=(0, GAP))
@@ -21198,6 +21786,100 @@ class BookReader:
                 return k
         return "do"
 
+    def _matrix_target_widget(self):
+        widgets = set((getattr(self, "_eisenhower_widgets", {}) or {}).values())
+        if not widgets:
+            return None
+        if hasattr(self, "_ftb_action_targets"):
+            for target in self._ftb_action_targets():
+                if target in widgets:
+                    return target
+        target = getattr(self, "_mic_target", None)
+        if target in widgets:
+            return target
+        return None
+
+    def _matrix_mark_widget_modified(self, widget) -> None:
+        try:
+            widget.edit_modified(True)
+            widget.event_generate("<<Modified>>")
+        except tk.TclError:
+            pass
+
+    def _matrix_add_task_line(self, default_to_do: bool = False) -> bool:
+        widget = self._matrix_target_widget()
+        if widget is None and default_to_do:
+            widget = (self._eisenhower_widgets or {}).get("do")
+        if widget is None:
+            return False
+        try:
+            ranges = widget.tag_ranges(tk.SEL)
+            if ranges:
+                raw = widget.get(ranges[0], ranges[1])
+                lines = [line.strip() for line in raw.splitlines() if line.strip()]
+                if not lines:
+                    return True
+                tasks = []
+                for line in lines:
+                    tasks.append(line if self._MATRIX_CHECKBOX_RE.match(line)
+                                 else f"[ ] {line}")
+                widget.delete(ranges[0], ranges[1])
+                widget.insert(ranges[0], "\n".join(tasks))
+                widget.mark_set(tk.INSERT, ranges[0])
+            else:
+                line_no = int(widget.index(tk.INSERT).split(".")[0])
+                line_start, line_end = f"{line_no}.0", f"{line_no}.end"
+                text = widget.get(line_start, line_end)
+                if self._MATRIX_CHECKBOX_RE.match(text):
+                    self.set_status("🎯 That Matrix line is already a task.")
+                    return True
+                if text.strip():
+                    indent = text[:len(text) - len(text.lstrip())]
+                    body = text.strip()
+                    widget.delete(line_start, line_end)
+                    widget.insert(line_start, f"{indent}[ ] {body}")
+                    widget.mark_set(tk.INSERT, f"{line_no}.4")
+                else:
+                    widget.insert(tk.INSERT, "[ ] ")
+            widget.focus_set()
+            self._set_mic_target(widget)
+            self._matrix_mark_widget_modified(widget)
+            self.set_status("🎯 Added Matrix task line.")
+            return True
+        except (tk.TclError, ValueError):
+            return True
+
+    def _matrix_remove_task_line(self, default_to_do: bool = False) -> bool:
+        widget = self._matrix_target_widget()
+        if widget is None and default_to_do:
+            widget = (self._eisenhower_widgets or {}).get("do")
+        if widget is None:
+            return False
+        try:
+            ranges = widget.tag_ranges(tk.SEL)
+            if ranges:
+                widget.delete(ranges[0], ranges[1])
+            else:
+                line_no = int(widget.index(tk.INSERT).split(".")[0])
+                line_start = f"{line_no}.0"
+                line_end = f"{line_no}.end"
+                if not widget.get(line_start, line_end).strip():
+                    self.set_status("🎯 Matrix line is already empty.")
+                    return True
+                next_line = f"{line_no + 1}.0"
+                try:
+                    widget.get(next_line)
+                    widget.delete(line_start, next_line)
+                except tk.TclError:
+                    widget.delete(line_start, line_end)
+            widget.focus_set()
+            self._set_mic_target(widget)
+            self._matrix_mark_widget_modified(widget)
+            self.set_status("🎯 Removed Matrix line.")
+            return True
+        except (tk.TclError, ValueError):
+            return True
+
     def _matrix_on_checkbox_click(self, _event, key, widget):
         try:
             idx = widget.index("@%d,%d" % (_event.x, _event.y))
@@ -21224,7 +21906,7 @@ class BookReader:
         try:
             widget.delete(line_start, line_end)
             widget.insert(line_start, new_line)
-            widget.edit_modified(True)   # triggers autosave of the quadrant
+            self._matrix_mark_widget_modified(widget)
         except tk.TclError:
             return
         if not was_done:                  # [ ] -> [x] : log it
@@ -21233,9 +21915,7 @@ class BookReader:
     def _matrix_toggle_done_line(self):
         """Toolbar fallback for the checkbox click: toggle the line the caret
         is on in whichever quadrant currently has focus (or Do Now by default)."""
-        w = (getattr(self, "_mic_target", None) if isinstance(
-            getattr(self, "_mic_target", None), tk.Text)
-             else (self._eisenhower_widgets or {}).get("do"))
+        w = self._matrix_target_widget() or (self._eisenhower_widgets or {}).get("do")
         if w is None or w not in (self._eisenhower_widgets or {}).values():
             w = (self._eisenhower_widgets or {}).get("do")
         if w is None:
@@ -21255,7 +21935,7 @@ class BookReader:
                 return
             try:
                 w.insert(line_start, "[x] ")
-                w.edit_modified(True)
+                self._matrix_mark_widget_modified(w)
             except tk.TclError:
                 return
             self._matrix_log_completion(
@@ -21267,7 +21947,7 @@ class BookReader:
             try:
                 w.delete(line_start, line_end)
                 w.insert(line_start, new_line)
-                w.edit_modified(True)
+                self._matrix_mark_widget_modified(w)
             except tk.TclError:
                 return
             if not was_done:
@@ -22291,6 +22971,26 @@ def main() -> None:
     def on_close():
         try: app._stop_mic()
         except Exception: pass
+        try:
+            p1 = getattr(app, "_ftb_speak_proc", None)
+            if p1 is not None and p1.poll() is None:
+                p1.terminate()
+        except Exception: pass
+        try:
+            p2 = getattr(app, "_ps_proc", None)
+            if p2 is not None and p2.poll() is None:
+                p2.terminate()
+        except Exception: pass
+        try:
+            p3 = getattr(app, "_tts_proc", None)
+            if p3 is not None and p3.poll() is None:
+                p3.terminate()
+        except Exception: pass
+        try:
+            p4 = getattr(app, "_word_speak_proc", None)
+            if p4 is not None and p4.poll() is None:
+                p4.terminate()
+        except Exception: pass
         try: app._stop_timer(announce=False)
         except Exception: pass
         try: app._cancel_time_auditor()
@@ -22347,6 +23047,8 @@ if __name__ == "__main__":
     # next launch failure can be diagnosed without re-running by hand.
     try:
         main()
+        import sys
+        sys.exit(0)
     except Exception:
         import traceback as _tb
         try:
