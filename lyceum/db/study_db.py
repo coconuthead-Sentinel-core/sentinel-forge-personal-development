@@ -293,7 +293,7 @@ CREATE TABLE IF NOT EXISTS not_to_do (
 CREATE INDEX IF NOT EXISTS idx_nottodo_kind ON not_to_do(kind);
 
 -- "Winner's Time Log" (Zig Ziglar) / time audit (Brian Tracy, James Clear):
--- a low-friction chime every 60-90 min asks "what did you just work on?" and
+-- a low-friction chime from 5 min to 2 hr asks "what did you just work on?" and
 -- one tap files the answer here. One row per logged interval; the weekly pie
 -- chart sums `minutes` by `category`. Tracking where the minutes actually go
 -- is, in Ziglar's words, a "freeing factor," not a limiting one.

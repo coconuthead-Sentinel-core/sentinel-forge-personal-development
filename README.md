@@ -38,11 +38,12 @@
 
 Beyond reading, the app is a study and focus workstation:
 
-- **⭐ Major Definite Purpose banner** — a permanent North Star pinned to the
-  very top of the dashboard. Your one burning goal (e.g. *"Earn my Computer
-  Science Degree by 2028"*) stares back at you whatever you're doing — schedule,
-  bills, reading — because Hill and Tracy found that one organizing goal is what
-  separates the achievers. Click it to edit; it persists across sessions.
+- **⭐ Major Definite Purpose banner** — a permanent scrolling marquee sign pinned
+  to the very top of the dashboard. Your one burning goal (e.g. *"Earn my
+  Computer Science Degree by 2028"*) moves across the screen whatever you're
+  doing — schedule, bills, reading — because Hill and Tracy found that one
+  organizing goal is what separates the achievers. Click it to edit; it persists
+  across sessions.
 - **🌤 Blue-Sky Vision Board** — upload images of the life you want (the exact
   car, the house, the diploma), add captions, and play the **60-second slideshow**
   — optionally set to your own **WAV music** — to vividly program your reticular
@@ -98,7 +99,7 @@ Beyond reading, the app is a study and focus workstation:
   a **🚫 Not-To-Do list + website blocker**, **☸ Wheel of Life** and
   **🎯 Goals**, and **🧭 Weekly Roles**.
 - **⏱ Winner's Time Log (time auditor)** — a low-friction chime every
-  60 or 90 minutes asks "what did you work on for the last hour?"; one tap
+  5, 10, 15, 20, 25, 30, 60, 90, or 120 minutes asks "what did you work on?"; one tap
   files it, and the dashboard draws a **weekly pie chart** of where your
   time actually went (A-1 task, studying, distracted, …). Toggle it on/off
   and pick the interval from the ⏱ Time Log window. In Ziglar's words,

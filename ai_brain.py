@@ -3,8 +3,9 @@
 ai_brain.py — onboard local AI assistant for Sentinel Forge.
 
 A self-contained "wiring harness": one class wrapping a LOCAL language model via
-Ollama. 100% offline — the only network touch is the loopback to the Ollama
-daemon on this machine. No cloud, no API key, no per-token cost.
+Ollama. The model itself stays local — the usual network touch is the loopback
+to the Ollama daemon on this machine. The desktop app may optionally provide
+web-search snippets as context. No cloud AI API key, no per-token cost.
 
 Pulled out of the Strata Console prototype and installed here as a pluggable
 module. If Ollama or the model isn't present, `.available` is False and `ask()`
@@ -33,9 +34,10 @@ except Exception:
 DEFAULT_MODEL = os.environ.get("SENTINEL_AI_MODEL", "llama3.2:3b")
 
 DEFAULT_SYSTEM = (
-    "You are the onboard assistant inside Sentinel Forge, a local, offline "
+    "You are the onboard assistant inside Sentinel Forge, a local-first "
     "personal-development and reading workspace. You help with reading, study, "
     "journaling, planning, and focus. Be accurate, concise, and encouraging. "
+    "When web-search context is provided, use it and mention sources when useful. "
     "If something isn't in the provided context or you are unsure, say so plainly "
     "instead of inventing details. When asked for code, return clean, working code."
 )

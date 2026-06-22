@@ -3,7 +3,8 @@ book_reader.py — Sentinel Forge — Personal Development
 =====================================================
 
 A real native Windows desktop application. No browser, no web server,
-no API, no internet. One window, big buttons, big readable text,
+no required API. Optional web search is available from AI Chat.
+One window, big buttons, big readable text,
 and a Save-for-Claude button that writes excerpts to disk for the
 next Claude session to read.
 
@@ -264,6 +265,24 @@ TIME_AUDIT_CATEGORIES = [
     ("😵 Distracted",  "#dc2626"),
     ("☕ Break",       "#475569"),
 ]
+TIME_AUDIT_INTERVAL_OPTIONS = (
+    (5, "5 min"),
+    (10, "10 min"),
+    (15, "15 min"),
+    (20, "20 min"),
+    (25, "25 min"),
+    (30, "30 min"),
+    (60, "1 hr"),
+    (90, "1.5 hr"),
+    (120, "2 hr"),
+)
+TIME_AUDIT_INTERVAL_LABELS = {
+    minutes: label for minutes, label in TIME_AUDIT_INTERVAL_OPTIONS
+}
+TIME_AUDIT_INTERVAL_BY_LABEL = {
+    label: minutes for minutes, label in TIME_AUDIT_INTERVAL_OPTIONS
+}
+TIME_AUDIT_ALLOWED_INTERVALS = tuple(TIME_AUDIT_INTERVAL_LABELS)
 
 
 def _style_optionmenu(om: tk.OptionMenu) -> None:
@@ -453,6 +472,10 @@ class BookReader:
         self._prompts_current_id: int | None = None
         self._prompts_fields: dict[str, tk.Widget] = {}
         self._prompts_save_after_id: str | None = None
+        self._mdp_after_id: str | None = None
+        self._mdp_text_item: int | None = None
+        self._mdp_scroll_x = 0
+        self._mdp_scroll_speed = 2
         # Prompt Library (green-button window: prompt + response archive,
         # separate from the Books library)
         self._prompt_lib_win: tk.Toplevel | None = None
@@ -576,11 +599,14 @@ class BookReader:
         tk.Label(mdp_left, text="MAJOR DEFINITE PURPOSE — your North Star",
                  bg=MDP_BG, fg="#a5b4fc", font=("Segoe UI", 8, "bold")).pack(anchor="w")
         self._mdp_var = tk.StringVar()
-        self._mdp_label = tk.Label(mdp_left, textvariable=self._mdp_var, bg=MDP_BG,
-                                   fg="#fef9c3", font=("Segoe UI", 15, "bold"),
-                                   anchor="w", cursor="hand2")
-        self._mdp_label.pack(anchor="w", fill=tk.X)
-        self._mdp_label.bind("<Button-1>", lambda _e: self.edit_major_purpose())
+        self._mdp_font = tkfont.Font(family="Segoe UI", size=18, weight="bold")
+        self._mdp_canvas = tk.Canvas(
+            mdp_left, height=42, bg=MDP_BG, highlightthickness=0, bd=0,
+            cursor="hand2",
+        )
+        self._mdp_canvas.pack(anchor="w", fill=tk.X)
+        self._mdp_canvas.bind("<Button-1>", lambda _e: self.edit_major_purpose())
+        self._mdp_canvas.bind("<Configure>", self._mdp_reset_scroll)
         self._mdp_refresh()
 
         # ---- Session Header --------------------------------------------
@@ -2971,7 +2997,7 @@ class BookReader:
     # ---- Winner's Time Log (Ziglar / Tracy time audit) -----------------
     def _time_audit_prefs(self) -> tuple[bool, int]:
         """(enabled, interval_minutes). Persisted in HANDOFF_STATE so a user
-        who turns the chime off (or picks 90 min) keeps that across launches.
+        who turns the chime off or changes the interval keeps that across launches.
         Defaults: on, every 60 min."""
         st = self._load_handoff_state() or {}
         enabled = bool(st.get("time_audit_enabled", True))
@@ -2979,7 +3005,7 @@ class BookReader:
             interval = int(st.get("time_audit_interval", 60))
         except (TypeError, ValueError):
             interval = 60
-        if interval not in (60, 90):
+        if interval not in TIME_AUDIT_ALLOWED_INTERVALS:
             interval = 60
         return enabled, interval
 
@@ -3131,6 +3157,8 @@ class BookReader:
             self.set_status("⏱ Time Log paused. Turn it back on from ⏱ Time Log.")
 
     def _set_time_audit_interval(self, interval: int) -> None:
+        if interval not in TIME_AUDIT_ALLOWED_INTERVALS:
+            interval = 60
         enabled, _ = self._time_audit_prefs()
         self._save_time_audit_prefs(enabled, interval)
         if enabled:
@@ -3176,6 +3204,86 @@ class BookReader:
         self.open_study_workspace()
         self._show_study_tab("ai_chat")
 
+    def _ai_web_search_context(self, query: str, limit: int = 5) -> str:
+        """Return compact web-search context for the local assistant.
+
+        Uses DuckDuckGo's lightweight HTML endpoint and standard-library urllib
+        so the app keeps running even when optional packages are missing.
+        """
+        query = (query or "").strip()
+        if not query:
+            return ""
+        try:
+            import html as html_lib
+            import urllib.error
+            import urllib.parse
+            import urllib.request
+
+            url = "https://lite.duckduckgo.com/lite/?" + urllib.parse.urlencode({"q": query})
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "SentinelPersonalDevelopment/1.0"
+                    )
+                },
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                raw = resp.read(300_000).decode("utf-8", errors="replace")
+
+            results = []
+
+            def _clean_href(href: str) -> str:
+                href = html_lib.unescape(href or "").strip()
+                if href.startswith("//"):
+                    href = "https:" + href
+                parsed = urllib.parse.urlparse(href)
+                if "duckduckgo.com" in parsed.netloc and parsed.path.startswith("/l/"):
+                    target = urllib.parse.parse_qs(parsed.query).get("uddg", [""])[0]
+                    if target:
+                        return target
+                return href
+
+            if HAS_BS4:
+                soup = BeautifulSoup(raw, "html.parser")
+                for link in soup.select("a.result-link"):
+                    title = link.get_text(" ", strip=True)
+                    href = _clean_href(link.get("href") or "")
+                    row = link.find_parent("tr")
+                    snippet_node = row.find_next("td", class_="result-snippet") if row else None
+                    snippet = snippet_node.get_text(" ", strip=True) if snippet_node else ""
+                    if title:
+                        results.append((title, href, snippet))
+                    if len(results) >= limit:
+                        break
+            else:
+                pattern = re.compile(
+                    r'<a[^>]+href="([^"]+)"[^>]+class=[\'\"]result-link[\'\"][^>]*>(.*?)</a>',
+                    re.IGNORECASE | re.DOTALL,
+                )
+                for href, title_html in pattern.findall(raw):
+                    title = re.sub(r"<[^>]+>", " ", title_html)
+                    title = html_lib.unescape(re.sub(r"\s+", " ", title)).strip()
+                    href = _clean_href(href)
+                    if title:
+                        results.append((title, href, ""))
+                    if len(results) >= limit:
+                        break
+
+            if not results:
+                return "Web search returned no usable results."
+            lines = [f"Web search results for: {query}"]
+            for i, (title, href, snippet) in enumerate(results, start=1):
+                lines.append(f"{i}. {title}")
+                if snippet:
+                    lines.append(f"   Summary: {snippet}")
+                if href:
+                    lines.append(f"   Source: {href}")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Web search failed: {type(e).__name__}: {e}"
+
     def _build_tab_ai_chat(self, parent: tk.Frame) -> None:
         """Builds the AI Chat panel into the Study Workspace."""
         head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
@@ -3207,6 +3315,14 @@ class BookReader:
         btn_send = tk.Button(input_frame, text="Send", bg=ACCENT_CYAN, fg=BG_DARK,
                              font=("Segoe UI", 10, "bold"), relief=tk.FLAT)
         btn_send.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        web_var = tk.BooleanVar(value=False)
+        web_toggle = tk.Checkbutton(
+            input_frame, text="🌐 Web", variable=web_var,
+            bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_PANEL,
+            activebackground=BG_DARK, activeforeground=FG_TEXT,
+            font=("Segoe UI", 10, "bold"), cursor="hand2",
+        )
+        web_toggle.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
         chat_input.focus_set()
 
         # 2. History area (packed TOP, consumes remaining space)
@@ -3222,6 +3338,7 @@ class BookReader:
         chat_history.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._ai_chat_history = chat_history
         self._ai_chat_history.bind("<1>", lambda _e: self._set_mic_target(self._ai_chat_history), add="+")
+        self._attach_clipboard_menu(chat_history, track_for_mic=False)
 
         chat_history.tag_config("You", foreground=ACCENT_CYAN, font=("Segoe UI", 10, "bold"))
         chat_history.tag_config("Sentinel", foreground=ACCENT_PURPLE, font=("Segoe UI", 10, "bold"))
@@ -3241,7 +3358,7 @@ class BookReader:
             if not brain.available:
                 _append_msg("Sentinel", f"Offline. {brain.last_error}")
             else:
-                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. How can I help you today?")
+                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. Turn on 🌐 Web or start with /web when you want me to search the internet.")
         except Exception as e:
             brain = None
             _append_msg("Error", f"Could not load AI module: {e}")
@@ -3253,6 +3370,11 @@ class BookReader:
             content = chat_input.get("1.0", tk.END).strip()
             if not content:
                 return "break"
+            use_web = bool(web_var.get())
+            web_query = content
+            if content.lower().startswith("/web "):
+                use_web = True
+                web_query = content[5:].strip() or content
             
             chat_input.delete("1.0", tk.END)
             _append_msg("You", content)
@@ -3280,7 +3402,14 @@ class BookReader:
                         if planner_lines:
                             planner_context = "User's current day planner entries:\n" + "\n".join(planner_lines)
 
-                    reply = brain.ask(content, context=planner_context)
+                    web_context = ""
+                    if use_web:
+                        web_context = self._ai_web_search_context(web_query)
+                    combined_context = "\n\n".join(
+                        part for part in (planner_context, web_context) if part
+                    )
+
+                    reply = brain.ask(content, context=combined_context)
                     reply = reply if reply else "I'm sorry, I couldn't reach the backend."
                 except Exception as ex:
                     reply = f"Error: {ex}"
@@ -3396,10 +3525,13 @@ class BookReader:
                        font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
         tk.Label(ctrl, text="every", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(8, 4))
-        iv_var = tk.StringVar(value=f"{interval} min")
-        iv_menu = tk.OptionMenu(ctrl, iv_var, "60 min", "90 min",
-                                command=lambda _v: self._set_time_audit_interval(
-                                    60 if iv_var.get().startswith("60") else 90))
+        iv_var = tk.StringVar(
+            value=TIME_AUDIT_INTERVAL_LABELS.get(interval, "1 hr"))
+        iv_menu = tk.OptionMenu(
+            ctrl, iv_var,
+            *(label for _minutes, label in TIME_AUDIT_INTERVAL_OPTIONS),
+            command=lambda value: self._set_time_audit_interval(
+                TIME_AUDIT_INTERVAL_BY_LABEL.get(value, 60)))
         _style_optionmenu(iv_menu)
         iv_menu.configure(width=8, font=("Segoe UI", 10, "bold"))
         iv_menu.pack(side=tk.LEFT)
@@ -4941,34 +5073,42 @@ class BookReader:
                            fill="white", font=("Segoe UI", 9, "bold"))
 
     def _ask_text(self, title, prompt, initial=""):
-        """Tiny modal text prompt (for naming a new bucket)."""
+        """Modal text prompt used for short but important user-entered labels."""
         dlg = tk.Toplevel(self.root)
         dlg.title(title); dlg.configure(bg=BG_DARK); dlg.transient(self.root)
         try:
             sw = dlg.winfo_screenwidth(); sh = dlg.winfo_screenheight()
         except tk.TclError:
             sw, sh = 1280, 800
-        dlg.geometry(f"340x150+{(sw-340)//2}+{(sh-150)//2}")
-        tk.Label(dlg, text=prompt, bg=BG_DARK, fg=FG_TEXT, wraplength=300,
-                 justify=tk.LEFT, font=("Segoe UI", 10)).pack(padx=14, pady=(14, 6))
+        w = min(620, max(460, sw - 100))
+        h = min(260, max(210, sh - 140))
+        dlg.geometry(f"{w}x{h}+{max(0, (sw-w)//2)}+{max(0, (sh-h)//2 - 20)}")
+        dlg.minsize(440, 210)
+        body = tk.Frame(dlg, bg=BG_DARK, padx=22, pady=18)
+        body.pack(fill=tk.BOTH, expand=True)
+        tk.Label(body, text=prompt, bg=BG_DARK, fg=FG_TEXT, wraplength=w - 60,
+                 justify=tk.LEFT, font=("Segoe UI", 11)).pack(fill=tk.X, pady=(0, 14))
         var = tk.StringVar(value=initial)
-        ent = tk.Entry(dlg, textvariable=var, width=28, bg=BG_INPUT, fg=FG_TEXT,
+        ent = tk.Entry(body, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
                        insertbackground=FG_TEXT, relief=tk.FLAT,
-                       font=("Segoe UI", 12))
-        ent.pack(padx=14); ent.focus_set()
+                       font=("Segoe UI", 14))
+        ent.pack(fill=tk.X, ipady=7)
+        ent.focus_set()
+        ent.icursor(tk.END)
         result = {"v": None}
 
         def _ok():
             result["v"] = var.get().strip()
             dlg.destroy()
-        brow = tk.Frame(dlg, bg=BG_DARK); brow.pack(pady=12)
+        brow = tk.Frame(body, bg=BG_DARK)
+        brow.pack(side=tk.BOTTOM, pady=(18, 0))
         tk.Button(brow, text="OK", command=_ok, font=("Segoe UI", 10, "bold"),
                   bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-                  relief=tk.FLAT, padx=16, pady=4, cursor="hand2",
+              relief=tk.FLAT, padx=30, pady=6, cursor="hand2",
                   borderwidth=0).pack(side=tk.LEFT, padx=4)
         tk.Button(brow, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=4,
+              activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=24, pady=6,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=4)
         ent.bind("<Return>", lambda _e: _ok())
         dlg.bind("<Escape>", lambda _e: dlg.destroy())
@@ -6847,13 +6987,53 @@ class BookReader:
         if not hasattr(self, "_mdp_var"):
             return
         txt = self._mdp_get()
-        self._mdp_var.set(txt if txt else
-                          "Click to set your one burning goal — your North Star.")
+        display = txt if txt else "Click to set your one burning goal — your North Star."
+        self._mdp_var.set(display)
+        self._mdp_draw_text(display, has_value=bool(txt))
+
+    def _mdp_draw_text(self, text: str, has_value: bool = True) -> None:
+        if not hasattr(self, "_mdp_canvas"):
+            return
         try:
-            self._mdp_label.configure(
-                fg=("#fef9c3" if txt else "#818cf8"))
+            canvas = self._mdp_canvas
+            canvas.delete("all")
+            fg = "#fef9c3" if has_value else "#818cf8"
+            canvas.create_rectangle(0, 0, 9999, 42, fill="#1e1b4b", outline="")
+            self._mdp_text_item = canvas.create_text(
+                max(canvas.winfo_width(), 1), 21,
+                text=f"   {text}   ", anchor="w", fill=fg,
+                font=self._mdp_font,
+            )
+            self._mdp_scroll_x = max(canvas.winfo_width(), 1)
+            if self._mdp_after_id is None:
+                self._mdp_animate()
         except (tk.TclError, AttributeError):
             pass
+
+    def _mdp_reset_scroll(self, _event=None) -> None:
+        try:
+            if self._mdp_text_item is not None:
+                self._mdp_scroll_x = max(self._mdp_canvas.winfo_width(), 1)
+                self._mdp_canvas.coords(self._mdp_text_item, self._mdp_scroll_x, 21)
+        except (tk.TclError, AttributeError):
+            pass
+
+    def _mdp_animate(self) -> None:
+        try:
+            if self._mdp_text_item is None:
+                self._mdp_after_id = self.root.after(80, self._mdp_animate)
+                return
+            canvas = self._mdp_canvas
+            width = max(canvas.winfo_width(), 1)
+            bbox = canvas.bbox(self._mdp_text_item)
+            text_width = (bbox[2] - bbox[0]) if bbox else 0
+            self._mdp_scroll_x -= self._mdp_scroll_speed
+            if self._mdp_scroll_x < -text_width:
+                self._mdp_scroll_x = width
+            canvas.coords(self._mdp_text_item, self._mdp_scroll_x, 21)
+            self._mdp_after_id = self.root.after(35, self._mdp_animate)
+        except (tk.TclError, AttributeError):
+            self._mdp_after_id = None
 
     def edit_major_purpose(self) -> None:
         """Set/edit the single burning goal that organizes everything (Napoleon
@@ -11169,6 +11349,12 @@ class BookReader:
                   relief=tk.FLAT, padx=18, pady=8,
                   cursor="hand2", borderwidth=0
                   ).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(btn_row, text="🤖 Chat", command=self.open_ai_chat,
+                  bg=ACCENT_ORANGE, fg="white",
+                  font=("Segoe UI", 11, "bold"),
+                  activebackground=ACCENT_ORANGE, relief=tk.FLAT,
+                  padx=18, pady=8, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.LEFT, padx=(0, 8))
         if dismiss is not None:
             tk.Button(btn_row, text="Skip for now", command=dismiss,
                       bg=ACCENT_SLATE, fg="white",
@@ -15453,12 +15639,6 @@ class BookReader:
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
 
-        # AI Chatbot Assistant — added to speak directly with the onboard AI
-        tk.Button(tabbar, text="🤖 Chat", command=self.open_ai_chat,
-                  font=("Segoe UI", 9, "bold"), bg=ACCENT_ORANGE, fg="white",
-                  activebackground=ACCENT_ORANGE, relief=tk.FLAT, padx=6, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
-
         # Minimize button — sends the Study window to the taskbar.
         # (Expand/Restore removed; use the window's own title-bar controls.)
         min_btn = tk.Button(
@@ -16445,7 +16625,45 @@ class BookReader:
 
     # ---- Workspace tab: Topics -----------------------------------------
     def _build_tab_topics(self, parent: tk.Frame) -> None:
-        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        scroll_host = tk.Frame(parent, bg=BG_DARK)
+        scroll_host.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(scroll_host, bg=BG_DARK, highlightthickness=0, bd=0)
+        panel_scrollbar = tk.Scrollbar(
+            scroll_host, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=panel_scrollbar.set)
+        panel_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        panel = tk.Frame(canvas, bg=BG_DARK)
+        panel_window_id = canvas.create_window((0, 0), window=panel, anchor="nw")
+
+        def _sync_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _fit_panel(event):
+            canvas.itemconfig(panel_window_id, width=event.width)
+            canvas.itemconfig(panel_window_id, height=max(720, event.height))
+            _sync_scroll_region()
+
+        def _wheel_panel(event):
+            try:
+                widget = parent.winfo_containing(event.x_root, event.y_root)
+            except tk.TclError:
+                widget = None
+            while widget is not None:
+                if widget in (self._topics_listbox, self._topic_entries_listbox):
+                    return
+                if widget is panel:
+                    break
+                widget = getattr(widget, "master", None)
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        panel.bind("<Configure>", _sync_scroll_region)
+        canvas.bind("<Configure>", _fit_panel)
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel_panel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        head = tk.Frame(panel, bg=BG_PANEL, padx=12, pady=8)
         head.pack(fill=tk.X)
         tk.Label(head, text="📌 Topics", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
@@ -16454,7 +16672,7 @@ class BookReader:
                  bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
                  ).pack(side=tk.RIGHT)
 
-        paned = tk.PanedWindow(parent, orient=tk.HORIZONTAL, sashwidth=6,
+        paned = tk.PanedWindow(panel, orient=tk.HORIZONTAL, sashwidth=6,
                                 bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
         paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
@@ -16822,7 +17040,46 @@ class BookReader:
 
     # ---- Workspace tab: Glossary ---------------------------------------
     def _build_tab_glossary(self, parent: tk.Frame) -> None:
-        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        scroll_host = tk.Frame(parent, bg=BG_DARK)
+        scroll_host.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(scroll_host, bg=BG_DARK, highlightthickness=0, bd=0)
+        panel_scrollbar = tk.Scrollbar(
+            scroll_host, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=panel_scrollbar.set)
+        panel_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        panel = tk.Frame(canvas, bg=BG_DARK)
+        panel_window_id = canvas.create_window((0, 0), window=panel, anchor="nw")
+
+        def _sync_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _fit_panel(event):
+            canvas.itemconfig(panel_window_id, width=event.width)
+            canvas.itemconfig(panel_window_id, height=max(720, event.height))
+            _sync_scroll_region()
+
+        def _wheel_panel(event):
+            try:
+                widget = parent.winfo_containing(event.x_root, event.y_root)
+            except tk.TclError:
+                widget = None
+            while widget is not None:
+                if widget in (self._glossary_definition_widget,
+                              self._glossary_listbox):
+                    return
+                if widget is panel:
+                    break
+                widget = getattr(widget, "master", None)
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        panel.bind("<Configure>", _sync_scroll_region)
+        canvas.bind("<Configure>", _fit_panel)
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel_panel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        head = tk.Frame(panel, bg=BG_PANEL, padx=12, pady=8)
         head.pack(fill=tk.X)
         tk.Label(head, text="📒 Glossary", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
@@ -16831,7 +17088,7 @@ class BookReader:
                  bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
                  ).pack(side=tk.RIGHT)
 
-        search_row = tk.Frame(parent, bg=BG_DARK, padx=12, pady=6)
+        search_row = tk.Frame(panel, bg=BG_DARK, padx=12, pady=6)
         search_row.pack(fill=tk.X)
         tk.Label(search_row, text="Search:", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=(0, 6))
@@ -16843,7 +17100,7 @@ class BookReader:
         self._glossary_search_var.trace_add(
             "write", lambda *_: self._refresh_tab_glossary())
 
-        paned = tk.PanedWindow(parent, orient=tk.HORIZONTAL, sashwidth=6,
+        paned = tk.PanedWindow(panel, orient=tk.HORIZONTAL, sashwidth=6,
                                 bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
         paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
@@ -16878,7 +17135,7 @@ class BookReader:
         paned.add(left,  minsize=200, stretch="always")
         paned.add(right, minsize=320, stretch="always")
 
-        row = tk.Frame(parent, bg=BG_DARK, padx=12, pady=8)
+        row = tk.Frame(panel, bg=BG_DARK, padx=12, pady=8)
         row.pack(fill=tk.X)
         def b(text, cmd, color):
             return tk.Button(row, text=text, command=cmd,
@@ -16953,7 +17210,45 @@ class BookReader:
 
     # ---- Workspace tab: Journal ----------------------------------------
     def _build_tab_journal(self, parent: tk.Frame) -> None:
-        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        scroll_host = tk.Frame(parent, bg=BG_DARK)
+        scroll_host.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(scroll_host, bg=BG_DARK, highlightthickness=0, bd=0)
+        panel_scrollbar = tk.Scrollbar(
+            scroll_host, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=panel_scrollbar.set)
+        panel_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        panel = tk.Frame(canvas, bg=BG_DARK)
+        panel_window_id = canvas.create_window((0, 0), window=panel, anchor="nw")
+
+        def _sync_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _fit_panel(event):
+            canvas.itemconfig(panel_window_id, width=event.width)
+            canvas.itemconfig(panel_window_id, height=max(720, event.height))
+            _sync_scroll_region()
+
+        def _wheel_panel(event):
+            try:
+                widget = parent.winfo_containing(event.x_root, event.y_root)
+            except tk.TclError:
+                widget = None
+            while widget is not None:
+                if widget in (self._journal_body, self._journal_listbox):
+                    return
+                if widget is panel:
+                    break
+                widget = getattr(widget, "master", None)
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        panel.bind("<Configure>", _sync_scroll_region)
+        canvas.bind("<Configure>", _fit_panel)
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel_panel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        head = tk.Frame(panel, bg=BG_PANEL, padx=12, pady=8)
         head.pack(fill=tk.X)
         tk.Label(head, text="📅 Journal", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
@@ -16962,7 +17257,7 @@ class BookReader:
                  bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
                  ).pack(side=tk.RIGHT)
 
-        paned = tk.PanedWindow(parent, orient=tk.HORIZONTAL, sashwidth=6,
+        paned = tk.PanedWindow(panel, orient=tk.HORIZONTAL, sashwidth=6,
                                 bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
         paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
@@ -18165,7 +18460,45 @@ class BookReader:
         module) alongside your books. Moved here from the main reading column
         into its own Study section. Source files live in COMMENTARIES_DIR so
         they stay separate from regular books in the Library."""
-        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        scroll_host = tk.Frame(parent, bg=BG_DARK)
+        scroll_host.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(scroll_host, bg=BG_DARK, highlightthickness=0, bd=0)
+        panel_scrollbar = tk.Scrollbar(
+            scroll_host, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=panel_scrollbar.set)
+        panel_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        panel = tk.Frame(canvas, bg=BG_DARK)
+        panel_window_id = canvas.create_window((0, 0), window=panel, anchor="nw")
+
+        def _sync_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _fit_panel(event):
+            canvas.itemconfig(panel_window_id, width=event.width)
+            canvas.itemconfig(panel_window_id, height=max(720, event.height))
+            _sync_scroll_region()
+
+        def _wheel_panel(event):
+            try:
+                widget = parent.winfo_containing(event.x_root, event.y_root)
+            except tk.TclError:
+                widget = None
+            while widget is not None:
+                if widget is self.commentary_area:
+                    return
+                if widget is panel:
+                    break
+                widget = getattr(widget, "master", None)
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        panel.bind("<Configure>", _sync_scroll_region)
+        canvas.bind("<Configure>", _fit_panel)
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel_panel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        head = tk.Frame(panel, bg=BG_PANEL, padx=12, pady=8)
         head.pack(fill=tk.X)
         tk.Label(head, textvariable=self.commentary_title_var,
                  bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 13, "bold"),
@@ -18183,7 +18516,7 @@ class BookReader:
             padx=10, pady=4, cursor="hand2", borderwidth=0,
         ).pack(side=tk.RIGHT, padx=4)
 
-        body_frame = tk.Frame(parent, bg=BG_DARK, padx=8, pady=8)
+        body_frame = tk.Frame(panel, bg=BG_DARK, padx=8, pady=8)
         body_frame.pack(fill=tk.BOTH, expand=True)
         self.commentary_area = scrolledtext.ScrolledText(
             body_frame, wrap=tk.WORD,
@@ -18205,7 +18538,49 @@ class BookReader:
         self.commentary_area.configure(state=tk.DISABLED)
 
     def _build_tab_study_notes(self, parent: tk.Frame) -> None:
-        head = tk.Frame(parent, bg=BG_PANEL, padx=12, pady=8)
+        scroll_host = tk.Frame(parent, bg=BG_DARK)
+        scroll_host.pack(fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(scroll_host, bg=BG_DARK, highlightthickness=0, bd=0)
+        panel_scrollbar = tk.Scrollbar(
+            scroll_host, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=panel_scrollbar.set)
+        panel_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        panel = tk.Frame(canvas, bg=BG_DARK)
+        panel_window_id = canvas.create_window((0, 0), window=panel, anchor="nw")
+
+        def _sync_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _fit_panel(event):
+            canvas.itemconfig(panel_window_id, width=event.width)
+            canvas.itemconfig(panel_window_id, height=max(720, event.height))
+            _sync_scroll_region()
+
+        def _wheel_panel(event):
+            try:
+                widget = parent.winfo_containing(event.x_root, event.y_root)
+            except tk.TclError:
+                widget = None
+            inner_scroll_widgets = (
+                getattr(self, "_study_notes_listbox", None),
+                getattr(self, "_study_notes_widget", None),
+            )
+            while widget is not None:
+                if widget in inner_scroll_widgets:
+                    return
+                if widget is panel:
+                    break
+                widget = getattr(widget, "master", None)
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        panel.bind("<Configure>", _sync_scroll_region)
+        canvas.bind("<Configure>", _fit_panel)
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", _wheel_panel))
+        canvas.bind("<Leave>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
+
+        head = tk.Frame(panel, bg=BG_PANEL, padx=12, pady=8)
         head.pack(fill=tk.X)
         tk.Label(head, text="📝 Study Notes", bg=BG_PANEL, fg=FG_TEXT,
                  font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
@@ -18228,7 +18603,7 @@ class BookReader:
         self._study_notes_read_btn = None
         self._study_notes_read_color_var = tk.StringVar(value="Yellow")
 
-        body_frame = tk.Frame(parent, bg=BG_DARK, padx=8, pady=8)
+        body_frame = tk.Frame(panel, bg=BG_DARK, padx=8, pady=8)
         body_frame.pack(fill=tk.BOTH, expand=True)
 
         # ---- Left: the archive of saved note entries ----
@@ -21081,7 +21456,7 @@ class BookReader:
     def open_focus_mode(self) -> None:
         """Ziglar/Tracy single-handling: show ONLY your #1 task, full screen,
         with the "Do it now!" mantra — calendar and every other task hidden.
-        A 60- or 90-minute time block flips on a Do-Not-Disturb state so you
+        A chosen time block flips on a Do-Not-Disturb state so you
         work the one task to 100% without picking it up and putting it down."""
         existing = getattr(self, "_focus_win", None)
         if existing is not None:
@@ -21237,6 +21612,16 @@ class BookReader:
         bar.pack(fill=tk.X)
         inner = tk.Frame(bar, bg=FBG)
         inner.pack()
+        focus_block_options = (
+            ("5", 5), ("10", 10), ("15", 15), ("20", 20),
+            ("25", 25), ("30", 30), ("45", 45), ("1 hr", 60),
+            ("2 hr", 120),
+        )
+        focus_block_by_label = {label: mins for label, mins in focus_block_options}
+        focus_block_var = tk.StringVar(value="30")
+
+        def _start_selected_block():
+            _start_block(focus_block_by_label.get(focus_block_var.get(), 30))
 
         def _fbtn(text, cmd, color):
             return tk.Button(inner, text=text, command=cmd,
@@ -21244,13 +21629,15 @@ class BookReader:
                              activebackground=color, relief=tk.FLAT, padx=14,
                              pady=7, cursor="hand2", borderwidth=0)
         _fbtn("✓ Done", _done, ACCENT_GREEN).pack(side=tk.LEFT, padx=4)
-        _fbtn("▶ 60-min block", lambda: _start_block(60),
-              ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
-        _fbtn("▶ 90-min block", lambda: _start_block(90),
+        focus_menu = tk.OptionMenu(
+            inner, focus_block_var, *(label for label, _mins in focus_block_options))
+        _style_optionmenu(focus_menu)
+        focus_menu.configure(width=7, padx=10, pady=6)
+        focus_menu.pack(side=tk.LEFT, padx=4)
+        _fbtn("▶ Start", _start_selected_block,
               ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
         _fbtn("⏹ End block", lambda: _end_block(silent=False),
               ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
-        _fbtn("⏭ Skip", _skip, ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
         _fbtn("✕ Exit", _close, ACCENT_RED).pack(side=tk.LEFT, padx=4)
 
         _load()
