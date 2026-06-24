@@ -60,6 +60,46 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from tkinter import font as tkfont
 
+# =========================================================================
+# Windows 11 Native OS Integration
+# =========================================================================
+# 1. Enable Native DPI Awareness (prevents blurry text on high-res monitors)
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(2) # PROCESS_PER_MONITOR_DPI_AWARE
+except Exception:
+    pass
+
+def _apply_win11_dark_mode(window):
+    """Tell Windows 11 Desktop Window Manager to render the window frame in immersive dark mode
+       with native Windows 11 rounded corners."""
+    try:
+        import ctypes
+        window.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+        # Immersive dark mode (Windows 11)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(ctypes.c_int(1)), 4)
+        # Rounded corners (Windows 11) -> 2 = DWMWCP_ROUND
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(ctypes.c_int(2)), 4)
+    except Exception:
+        pass
+
+# 2. Seamlessly hook all Tkinter windows to inherently spawn with Windows 11 native integration
+_orig_Tk_init = tk.Tk.__init__
+_orig_Toplevel_init = tk.Toplevel.__init__
+
+def _new_Tk_init(self, *args, **kwargs):
+    _orig_Tk_init(self, *args, **kwargs)
+    self.after(10, lambda: _apply_win11_dark_mode(self))
+
+def _new_Toplevel_init(self, *args, **kwargs):
+    _orig_Toplevel_init(self, *args, **kwargs)
+    self.after(10, lambda: _apply_win11_dark_mode(self))
+
+tk.Tk.__init__ = _new_Tk_init
+tk.Toplevel.__init__ = _new_Toplevel_init
+# =========================================================================
+
 # ---- File parsers --------------------------------------------------------
 try:
     from docx import Document
