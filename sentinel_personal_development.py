@@ -1692,8 +1692,8 @@ class BookReader:
                 except Exception: pass
             if getattr(self, "tts_mode", "") == "piper":
                 try:
-                    import winsound
-                    winsound.PlaySound(None, winsound.SND_PURGE)
+                    import sounddevice
+                    sounddevice.stop()
                 except Exception:
                     pass
             self._ftb_speak_proc = None
@@ -1821,9 +1821,32 @@ class BookReader:
                             proc.communicate(input=chunk_text.encode("utf-8"), timeout=60)
                             if (proc.returncode == 0 and os.path.exists(wav_path)
                                     and os.path.getsize(wav_path) > 44):
-                                winsound.PlaySound(
-                                    wav_path,
-                                    winsound.SND_FILENAME | winsound.SND_NODEFAULT)
+                                try:
+                                    import wave
+                                    import sounddevice as _sd_tts
+                                    import numpy as _np_tts
+                                    
+                                    wasapi_index = None
+                                    for idx, api in enumerate(_sd_tts.query_hostapis()):
+                                        if "WASAPI" in api.get("name", ""):
+                                            wasapi_index = idx
+                                            break
+                                            
+                                    with wave.open(wav_path, 'rb') as wf:
+                                        fs = wf.getframerate()
+                                        audio_bytes = wf.readframes(wf.getnframes())
+                                        audio_data = _np_tts.frombuffer(audio_bytes, dtype=_np_tts.int16)
+                                        
+                                        stream_kwargs = {
+                                            "samplerate": fs,
+                                            "blocking": True
+                                        }
+                                        if wasapi_index is not None:
+                                            stream_kwargs["hostapi"] = wasapi_index
+                                            
+                                        _sd_tts.play(audio_data, **stream_kwargs)
+                                except Exception:
+                                    pass
                         finally:
                             if os.path.exists(wav_path):
                                 try: os.unlink(wav_path)
@@ -1838,6 +1861,7 @@ class BookReader:
                                 "Add-Type -AssemblyName System.Speech; "
                                 f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                                "$s.SetOutputToDefaultAudioDevice(); "
                                 f"{self._sapi_select_voice_ps()}"
                                 "$s.Speak($t)"
                             )
@@ -13574,16 +13598,38 @@ class BookReader:
                     if not self.is_reading:
                         break
                     if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
-                        # SND_FILENAME blocks until the wav finishes. We
-                        # honor Stop by calling PlaySound(None, SND_PURGE)
-                        # from stop_reading() — winsound interrupts.
                         try:
-                            winsound.PlaySound(
-                                wav_path,
-                                winsound.SND_FILENAME | winsound.SND_NODEFAULT,
-                            )
-                        except RuntimeError:
-                            pass  # PURGE was called from stop_reading
+                            # -------------------------------------------------------------
+                            # Microsoft Windows 11 OS Standards requirement:
+                            # Replace the legacy WinMM drivers (winsound) with pure WASAPI.
+                            # sounddevice plays the WAV exactly mimicking the native OS output 
+                            # configured in Windows 11 limits.
+                            import wave
+                            import sounddevice as _sd_tts
+                            import numpy as _np_tts
+                            
+                            wasapi_index = None
+                            for idx, api in enumerate(_sd_tts.query_hostapis()):
+                                if "WASAPI" in api.get("name", ""):
+                                    wasapi_index = idx
+                                    break
+                            
+                            with wave.open(wav_path, 'rb') as wf:
+                                fs = wf.getframerate()
+                                audio_bytes = wf.readframes(wf.getnframes())
+                                audio_data = _np_tts.frombuffer(audio_bytes, dtype=_np_tts.int16)
+                                
+                                stream_kwargs = {
+                                    "samplerate": fs,
+                                    "blocking": True
+                                }
+                                if wasapi_index is not None:
+                                    stream_kwargs["hostapi"] = wasapi_index
+                                    
+                                _sd_tts.play(audio_data, **stream_kwargs)
+                            # -------------------------------------------------------------
+                        except Exception:
+                            pass  # Stop was called (sd.stop() interrupts sleep/blocking)
                 except Exception as e:
                     self._highlight_queue.put(("error", str(e)))
                     return
@@ -13632,6 +13678,9 @@ class BookReader:
                         "Add-Type -AssemblyName System.Speech; "
                         f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                        # Windows 11 OS System Standard Output Driver Requirement:
+                        # Explicitly bind the TTS engine to the default WASAPI output device endpoint.
+                        "$s.SetOutputToDefaultAudioDevice(); "
                         f"{self._sapi_select_voice_ps()}"
                         "$s.Speak($t)"
                     )
@@ -13731,12 +13780,12 @@ class BookReader:
                 try: self._ps_proc.terminate()
                 except Exception: pass
                 self._ps_proc = None
-            # Piper mode plays via winsound — PURGE interrupts the
-            # currently-playing wav. No-op for PowerShell mode.
+            # Piper mode plays via native Windows 11 WASAPI Audio
+            # sd.stop() interrupts the currently-playing wav immediately.
             if self.tts_mode == "piper":
                 try:
-                    import winsound
-                    winsound.PlaySound(None, winsound.SND_PURGE)
+                    import sounddevice
+                    sounddevice.stop()
                 except Exception:
                     pass
             if self._pump_after_id is not None:
@@ -14205,6 +14254,7 @@ class BookReader:
                 "Add-Type -AssemblyName System.Speech; "
                 f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                "$s.SetOutputToDefaultAudioDevice(); "
                 f"{self._sapi_select_voice_ps()}"
                 "$s.Speak($t)"
             )
