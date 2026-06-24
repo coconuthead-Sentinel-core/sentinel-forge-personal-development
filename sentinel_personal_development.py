@@ -13950,8 +13950,28 @@ class BookReader:
         stop = self._whisper_stop
         calib, calibrated = [], False
         try:
-            with sd.InputStream(samplerate=SR, channels=1, dtype="float32",
-                                blocksize=FRAME, callback=_cb):
+            # ---------------------------------------------------------------------
+            # Microsoft Windows 11 OS Standards requirement:
+            # Explicitly force the WASAPI native audio host (low latency, exclusive
+            # or shared) instead of legacy MME or DirectSound.
+            wasapi_index = None
+            for idx, api in enumerate(sd.query_hostapis()):
+                if "WASAPI" in api.get("name", ""):
+                    wasapi_index = idx
+                    break
+            
+            stream_kwargs = {
+                "samplerate": SR,
+                "channels": 1,
+                "dtype": "float32",
+                "blocksize": FRAME,
+                "callback": _cb
+            }
+            if wasapi_index is not None:
+                stream_kwargs["hostapi"] = wasapi_index
+            # ---------------------------------------------------------------------
+
+            with sd.InputStream(**stream_kwargs):
                 self._mic_queue.put(("ready",))
                 while stop is not None and not stop.is_set():
                     try:
