@@ -18614,12 +18614,28 @@ class BookReader:
         bar = tk.Frame(parent, bg=BG_PANEL, padx=10, pady=6)
         bar.pack(side=tk.TOP, fill=tk.X)
 
-        # (Reader control bar removed — Text/font picker, A−/A+, 🖍
-        #  Highlight selection, Highlight by: unit picker, Color:
-        #  highlight-color picker, and Voice: TTS-voice picker were all
-        #  taken out at the user's request alongside the read-aloud and
-        #  microphone feature removals. Underlying StringVars are still
-        #  set in __init__ so any code that reads them keeps working.)
+        # ADHD / Accessibility Font and Size Controls
+        font_lbl = tk.Label(bar, text="Font:", bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 9, "bold"))
+        font_lbl.pack(side=tk.LEFT, padx=(0, 4))
+        
+        font_menu = tk.OptionMenu(bar, self.font_var, *self.available_fonts, command=self._on_font_change)
+        _style_optionmenu(font_menu)
+        font_menu.configure(width=16, font=("Segoe UI", 9, "bold"))
+        font_menu.pack(side=tk.LEFT, padx=(0, 10))
+
+        plus_btn = tk.Button(bar, text="A+", command=self.bigger_text,
+                             bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_CYAN,
+                             font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=6, pady=2, cursor="hand2")
+        plus_btn.pack(side=tk.LEFT, padx=(0, 4))
+
+        minus_btn = tk.Button(bar, text="A-", command=self.smaller_text,
+                              bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_CYAN,
+                              font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=8, pady=2, cursor="hand2")
+        minus_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        # (Other elements from the Reader control bar were removed at the user's
+        # request. Underlying StringVars are still set in __init__ so any code
+        # that reads them keeps working.)
 
     def _build_tab_reader(self, parent: tk.Frame) -> None:
         """📖 Reader — the book itself: full text on the left, a chapter
