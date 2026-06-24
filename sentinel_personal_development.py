@@ -1167,7 +1167,8 @@ class BookReader:
             self._ftb_read_color_var = tk.StringVar(value="Yellow")
         _ftb_rc = tk.OptionMenu(
             body, self._ftb_read_color_var,
-            *list(self.HIGHLIGHT_COLORS.keys()))
+            *list(self.HIGHLIGHT_COLORS.keys()),
+            command=self._on_ftb_highlight_color_change)
         _style_optionmenu(_ftb_rc)
         _ftb_rc.configure(width=7, font=("Segoe UI", 9, "bold"))
         _ftb_rc.pack(side=tk.LEFT, padx=(4, 0))
@@ -1669,6 +1670,20 @@ class BookReader:
         except tk.TclError:
             return
         self._ftb_read_target = target
+        
+    def _on_ftb_highlight_color_change(self, value=None):
+        """Immediately update the highlight color if the user changes the
+        dropdown while the text is being read."""
+        if getattr(self, "_ftb_read_target", None) is None:
+            return
+        color_name = "Yellow"
+        if self._ftb_read_color_var is not None:
+            color_name = self._ftb_read_color_var.get() or "Yellow"
+        color_hex = self.HIGHLIGHT_COLORS.get(color_name, "#fde047")
+        try:
+            self._ftb_read_target.tag_configure("ftb_reading", background=color_hex, foreground="#0f172a")
+        except tk.TclError:
+            pass
         self._ftb_read_range = (start_idx, end_idx)
 
     def _ftb_read_toggle(self) -> None:
