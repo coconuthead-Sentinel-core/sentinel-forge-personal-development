@@ -1141,7 +1141,7 @@ class BookReader:
         _ftb_voice.configure(width=12, font=("Segoe UI", 9, "bold"))
         _ftb_voice.pack(side=tk.LEFT, padx=(6, 0))
 
-        # Universal Add/Remove buttons
+        # Universal Add/Remove/Save buttons
         add_btn = tk.Button(
             body, text="➕ Add", command=self._ftb_action_add,
             font=("Segoe UI", 9, "bold"), bg="#3b82f6", fg="white",
@@ -1154,7 +1154,14 @@ class BookReader:
             font=("Segoe UI", 9, "bold"), bg="#ef4444", fg="white",
             activebackground="#dc2626", relief=tk.FLAT,
             padx=10, pady=2, cursor="hand2", borderwidth=0)
-        rem_btn.pack(side=tk.LEFT, padx=(2, 0))
+        rem_btn.pack(side=tk.LEFT, padx=(2, 2))
+
+        save_btn = tk.Button(
+            body, text="💾 Save", command=self._ftb_action_save,
+            font=("Segoe UI", 9, "bold"), bg="#10b981", fg="white",
+            activebackground="#059669", relief=tk.FLAT,
+            padx=10, pady=2, cursor="hand2", borderwidth=0)
+        save_btn.pack(side=tk.LEFT, padx=(2, 0))
 
         # (🖍 Highlight + color picker NOT in the toolbar by design —
         #  highlight is on the right-click menu of every text widget
@@ -1337,11 +1344,23 @@ class BookReader:
             return
         if self._journal_add_entry_from_toolbar():
             return
+        if self._study_notes_context_active():
+            self._new_study_note()
+            return
+        if self._commentary_context_active():
+            self.open_commentary_picker()
+            return
         if self._ftb_generate_bound_event("<Return>"):
             return
         if self._ftb_invoke_context_button(("add", "new", "create", "upload")):
             return
-        self.set_status("Click into an add field or list, then use Add.")
+            
+        # Explicit fallback for Prompt Library
+        if self._prompt_lib_win is not None and self._prompt_lib_win.winfo_exists():
+            self._prompt_lib_new()
+            return
+            
+        self._library_add_files()
 
     def _ftb_action_remove(self) -> None:
         """Context-aware Remove button from the floating toolbar."""
@@ -1357,11 +1376,64 @@ class BookReader:
             return
         if self._topics_remove_from_toolbar():
             return
+        if self._commentary_context_active():
+            if self._commentary_file:
+                # Remove the currently open commentary
+                name = Path(self._commentary_file).name
+                if messagebox.askyesno(
+                    "Remove from commentaries?",
+                    f"Permanently delete this file from disk?\n\n{name}\n\nThis cannot be undone."):
+                    try:
+                        os.unlink(self._commentary_file)
+                        self._clear_commentary()
+                        self.set_status(f"🗑 Deleted commentary: {name}")
+                    except Exception as e:
+                        messagebox.showerror("Could not remove", str(e))
+                return
+            else:
+                self.open_commentary_picker()
+                return
+
         if self._ftb_invoke_context_button(("remove", "delete", "clear", "🗑")):
             return
         if self._ftb_generate_bound_event("<Delete>"):
             return
-        self.set_status("Click or select something removable, then use Remove.")
+        
+        # Explicit fallback for Prompt Library
+        if self._prompt_lib_win is not None and self._prompt_lib_win.winfo_exists():
+            self._prompt_lib_delete_current()
+            return
+            
+        # Base fallback behavior: try removing an open text / library document
+        self.open_library()
+        self._library_remove_selected()
+
+    def _ftb_action_save(self) -> None:
+        """Context-aware Save button from the floating toolbar."""
+        if self._ftb_invoke_context_button(("save", "update", "💾")):
+            return
+            
+        if self._journal_context_active():
+            self._save_current_journal_entry()
+            return
+
+        if self._study_notes_context_active():
+            self._save_study_notes()
+            return
+            
+        if self._commentary_context_active():
+            # Commentary is read-only by design (like e-Sword).
+            # Saving from it adds the selection to the prompt library
+            # just like the main reader board.
+            self.save_board_to_prompt_library()
+            return
+
+        # If in prompt library or just want to save reader to prompt library
+        if self._prompt_lib_win is not None and self._prompt_lib_win.winfo_exists():
+            self._prompt_lib_save_current()
+            return
+            
+        self.save_board_to_prompt_library()
 
     def _ftb_remember_focus(self, event) -> None:
         widget = getattr(event, "widget", None)
@@ -3315,6 +3387,7 @@ class BookReader:
         btn_send = tk.Button(input_frame, text="Send", bg=ACCENT_CYAN, fg=BG_DARK,
                              font=("Segoe UI", 10, "bold"), relief=tk.FLAT)
         btn_send.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        
         web_var = tk.BooleanVar(value=False)
         web_toggle = tk.Checkbutton(
             input_frame, text="🌐 Web", variable=web_var,
@@ -3323,6 +3396,16 @@ class BookReader:
             font=("Segoe UI", 10, "bold"), cursor="hand2",
         )
         web_toggle.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        
+        context_var = tk.StringVar(value="No Reader Context")
+        context_menu = tk.OptionMenu(
+            input_frame, context_var,
+            "No Reader Context", "Current Page", "Current Chapter", "Entire Book", "Prompt Library", "Journal", "Study Notes", "Commentary"
+        )
+        context_menu.configure(bg=BG_DARK, fg=FG_TEXT, activebackground=BG_DARK, activeforeground=FG_TEXT, highlightthickness=1, highlightbackground=ACCENT_SLATE, font=("Segoe UI", 9, "bold"), cursor="hand2")
+        context_menu["menu"].configure(bg=BG_PANEL, fg=FG_TEXT)
+        context_menu.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        
         chat_input.focus_set()
 
         # 2. History area (packed TOP, consumes remaining space)
@@ -3358,7 +3441,7 @@ class BookReader:
             if not brain.available:
                 _append_msg("Sentinel", f"Offline. {brain.last_error}")
             else:
-                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. Turn on 🌐 Web or start with /web when you want me to search the internet.")
+                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}.\nTo have me summarize or read your books, use the dropdown below to attach the current page, chapter, or entire book to our chat.")
         except Exception as e:
             brain = None
             _append_msg("Error", f"Could not load AI module: {e}")
@@ -3405,8 +3488,96 @@ class BookReader:
                     web_context = ""
                     if use_web:
                         web_context = self._ai_web_search_context(web_query)
+                        
+                    doc_context = ""
+                    ctx_val = context_var.get()
+                    if ctx_val == "Current Page":
+                        try:
+                            top = self.text_area.index("@0,0")
+                            bot = self.text_area.index(f"@0,{self.text_area.winfo_height()}")
+                            curr_text = self.text_area.get(top, bot).strip()
+                            if curr_text and curr_text != "Nothing loaded.":
+                                doc_context = "Currently visible page in the reader:\n\n" + curr_text
+                        except Exception: pass
+                    elif ctx_val == "Current Chapter":
+                        try:
+                            insert_offset = len(self.text_area.get("1.0", tk.INSERT))
+                            chaps = getattr(self, "_chapters", [])
+                            chap_start = 0
+                            chap_end = len(self.text_area.get("1.0", tk.END))
+                            
+                            for i, (label, offset) in enumerate(chaps):
+                                if offset <= insert_offset:
+                                    chap_start = offset
+                                    if i + 1 < len(chaps):
+                                        chap_end = chaps[i+1][1]
+                                    else:
+                                        chap_end = len(self.text_area.get("1.0", tk.END))
+                                else:
+                                    break
+                            
+                            if chap_start < chap_end:
+                                tk_start = self.text_area.index(f"1.0 + {int(chap_start)} chars")
+                                tk_end = self.text_area.index(f"1.0 + {int(chap_end)} chars")
+                                curr_text = self.text_area.get(tk_start, tk_end).strip()
+                                if curr_text and curr_text != "Nothing loaded.":
+                                    doc_context = "Current chapter in the reader:\n\n" + curr_text
+                        except Exception: pass
+                    elif ctx_val == "Entire Book":
+                        try:
+                            curr_text = self.text_area.get("1.0", tk.END).strip()
+                            if curr_text and curr_text != "Nothing loaded.":
+                                doc_context = "Complete document loaded in the reader:\n\n" + curr_text
+                        except Exception: pass
+                    elif ctx_val == "Prompt Library":
+                        try:
+                            rows = self._db_query("SELECT title, prompt, response FROM prompt_library ORDER BY id ASC")
+                            if rows:
+                                lib_text = "\n\n---\n\n".join(
+                                    f"TITLE: {r[0]}\nPROMPT:\n{r[1]}\nRESPONSE:\n{r[2]}"
+                                    for r in rows
+                                )
+                                doc_context = "User's current Prompt Library content:\n\n" + lib_text
+                            else:
+                                doc_context = "The user has no prompts saved in the Prompt Library yet."
+                        except Exception: pass
+                    elif ctx_val == "Journal":
+                        try:
+                            rows = self._db_query("SELECT entry_date, body FROM journal ORDER BY entry_date DESC")
+                            if rows:
+                                j_text = "\n\n---\n\n".join(
+                                    f"DATE: {r[0]}\nCONTENT:\n{r[1]}"
+                                    for r in rows
+                                )
+                                doc_context = "User's complete personal Journal entries:\n\n" + j_text
+                            else:
+                                doc_context = "The user has no journal entries saved yet."
+                        except Exception: pass
+                    elif ctx_val == "Study Notes":
+                        try:
+                            rows = self._db_query("SELECT title, body FROM study_notes ORDER BY id ASC")
+                            if rows:
+                                sn_text = "\n\n---\n\n".join(
+                                    f"TITLE: {r[0]}\nCONTENT:\n{r[1]}"
+                                    for r in rows
+                                )
+                                doc_context = "User's complete Study Notes archive:\n\n" + sn_text
+                            else:
+                                doc_context = "The user has no study notes saved yet."
+                        except Exception: pass
+                    elif ctx_val == "Commentary":
+                        try:
+                            w = getattr(self, "commentary_area", None)
+                            if w is not None:
+                                curr_text = w.get("1.0", tk.END).strip()
+                                if curr_text:
+                                    doc_context = f"Currently loaded Commentary text ({getattr(self, '_commentary_file', 'scratchpad')}):\n\n" + curr_text
+                                else:
+                                    doc_context = "The user has no commentary loaded at the moment."
+                        except Exception: pass
+
                     combined_context = "\n\n".join(
-                        part for part in (planner_context, web_context) if part
+                        part for part in (planner_context, web_context, doc_context) if part
                     )
 
                     reply = brain.ask(content, context=combined_context)
@@ -12580,6 +12751,14 @@ class BookReader:
                 # book is visible under the active zone immediately.
                 self._load_meta(dest)
                 added += 1
+                
+                # As requested: Give the Assistant complete and full access immediately
+                # by opening the newly added book in the Reader so it's ready to be queried.
+                try:
+                    self._load_book(dest)
+                except Exception:
+                    pass
+
             except Exception as e:
                 skipped.append(f"{os.path.basename(src)} ({e})")
         self._refresh_library_list()
@@ -12693,6 +12872,16 @@ class BookReader:
     # COMMENTARIES_DIR). The Library scan above prunes that subfolder,
     # so books and commentaries never mix. A loaded commentary is shown
     # in the middle pane of the right column, read-only.
+
+    def _commentary_context_active(self) -> bool:
+        editor = getattr(self, "commentary_area", None)
+        if getattr(self, "_study_active_tab", None) == "commentary":
+            return True
+        if hasattr(self, "_ftb_action_targets"):
+            for target in self._ftb_action_targets():
+                if target is editor:
+                    return True
+        return False
 
     def open_commentary_picker(self) -> None:
         """Modal picker over the Commentaries/ folder. Add new
