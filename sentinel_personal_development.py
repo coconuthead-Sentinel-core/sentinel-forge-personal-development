@@ -36,6 +36,7 @@ from lyceum.text_norm import normalize_for_speech
 from lyceum.dictation_commands import apply_dictation_commands
 from lyceum.dictation_guard import dedup_punctuation
 from lyceum.platform_dpi import enable_high_dpi_awareness
+from lyceum import finance as _finance
 import subprocess
 import tempfile
 import threading
@@ -5404,10 +5405,7 @@ class BookReader:
     # ---- Run Rate / Emergency-Fund calculator --------------------------
     @staticmethod
     def _run_rate_months(cash, monthly):
-        """Months of survival if income stopped today. None if no expenses set."""
-        if monthly is None or monthly <= 0:
-            return None
-        return float(cash) / float(monthly)
+        return _finance.run_rate_months(cash, monthly)
 
     def _emergency_fund_goal(self, target, cash):
         """Create/refresh a '🔋 Emergency Fund' Dream Bucket as the auto-goal."""
@@ -5661,11 +5659,7 @@ class BookReader:
     # ---- Time vs. Money translator (price -> hours of your life) -------
     @staticmethod
     def _time_cost_hours(price, wage, tax_pct):
-        """Hours of work a purchase costs. None if no usable (net) wage."""
-        net = float(wage) * (1 - (float(tax_pct or 0) / 100.0))
-        if net <= 0:
-            return None
-        return float(price) / net
+        return _finance.time_cost_hours(price, wage, tax_pct)
 
     def open_time_money(self) -> None:
         """The Time vs. Money translator: a price isn't dollars, it's the hours
@@ -6036,15 +6030,7 @@ class BookReader:
     # ---- Save More Tomorrow (SMarT) raise auto-escalator ---------------
     @staticmethod
     def _wedge_split(old_wage, new_wage, hours_per_week, pct):
-        """Split a raise: half (pct) to savings, half to lifestyle. Returns the
-        per-hour increase and the savings/lifestyle amounts per month & year."""
-        inc = max(0.0, float(new_wage) - float(old_wage))      # $/hr
-        annual = inc * float(hours_per_week) * 52.0
-        monthly = annual / 12.0
-        f = float(pct) / 100.0
-        return {"inc_hr": inc,
-                "save_monthly": monthly * f, "save_annual": annual * f,
-                "life_monthly": monthly * (1 - f), "life_annual": annual * (1 - f)}
+        return _finance.wedge_split(old_wage, new_wage, hours_per_week, pct)
 
     def _smart_get(self) -> dict:
         try:
@@ -6347,16 +6333,7 @@ class BookReader:
     # ---- Rule of 72 compound-interest simulator ------------------------
     @staticmethod
     def _compound_series(weekly, rate_pct, years, start=0.0):
-        """Year-by-year balance of weekly savings compounding at rate_pct.
-        Returns a list of length years+1 (balance at the end of each year)."""
-        r = float(rate_pct) / 100.0
-        annual = float(weekly) * 52.0
-        bal = float(start)
-        out = [bal]
-        for _ in range(max(0, int(years))):
-            bal = bal * (1 + r) + annual
-            out.append(bal)
-        return out
+        return _finance.compound_series(weekly, rate_pct, years, start)
 
     def _draw_growth(self, canvas, series, start_age):
         canvas.delete("all")
@@ -9527,8 +9504,7 @@ class BookReader:
     # ---- Expected Net Worth (PAW vs. UAW) calculator ------------------
     @staticmethod
     def _expected_net_worth(age, income):
-        """The Millionaire Next Door formula: age * income / 10."""
-        return float(age) * float(income) / 10.0
+        return _finance.expected_net_worth(age, income)
 
     @staticmethod
     def _paw_status(actual, expected):
@@ -10377,16 +10353,7 @@ class BookReader:
     # ---- Hidden Fee Checker & Optimizer -------------------------------
     @staticmethod
     def _fee_future_value(start, monthly, years, gross_pct, fee_pct):
-        """Monthly-compounded future value with the fee dragging the return.
-        net annual return = gross - fee."""
-        net = (float(gross_pct) - float(fee_pct)) / 100.0
-        r = net / 12.0
-        months = max(0, int(round(float(years) * 12)))
-        bal = float(start)
-        m = float(monthly)
-        for _ in range(months):
-            bal = bal * (1 + r) + m
-        return bal
+        return _finance.fee_future_value(start, monthly, years, gross_pct, fee_pct)
 
     LOW_COST_FUNDS = (
         ("Total US Stock Market index", "~0.03%", "the whole US market in one fund"),
@@ -10604,24 +10571,11 @@ class BookReader:
     # ---- Critical Mass / decumulation longevity simulator -------------
     @staticmethod
     def _critical_mass(income, wd_rate):
-        """Nest egg whose safe withdrawals replace your income. income / rate."""
-        if wd_rate <= 0:
-            return None
-        return float(income) / (float(wd_rate) / 100.0)
+        return _finance.critical_mass(income, wd_rate)
 
     @staticmethod
     def _years_until_depleted(nest, annual_withdrawal, return_pct, cap=70):
-        """Years a nest egg lasts under annual withdrawals + growth. None = it
-        sustains itself indefinitely (growth covers the withdrawals)."""
-        if annual_withdrawal <= 0:
-            return None
-        r = float(return_pct) / 100.0
-        bal = float(nest)
-        for yr in range(1, cap + 1):
-            bal = bal * (1 + r) - annual_withdrawal
-            if bal <= 0:
-                return yr
-        return None
+        return _finance.years_until_depleted(nest, annual_withdrawal, return_pct, cap)
 
     def open_critical_mass(self):
         """Decumulation: accumulating is only half the climb — you must not
