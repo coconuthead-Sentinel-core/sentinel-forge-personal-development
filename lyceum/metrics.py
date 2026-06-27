@@ -33,10 +33,34 @@ def wheel_progress(snapshot_avgs: list[float], target: int) -> dict:
                 "pct": 0, "arrow": "", "n": 0}
     baseline = snapshot_avgs[0]
     now = snapshot_avgs[-1]
-    if t > baseline:
-        pct = max(0, min(100, round(100 * (now - baseline) / (t - baseline))))
-    else:                                  # target at/below where you started
-        pct = 100 if now >= t else 0
+    pct = progress_pct(now, baseline, t)
     arrow = "▲" if now > baseline else ("▼" if now < baseline else "■")
     return {"baseline": baseline, "now": now, "target": t,
             "pct": pct, "arrow": arrow, "n": n}
+
+
+def progress_pct(current: float, baseline: float, target: float) -> int:
+    """Honest progress toward a target, as a 0–100 percentage.
+
+    The shared accountability kernel used by BOTH the Wheel of Life and the
+    Goals panel: pct = (current - baseline) / (target - baseline), clamped to
+    [0, 100]. If you're below where you started, pct is 0 — backsliding is
+    exposed, not hidden. If the target is at or below the baseline, you count as
+    complete only once you've reached it.
+    """
+    if target > baseline:
+        return max(0, min(100, round(100 * (current - baseline) / (target - baseline))))
+    return 100 if current >= target else 0
+
+
+def goal_progress(current: int, baseline: int, target: int) -> dict:
+    """Progress for a single goal check-in (1–10 scale).
+
+    Returns pct (0–100), an arrow vs. baseline, and the clamped baseline/target.
+    Mirrors wheel_progress so both panels report progress identically.
+    """
+    b = max(1, min(10, int(baseline)))
+    t = max(1, min(10, int(target)))
+    return {"pct": progress_pct(current, b, t),
+            "arrow": "▲" if current > b else ("▼" if current < b else "■"),
+            "baseline": b, "target": t, "current": current}

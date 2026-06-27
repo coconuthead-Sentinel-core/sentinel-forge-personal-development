@@ -31,7 +31,8 @@ from lyceum.db.study_db import (
     init_study_db,
     transaction as _db_transaction,
 )
-from lyceum.metrics import wheel_progress
+from lyceum.metrics import wheel_progress, progress_pct
+from lyceum.text_norm import normalize_for_speech
 import subprocess
 import tempfile
 import threading
@@ -1674,7 +1675,7 @@ class BookReader:
             for char_s, char_e, tk_s, tk_e in chunks:
                 if self._ftb_worker_id != current_worker_id or not getattr(self, "_ftb_reading", False):
                     break
-                chunk_text = text[char_s:char_e].strip()
+                chunk_text = normalize_for_speech(text[char_s:char_e].strip())
                 if not chunk_text:
                     continue
                 
@@ -13321,7 +13322,7 @@ class BookReader:
             for char_s, char_e, tk_s, tk_e in chunks:
                 if not self.is_reading:
                     break
-                chunk_text = text[char_s:char_e].strip()
+                chunk_text = normalize_for_speech(text[char_s:char_e].strip())
                 if not chunk_text:
                     continue
                 self._highlight_queue.put(("highlight", tk_s, tk_e))
@@ -13416,7 +13417,7 @@ class BookReader:
             for char_s, char_e, tk_s, tk_e in chunks:
                 if not self.is_reading:
                     break
-                chunk_text = text[char_s:char_e].strip()
+                chunk_text = normalize_for_speech(text[char_s:char_e].strip())
                 if not chunk_text:
                     continue
                 self._highlight_queue.put(("highlight", tk_s, tk_e))
@@ -20177,10 +20178,7 @@ class BookReader:
             except Exception as e:
                 messagebox.showerror("Could not log check-in", str(e))
                 return
-            if t > b:
-                pct = max(0, min(100, round(100 * (now_val - b) / (t - b))))
-            else:
-                pct = 100 if now_val >= t else 0
+            pct = progress_pct(now_val, b, t)   # shared accountability kernel
             progress_s.set(pct)
             _save_goal()                    # persist progress + baseline/target
             _draw_goal_graph()
