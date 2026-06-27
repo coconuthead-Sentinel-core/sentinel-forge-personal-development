@@ -33,6 +33,7 @@ from lyceum.db.study_db import (
 )
 from lyceum.metrics import wheel_progress, progress_pct
 from lyceum.text_norm import normalize_for_speech
+from lyceum.dictation_commands import apply_dictation_commands
 import subprocess
 import tempfile
 import threading
@@ -14274,6 +14275,9 @@ class BookReader:
             return
         self._last_dictation = text                      # raw heard
         text = self._apply_voice_corrections(text)
+        # Hands-free accessibility: turn spoken "period"/"new line"/"cap …"
+        # into the characters they name (pure, defensive — see lyceum module).
+        text = apply_dictation_commands(text)
         target = getattr(self, "_mic_active_target", None) or self.notes_area
         # Entry widgets (e.g. the Planner day boxes) take plain end-insertion.
         if isinstance(target, (tk.Entry, ttk.Entry)):

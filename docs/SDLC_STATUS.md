@@ -111,14 +111,14 @@ A professor's release checklist for *this* project (Definition of Done):
 
 1. [ ] Requirements / feature inventory written, with acceptance criteria.
 2. [x] Methodology declared (this document).
-3. [~] Test suite started — **24 unit tests** (progress kernels, DB atomicity,
+3. [~] Test suite started — **34 unit tests** (progress kernels, DB atomicity,
        speech normalizer). QA gate still informal (manual smoke test of windows).
 4. [~] Worst-case *logic* extracted to tested pure functions (shared progress
        kernel); full UI-level decomposition of the CC>50 builders deferred to
        visual QA (cannot screenshot `pythonw` headlessly).
 5. [x] God-Object reduction **underway** via incremental Extract-Module:
-       `lyceum/db`, `lyceum/metrics`, `lyceum/text_norm` now hold logic pulled
-       out of the 590-method class.
+       `lyceum/db`, `lyceum/metrics`, `lyceum/text_norm`, `lyceum/dictation_commands`
+       now hold logic pulled out of the 590-method class.
 6. [ ] Version tag + CHANGELOG; standalone build moved from "Planned" → built.
 7. [x] User documentation (README updated with architecture + tests).
 8. [ ] Stakeholder acceptance review (sign-off against the written criteria).
@@ -156,3 +156,18 @@ area. Standard practice:
   highlight-safe seam so follow-along stays in sync.
 - Synced as mirror copies across GitHub (`main`), the OneDrive clone, and the
   live install; `dashboard-work` merged and removed.
+
+**2026-06-27 (later) — accessibility: hands-free dictation commands.**
+- `lyceum/dictation_commands.py` — pure `apply_dictation_commands()` converts
+  spoken punctuation ("period", "comma", "question mark"), formatting ("new
+  line", "new paragraph", "tab"), and capitalization ("cap", "caps on/off",
+  "all caps on/off") into the characters they name. Wired into the Whisper path
+  in `_append_dictation`, right after Voice Memory corrections (defensive:
+  returns input unchanged on error, so it can't break a dictation session).
+- Stakeholder-approved accessibility addition (the app's core mission) — lets a
+  user who cannot type punctuate/format/capitalize entirely by voice.
+- Tests: +10 (`tests/test_dictation_commands.py`). Suite now **34/34** passing.
+- Deliberately **deferred** (would harm normal dictation if auto-applied):
+  "scratch that"/voice editing (stateful, needs the widget) and NATO/phonetic-
+  alphabet spelling (ambiguous in free speech — belongs in the Spelling Helper
+  as an explicit mode). Both on the post-v0.9 backlog.
