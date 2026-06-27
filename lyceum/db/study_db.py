@@ -1,6 +1,7 @@
 """SQLite study database — paths, schema, and low-level query helpers."""
 from __future__ import annotations
 
+import contextlib
 import os
 import sqlite3
 import sys
@@ -668,5 +669,31 @@ def db_exec(sql: str, params: tuple = ()) -> int:
         cur = con.execute(sql, params)
         con.commit()
         return cur.lastrowid or 0
+    finally:
+        con.close()
+
+
+@contextlib.contextmanager
+def transaction():
+    """One atomic unit of work — ACID's 'A' (Atomicity).
+
+    Use for any logical operation made of MORE THAN ONE statement that must
+    all succeed or all fail together (e.g. delete a parent row and its child
+    rows, or wipe-and-reinsert a set). Within the block, run statements on the
+    yielded connection::
+
+        with transaction() as con:
+            con.execute("DELETE FROM child  WHERE parent_id=?", (pid,))
+            con.execute("DELETE FROM parent WHERE id=?",        (pid,))
+
+    sqlite3's connection context manager commits on a clean exit and issues a
+    ROLLBACK if the block raises, so a crash partway through leaves the database
+    exactly as it was — no orphaned or half-written rows. The connection is
+    always closed afterward.
+    """
+    con = connect()
+    try:
+        with con:          # commit on success; ROLLBACK on any exception
+            yield con
     finally:
         con.close()

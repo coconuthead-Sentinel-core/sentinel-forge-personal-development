@@ -29,6 +29,7 @@ from lyceum.db.study_db import (
     db_exec as _db_exec_fn,
     db_query as _db_query_fn,
     init_study_db,
+    transaction as _db_transaction,
 )
 from lyceum.metrics import wheel_progress
 import subprocess
@@ -4163,8 +4164,9 @@ class BookReader:
                     "out of your Financial Independence balance."):
                 return
             try:
-                self._db_exec("DELETE FROM budget_items WHERE paycheck_id=?", (pid,))
-                self._db_exec("DELETE FROM paychecks WHERE id=?", (pid,))
+                with _db_transaction() as con:        # atomic: both or neither
+                    con.execute("DELETE FROM budget_items WHERE paycheck_id=?", (pid,))
+                    con.execute("DELETE FROM paychecks WHERE id=?", (pid,))
             except Exception:
                 pass
             _refresh_balance(); _refresh_list()
@@ -7517,8 +7519,9 @@ class BookReader:
 
     def _system_delete(self, sid):
         try:
-            self._db_exec("DELETE FROM system_steps WHERE system_id=?", (sid,))
-            self._db_exec("DELETE FROM systems WHERE id=?", (sid,))
+            with _db_transaction() as con:            # atomic: both or neither
+                con.execute("DELETE FROM system_steps WHERE system_id=?", (sid,))
+                con.execute("DELETE FROM systems WHERE id=?", (sid,))
         except Exception:
             pass
 
@@ -8116,8 +8119,9 @@ class BookReader:
 
     def _habit_delete(self, hid):
         try:
-            self._db_exec("DELETE FROM habit_marks WHERE habit_id=?", (hid,))
-            self._db_exec("DELETE FROM habits WHERE id=?", (hid,))
+            with _db_transaction() as con:            # atomic: both or neither
+                con.execute("DELETE FROM habit_marks WHERE habit_id=?", (hid,))
+                con.execute("DELETE FROM habits WHERE id=?", (hid,))
         except Exception:
             pass
 
@@ -8672,8 +8676,9 @@ class BookReader:
 
     def _pert_delete_plan(self, pid):
         try:
-            self._db_exec("DELETE FROM pert_steps WHERE plan_id=?", (pid,))
-            self._db_exec("DELETE FROM pert_plans WHERE id=?", (pid,))
+            with _db_transaction() as con:            # atomic: both or neither
+                con.execute("DELETE FROM pert_steps WHERE plan_id=?", (pid,))
+                con.execute("DELETE FROM pert_plans WHERE id=?", (pid,))
         except Exception:
             pass
 
