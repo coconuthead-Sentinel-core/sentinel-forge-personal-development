@@ -30,6 +30,7 @@ from lyceum.db.study_db import (
     db_query as _db_query_fn,
     init_study_db,
 )
+from lyceum.metrics import wheel_progress
 import subprocess
 import tempfile
 import threading
@@ -19868,19 +19869,14 @@ class BookReader:
         def _refresh_progress(*_):
             data = _snapshot_avgs()
             t = int(target_s.get())
-            if not data:
+            p = wheel_progress([avg for _d, avg in data], t)   # pure core
+            if p["n"] == 0:
                 prog_var.set("No snapshots yet — save one to start tracking.")
             else:
-                base = data[0][1]
-                now = data[-1][1]
-                if t > base:
-                    pct = max(0, min(100, round(100 * (now - base) / (t - base))))
-                else:
-                    pct = 100 if now >= t else 0
-                arrow = "▲" if now > base else ("▼" if now < base else "■")
                 prog_var.set(
-                    f"Baseline {base:.1f} → now {now:.1f} {arrow}  "
-                    f"(target {t}) — {pct}% of the way · {len(data)} snapshot(s)")
+                    f"Baseline {p['baseline']:.1f} → now {p['now']:.1f} "
+                    f"{p['arrow']}  (target {p['target']}) — {p['pct']}% of the "
+                    f"way · {p['n']} snapshot(s)")
             _draw_wheel_graph(data, t)
 
         def _on_target(*_):
