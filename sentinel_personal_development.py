@@ -60,46 +60,6 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from tkinter import font as tkfont
 
-# =========================================================================
-# Windows 11 Native OS Integration
-# =========================================================================
-# 1. Enable Native DPI Awareness (prevents blurry text on high-res monitors)
-try:
-    import ctypes
-    ctypes.windll.shcore.SetProcessDpiAwareness(2) # PROCESS_PER_MONITOR_DPI_AWARE
-except Exception:
-    pass
-
-def _apply_win11_dark_mode(window):
-    """Tell Windows 11 Desktop Window Manager to render the window frame in immersive dark mode
-       with native Windows 11 rounded corners."""
-    try:
-        import ctypes
-        window.update_idletasks()
-        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
-        # Immersive dark mode (Windows 11)
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(ctypes.c_int(1)), 4)
-        # Rounded corners (Windows 11) -> 2 = DWMWCP_ROUND
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(ctypes.c_int(2)), 4)
-    except Exception:
-        pass
-
-# 2. Seamlessly hook all Tkinter windows to inherently spawn with Windows 11 native integration
-_orig_Tk_init = tk.Tk.__init__
-_orig_Toplevel_init = tk.Toplevel.__init__
-
-def _new_Tk_init(self, *args, **kwargs):
-    _orig_Tk_init(self, *args, **kwargs)
-    self.after(10, lambda: _apply_win11_dark_mode(self))
-
-def _new_Toplevel_init(self, *args, **kwargs):
-    _orig_Toplevel_init(self, *args, **kwargs)
-    self.after(10, lambda: _apply_win11_dark_mode(self))
-
-tk.Tk.__init__ = _new_Tk_init
-tk.Toplevel.__init__ = _new_Toplevel_init
-# =========================================================================
-
 # ---- File parsers --------------------------------------------------------
 try:
     from docx import Document
@@ -1167,8 +1127,7 @@ class BookReader:
             self._ftb_read_color_var = tk.StringVar(value="Yellow")
         _ftb_rc = tk.OptionMenu(
             body, self._ftb_read_color_var,
-            *list(self.HIGHLIGHT_COLORS.keys()),
-            command=self._on_ftb_highlight_color_change)
+            *list(self.HIGHLIGHT_COLORS.keys()))
         _style_optionmenu(_ftb_rc)
         _ftb_rc.configure(width=7, font=("Segoe UI", 9, "bold"))
         _ftb_rc.pack(side=tk.LEFT, padx=(4, 0))
@@ -1182,7 +1141,7 @@ class BookReader:
         _ftb_voice.configure(width=12, font=("Segoe UI", 9, "bold"))
         _ftb_voice.pack(side=tk.LEFT, padx=(6, 0))
 
-        # Universal Add/Remove/Save buttons
+        # Universal Add/Remove buttons
         add_btn = tk.Button(
             body, text="➕ Add", command=self._ftb_action_add,
             font=("Segoe UI", 9, "bold"), bg="#3b82f6", fg="white",
@@ -1195,14 +1154,7 @@ class BookReader:
             font=("Segoe UI", 9, "bold"), bg="#ef4444", fg="white",
             activebackground="#dc2626", relief=tk.FLAT,
             padx=10, pady=2, cursor="hand2", borderwidth=0)
-        rem_btn.pack(side=tk.LEFT, padx=(2, 2))
-
-        save_btn = tk.Button(
-            body, text="💾 Save", command=self._ftb_action_save,
-            font=("Segoe UI", 9, "bold"), bg="#10b981", fg="white",
-            activebackground="#059669", relief=tk.FLAT,
-            padx=10, pady=2, cursor="hand2", borderwidth=0)
-        save_btn.pack(side=tk.LEFT, padx=(2, 0))
+        rem_btn.pack(side=tk.LEFT, padx=(2, 0))
 
         # (🖍 Highlight + color picker NOT in the toolbar by design —
         #  highlight is on the right-click menu of every text widget
@@ -1385,23 +1337,11 @@ class BookReader:
             return
         if self._journal_add_entry_from_toolbar():
             return
-        if self._study_notes_context_active():
-            self._new_study_note()
-            return
-        if self._commentary_context_active():
-            self.open_commentary_picker()
-            return
         if self._ftb_generate_bound_event("<Return>"):
             return
         if self._ftb_invoke_context_button(("add", "new", "create", "upload")):
             return
-            
-        # Explicit fallback for Prompt Library
-        if self._prompt_lib_win is not None and self._prompt_lib_win.winfo_exists():
-            self._prompt_lib_new()
-            return
-            
-        self._library_add_files()
+        self.set_status("Click into an add field or list, then use Add.")
 
     def _ftb_action_remove(self) -> None:
         """Context-aware Remove button from the floating toolbar."""
@@ -1417,64 +1357,11 @@ class BookReader:
             return
         if self._topics_remove_from_toolbar():
             return
-        if self._commentary_context_active():
-            if self._commentary_file:
-                # Remove the currently open commentary
-                name = Path(self._commentary_file).name
-                if messagebox.askyesno(
-                    "Remove from commentaries?",
-                    f"Permanently delete this file from disk?\n\n{name}\n\nThis cannot be undone."):
-                    try:
-                        os.unlink(self._commentary_file)
-                        self._clear_commentary()
-                        self.set_status(f"🗑 Deleted commentary: {name}")
-                    except Exception as e:
-                        messagebox.showerror("Could not remove", str(e))
-                return
-            else:
-                self.open_commentary_picker()
-                return
-
         if self._ftb_invoke_context_button(("remove", "delete", "clear", "🗑")):
             return
         if self._ftb_generate_bound_event("<Delete>"):
             return
-        
-        # Explicit fallback for Prompt Library
-        if self._prompt_lib_win is not None and self._prompt_lib_win.winfo_exists():
-            self._prompt_lib_delete_current()
-            return
-            
-        # Base fallback behavior: try removing an open text / library document
-        self.open_library()
-        self._library_remove_selected()
-
-    def _ftb_action_save(self) -> None:
-        """Context-aware Save button from the floating toolbar."""
-        if self._ftb_invoke_context_button(("save", "update", "💾")):
-            return
-            
-        if self._journal_context_active():
-            self._save_current_journal_entry()
-            return
-
-        if self._study_notes_context_active():
-            self._save_study_notes()
-            return
-            
-        if self._commentary_context_active():
-            # Commentary is read-only by design (like e-Sword).
-            # Saving from it adds the selection to the prompt library
-            # just like the main reader board.
-            self.save_board_to_prompt_library()
-            return
-
-        # If in prompt library or just want to save reader to prompt library
-        if self._prompt_lib_win is not None and self._prompt_lib_win.winfo_exists():
-            self._prompt_lib_save_current()
-            return
-            
-        self.save_board_to_prompt_library()
+        self.set_status("Click or select something removable, then use Remove.")
 
     def _ftb_remember_focus(self, event) -> None:
         widget = getattr(event, "widget", None)
@@ -1670,20 +1557,6 @@ class BookReader:
         except tk.TclError:
             return
         self._ftb_read_target = target
-        
-    def _on_ftb_highlight_color_change(self, value=None):
-        """Immediately update the highlight color if the user changes the
-        dropdown while the text is being read."""
-        if getattr(self, "_ftb_read_target", None) is None:
-            return
-        color_name = "Yellow"
-        if self._ftb_read_color_var is not None:
-            color_name = self._ftb_read_color_var.get() or "Yellow"
-        color_hex = self.HIGHLIGHT_COLORS.get(color_name, "#fde047")
-        try:
-            self._ftb_read_target.tag_configure("ftb_reading", background=color_hex, foreground="#0f172a")
-        except tk.TclError:
-            pass
         self._ftb_read_range = (start_idx, end_idx)
 
     def _ftb_read_toggle(self) -> None:
@@ -1707,8 +1580,8 @@ class BookReader:
                 except Exception: pass
             if getattr(self, "tts_mode", "") == "piper":
                 try:
-                    import sounddevice
-                    sounddevice.stop()
+                    import winsound
+                    winsound.PlaySound(None, winsound.SND_PURGE)
                 except Exception:
                     pass
             self._ftb_speak_proc = None
@@ -1836,32 +1709,20 @@ class BookReader:
                             proc.communicate(input=chunk_text.encode("utf-8"), timeout=60)
                             if (proc.returncode == 0 and os.path.exists(wav_path)
                                     and os.path.getsize(wav_path) > 44):
-                                try:
-                                    import wave
-                                    import sounddevice as _sd_tts
-                                    import numpy as _np_tts
-                                    
-                                    wasapi_index = None
-                                    for idx, api in enumerate(_sd_tts.query_hostapis()):
-                                        if "WASAPI" in api.get("name", ""):
-                                            wasapi_index = idx
+                                import wave
+                                with wave.open(wav_path, 'rb') as wf:
+                                    import pyaudio
+                                    p = pyaudio.PyAudio()
+                                    stream = p.open(format=p.get_format_from_width(wf.getsampwidth()), channels=wf.getnchannels(), rate=wf.getframerate(), output=True)
+                                    data = wf.readframes(1024)
+                                    while data:
+                                        if not getattr(self, "_ftb_reading", False) or self._ftb_worker_id != current_worker_id:
                                             break
-                                            
-                                    with wave.open(wav_path, 'rb') as wf:
-                                        fs = wf.getframerate()
-                                        audio_bytes = wf.readframes(wf.getnframes())
-                                        audio_data = _np_tts.frombuffer(audio_bytes, dtype=_np_tts.int16)
-                                        
-                                        stream_kwargs = {
-                                            "samplerate": fs,
-                                            "blocking": True
-                                        }
-                                        if wasapi_index is not None:
-                                            stream_kwargs["hostapi"] = wasapi_index
-                                            
-                                        _sd_tts.play(audio_data, **stream_kwargs)
-                                except Exception:
-                                    pass
+                                        stream.write(data)
+                                        data = wf.readframes(1024)
+                                    stream.stop_stream()
+                                    stream.close()
+                                    p.terminate()
                         finally:
                             if os.path.exists(wav_path):
                                 try: os.unlink(wav_path)
@@ -1876,7 +1737,6 @@ class BookReader:
                                 "Add-Type -AssemblyName System.Speech; "
                                 f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-                                "$s.SetOutputToDefaultAudioDevice(); "
                                 f"{self._sapi_select_voice_ps()}"
                                 "$s.Speak($t)"
                             )
@@ -3466,7 +3326,6 @@ class BookReader:
         btn_send = tk.Button(input_frame, text="Send", bg=ACCENT_CYAN, fg=BG_DARK,
                              font=("Segoe UI", 10, "bold"), relief=tk.FLAT)
         btn_send.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
-        
         web_var = tk.BooleanVar(value=False)
         web_toggle = tk.Checkbutton(
             input_frame, text="🌐 Web", variable=web_var,
@@ -3475,16 +3334,6 @@ class BookReader:
             font=("Segoe UI", 10, "bold"), cursor="hand2",
         )
         web_toggle.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
-        
-        context_var = tk.StringVar(value="No Reader Context")
-        context_menu = tk.OptionMenu(
-            input_frame, context_var,
-            "No Reader Context", "Current Page", "Current Chapter", "Entire Book", "Prompt Library", "Journal", "Study Notes", "Commentary"
-        )
-        context_menu.configure(bg=BG_DARK, fg=FG_TEXT, activebackground=BG_DARK, activeforeground=FG_TEXT, highlightthickness=1, highlightbackground=ACCENT_SLATE, font=("Segoe UI", 9, "bold"), cursor="hand2")
-        context_menu["menu"].configure(bg=BG_PANEL, fg=FG_TEXT)
-        context_menu.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
-        
         chat_input.focus_set()
 
         # 2. History area (packed TOP, consumes remaining space)
@@ -3520,7 +3369,7 @@ class BookReader:
             if not brain.available:
                 _append_msg("Sentinel", f"Offline. {brain.last_error}")
             else:
-                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}.\nTo have me summarize or read your books, use the dropdown below to attach the current page, chapter, or entire book to our chat.")
+                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. Turn on 🌐 Web or start with /web when you want me to search the internet.")
         except Exception as e:
             brain = None
             _append_msg("Error", f"Could not load AI module: {e}")
@@ -3567,96 +3416,8 @@ class BookReader:
                     web_context = ""
                     if use_web:
                         web_context = self._ai_web_search_context(web_query)
-                        
-                    doc_context = ""
-                    ctx_val = context_var.get()
-                    if ctx_val == "Current Page":
-                        try:
-                            top = self.text_area.index("@0,0")
-                            bot = self.text_area.index(f"@0,{self.text_area.winfo_height()}")
-                            curr_text = self.text_area.get(top, bot).strip()
-                            if curr_text and curr_text != "Nothing loaded.":
-                                doc_context = "Currently visible page in the reader:\n\n" + curr_text
-                        except Exception: pass
-                    elif ctx_val == "Current Chapter":
-                        try:
-                            insert_offset = len(self.text_area.get("1.0", tk.INSERT))
-                            chaps = getattr(self, "_chapters", [])
-                            chap_start = 0
-                            chap_end = len(self.text_area.get("1.0", tk.END))
-                            
-                            for i, (label, offset) in enumerate(chaps):
-                                if offset <= insert_offset:
-                                    chap_start = offset
-                                    if i + 1 < len(chaps):
-                                        chap_end = chaps[i+1][1]
-                                    else:
-                                        chap_end = len(self.text_area.get("1.0", tk.END))
-                                else:
-                                    break
-                            
-                            if chap_start < chap_end:
-                                tk_start = self.text_area.index(f"1.0 + {int(chap_start)} chars")
-                                tk_end = self.text_area.index(f"1.0 + {int(chap_end)} chars")
-                                curr_text = self.text_area.get(tk_start, tk_end).strip()
-                                if curr_text and curr_text != "Nothing loaded.":
-                                    doc_context = "Current chapter in the reader:\n\n" + curr_text
-                        except Exception: pass
-                    elif ctx_val == "Entire Book":
-                        try:
-                            curr_text = self.text_area.get("1.0", tk.END).strip()
-                            if curr_text and curr_text != "Nothing loaded.":
-                                doc_context = "Complete document loaded in the reader:\n\n" + curr_text
-                        except Exception: pass
-                    elif ctx_val == "Prompt Library":
-                        try:
-                            rows = self._db_query("SELECT title, prompt, response FROM prompt_library ORDER BY id ASC")
-                            if rows:
-                                lib_text = "\n\n---\n\n".join(
-                                    f"TITLE: {r[0]}\nPROMPT:\n{r[1]}\nRESPONSE:\n{r[2]}"
-                                    for r in rows
-                                )
-                                doc_context = "User's current Prompt Library content:\n\n" + lib_text
-                            else:
-                                doc_context = "The user has no prompts saved in the Prompt Library yet."
-                        except Exception: pass
-                    elif ctx_val == "Journal":
-                        try:
-                            rows = self._db_query("SELECT entry_date, body FROM journal ORDER BY entry_date DESC")
-                            if rows:
-                                j_text = "\n\n---\n\n".join(
-                                    f"DATE: {r[0]}\nCONTENT:\n{r[1]}"
-                                    for r in rows
-                                )
-                                doc_context = "User's complete personal Journal entries:\n\n" + j_text
-                            else:
-                                doc_context = "The user has no journal entries saved yet."
-                        except Exception: pass
-                    elif ctx_val == "Study Notes":
-                        try:
-                            rows = self._db_query("SELECT title, body FROM study_notes ORDER BY id ASC")
-                            if rows:
-                                sn_text = "\n\n---\n\n".join(
-                                    f"TITLE: {r[0]}\nCONTENT:\n{r[1]}"
-                                    for r in rows
-                                )
-                                doc_context = "User's complete Study Notes archive:\n\n" + sn_text
-                            else:
-                                doc_context = "The user has no study notes saved yet."
-                        except Exception: pass
-                    elif ctx_val == "Commentary":
-                        try:
-                            w = getattr(self, "commentary_area", None)
-                            if w is not None:
-                                curr_text = w.get("1.0", tk.END).strip()
-                                if curr_text:
-                                    doc_context = f"Currently loaded Commentary text ({getattr(self, '_commentary_file', 'scratchpad')}):\n\n" + curr_text
-                                else:
-                                    doc_context = "The user has no commentary loaded at the moment."
-                        except Exception: pass
-
                     combined_context = "\n\n".join(
-                        part for part in (planner_context, web_context, doc_context) if part
+                        part for part in (planner_context, web_context) if part
                     )
 
                     reply = brain.ask(content, context=combined_context)
@@ -12830,14 +12591,6 @@ class BookReader:
                 # book is visible under the active zone immediately.
                 self._load_meta(dest)
                 added += 1
-                
-                # As requested: Give the Assistant complete and full access immediately
-                # by opening the newly added book in the Reader so it's ready to be queried.
-                try:
-                    self._load_book(dest)
-                except Exception:
-                    pass
-
             except Exception as e:
                 skipped.append(f"{os.path.basename(src)} ({e})")
         self._refresh_library_list()
@@ -12951,16 +12704,6 @@ class BookReader:
     # COMMENTARIES_DIR). The Library scan above prunes that subfolder,
     # so books and commentaries never mix. A loaded commentary is shown
     # in the middle pane of the right column, read-only.
-
-    def _commentary_context_active(self) -> bool:
-        editor = getattr(self, "commentary_area", None)
-        if getattr(self, "_study_active_tab", None) == "commentary":
-            return True
-        if hasattr(self, "_ftb_action_targets"):
-            for target in self._ftb_action_targets():
-                if target is editor:
-                    return True
-        return False
 
     def open_commentary_picker(self) -> None:
         """Modal picker over the Commentaries/ folder. Add new
@@ -13614,37 +13357,25 @@ class BookReader:
                         break
                     if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
                         try:
-                            # -------------------------------------------------------------
-                            # Microsoft Windows 11 OS Standards requirement:
-                            # Replace the legacy WinMM drivers (winsound) with pure WASAPI.
-                            # sounddevice plays the WAV exactly mimicking the native OS output 
-                            # configured in Windows 11 limits.
                             import wave
-                            import sounddevice as _sd_tts
-                            import numpy as _np_tts
-                            
-                            wasapi_index = None
-                            for idx, api in enumerate(_sd_tts.query_hostapis()):
-                                if "WASAPI" in api.get("name", ""):
-                                    wasapi_index = idx
-                                    break
-                            
+                            import pyaudio
                             with wave.open(wav_path, 'rb') as wf:
-                                fs = wf.getframerate()
-                                audio_bytes = wf.readframes(wf.getnframes())
-                                audio_data = _np_tts.frombuffer(audio_bytes, dtype=_np_tts.int16)
-                                
-                                stream_kwargs = {
-                                    "samplerate": fs,
-                                    "blocking": True
-                                }
-                                if wasapi_index is not None:
-                                    stream_kwargs["hostapi"] = wasapi_index
-                                    
-                                _sd_tts.play(audio_data, **stream_kwargs)
-                            # -------------------------------------------------------------
+                                p = pyaudio.PyAudio()
+                                stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                                                channels=wf.getnchannels(),
+                                                rate=wf.getframerate(),
+                                                output=True)
+                                data = wf.readframes(1024)
+                                while data:
+                                    if not self.is_reading:
+                                        break
+                                    stream.write(data)
+                                    data = wf.readframes(1024)
+                                stream.stop_stream()
+                                stream.close()
+                                p.terminate()
                         except Exception:
-                            pass  # Stop was called (sd.stop() interrupts sleep/blocking)
+                            pass
                 except Exception as e:
                     self._highlight_queue.put(("error", str(e)))
                     return
@@ -13693,9 +13424,6 @@ class BookReader:
                         "Add-Type -AssemblyName System.Speech; "
                         f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-                        # Windows 11 OS System Standard Output Driver Requirement:
-                        # Explicitly bind the TTS engine to the default WASAPI output device endpoint.
-                        "$s.SetOutputToDefaultAudioDevice(); "
                         f"{self._sapi_select_voice_ps()}"
                         "$s.Speak($t)"
                     )
@@ -13795,12 +13523,12 @@ class BookReader:
                 try: self._ps_proc.terminate()
                 except Exception: pass
                 self._ps_proc = None
-            # Piper mode plays via native Windows 11 WASAPI Audio
-            # sd.stop() interrupts the currently-playing wav immediately.
+            # Piper mode plays via winsound — PURGE interrupts the
+            # currently-playing wav. No-op for PowerShell mode.
             if self.tts_mode == "piper":
                 try:
-                    import sounddevice
-                    sounddevice.stop()
+                    import winsound
+                    winsound.PlaySound(None, winsound.SND_PURGE)
                 except Exception:
                     pass
             if self._pump_after_id is not None:
@@ -14014,28 +13742,8 @@ class BookReader:
         stop = self._whisper_stop
         calib, calibrated = [], False
         try:
-            # ---------------------------------------------------------------------
-            # Microsoft Windows 11 OS Standards requirement:
-            # Explicitly force the WASAPI native audio host (low latency, exclusive
-            # or shared) instead of legacy MME or DirectSound.
-            wasapi_index = None
-            for idx, api in enumerate(sd.query_hostapis()):
-                if "WASAPI" in api.get("name", ""):
-                    wasapi_index = idx
-                    break
-            
-            stream_kwargs = {
-                "samplerate": SR,
-                "channels": 1,
-                "dtype": "float32",
-                "blocksize": FRAME,
-                "callback": _cb
-            }
-            if wasapi_index is not None:
-                stream_kwargs["hostapi"] = wasapi_index
-            # ---------------------------------------------------------------------
-
-            with sd.InputStream(**stream_kwargs):
+            with sd.InputStream(samplerate=SR, channels=1, dtype="float32",
+                                blocksize=FRAME, callback=_cb):
                 self._mic_queue.put(("ready",))
                 while stop is not None and not stop.is_set():
                     try:
@@ -14269,7 +13977,6 @@ class BookReader:
                 "Add-Type -AssemblyName System.Speech; "
                 f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-                "$s.SetOutputToDefaultAudioDevice(); "
                 f"{self._sapi_select_voice_ps()}"
                 "$s.Speak($t)"
             )
@@ -18629,28 +18336,12 @@ class BookReader:
         bar = tk.Frame(parent, bg=BG_PANEL, padx=10, pady=6)
         bar.pack(side=tk.TOP, fill=tk.X)
 
-        # ADHD / Accessibility Font and Size Controls
-        font_lbl = tk.Label(bar, text="Font:", bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 9, "bold"))
-        font_lbl.pack(side=tk.LEFT, padx=(0, 4))
-        
-        font_menu = tk.OptionMenu(bar, self.font_var, *self.available_fonts, command=self._on_font_change)
-        _style_optionmenu(font_menu)
-        font_menu.configure(width=16, font=("Segoe UI", 9, "bold"))
-        font_menu.pack(side=tk.LEFT, padx=(0, 10))
-
-        plus_btn = tk.Button(bar, text="A+", command=self.bigger_text,
-                             bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_CYAN,
-                             font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=6, pady=2, cursor="hand2")
-        plus_btn.pack(side=tk.LEFT, padx=(0, 4))
-
-        minus_btn = tk.Button(bar, text="A-", command=self.smaller_text,
-                              bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_CYAN,
-                              font=("Segoe UI", 10, "bold"), relief=tk.FLAT, padx=8, pady=2, cursor="hand2")
-        minus_btn.pack(side=tk.LEFT, padx=(0, 10))
-
-        # (Other elements from the Reader control bar were removed at the user's
-        # request. Underlying StringVars are still set in __init__ so any code
-        # that reads them keeps working.)
+        # (Reader control bar removed — Text/font picker, A−/A+, 🖍
+        #  Highlight selection, Highlight by: unit picker, Color:
+        #  highlight-color picker, and Voice: TTS-voice picker were all
+        #  taken out at the user's request alongside the read-aloud and
+        #  microphone feature removals. Underlying StringVars are still
+        #  set in __init__ so any code that reads them keeps working.)
 
     def _build_tab_reader(self, parent: tk.Frame) -> None:
         """📖 Reader — the book itself: full text on the left, a chapter

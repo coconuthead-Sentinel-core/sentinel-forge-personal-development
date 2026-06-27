@@ -28,8 +28,10 @@ from typing import Optional
 try:
     import ollama
     _OLLAMA_IMPORTED = True
-except Exception:
+    _OLLAMA_ERR = None
+except Exception as e:
     _OLLAMA_IMPORTED = False
+    _OLLAMA_ERR = str(e)
 
 DEFAULT_MODEL = os.environ.get("SENTINEL_AI_MODEL", "llama3.2:3b")
 
@@ -70,7 +72,7 @@ class LocalBrain:
         self.available = False
         self.last_error: Optional[str] = None
         if not _OLLAMA_IMPORTED:
-            self.last_error = "ollama package not installed"
+            self.last_error = f"ollama package not installed: {_OLLAMA_ERR}"
             return
         try:
             self.available = any(
