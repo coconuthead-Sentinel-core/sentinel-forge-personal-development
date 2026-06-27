@@ -34,6 +34,7 @@ from lyceum.db.study_db import (
 from lyceum.metrics import wheel_progress, progress_pct
 from lyceum.text_norm import normalize_for_speech
 from lyceum.dictation_commands import apply_dictation_commands
+from lyceum.platform_dpi import enable_high_dpi_awareness
 import subprocess
 import tempfile
 import threading
@@ -712,16 +713,21 @@ class BookReader:
 
         # Dyslexia-friendly font picker
         installed = set(tkfont.families())
-        # Preference order: OpenDyslexic if present, then research-backed fallbacks
-        # (Comic Sans MS and Verdana are repeatedly cited in dyslexia research)
+        # Preference order: OpenDyslexic first (the user's choice), then the
+        # fonts with the STRONGEST empirical evidence for dyslexic readers.
+        # Rello & Baeza-Yates (ACM ASSETS 2013, "Good Fonts for Dyslexia") found
+        # plain sans-serif faces (Verdana, Arial, Helvetica) and the
+        # legibility-designed Atkinson Hyperlegible give the best reading
+        # performance; Comic Sans is cited but on weaker evidence, so it is
+        # demoted below the sans-serifs rather than dropped.
         preferred = [
             "OpenDyslexic",
             "OpenDyslexic3",
             "Atkinson Hyperlegible",
-            "Comic Sans MS",
             "Verdana",
             "Tahoma",
             "Arial",
+            "Comic Sans MS",
             "Segoe UI",
         ]
         self.available_fonts = [f for f in preferred if f in installed]
@@ -1799,17 +1805,34 @@ class BookReader:
         self.text_area.tag_add(tk.SEL, "1.0", tk.END)
         return "break"
 
+    def _apply_reading_spacing(self) -> None:
+        """Open up line spacing on the reader (~150%) for dyslexic legibility.
+
+        The British Dyslexia Association style guide recommends ~1.5x line
+        spacing to reduce visual crowding. Tk spacing is in pixels, so we scale
+        the extra leading to the current font size. Defensive: a missing widget
+        never breaks a font change.
+        """
+        try:
+            extra = max(2, int(self.font_size * 0.6))     # inter-line leading
+            self.text_area.configure(spacing2=extra, spacing3=max(2, extra // 2))
+        except Exception:
+            pass
+
     def smaller_text(self) -> None:
         self.font_size = max(10, self.font_size - 2)
         self.text_area.configure(font=(self.font_family, self.font_size))
+        self._apply_reading_spacing()
 
     def bigger_text(self) -> None:
         self.font_size = min(36, self.font_size + 2)
         self.text_area.configure(font=(self.font_family, self.font_size))
+        self._apply_reading_spacing()
 
     def _on_font_change(self, value=None) -> None:
         self.font_family = self.font_var.get()
         self.text_area.configure(font=(self.font_family, self.font_size))
+        self._apply_reading_spacing()
         # Apply to notes too so the whole window reads consistently
         try: self.notes_area.configure(font=(self.font_family, 13))
         except Exception: pass
@@ -18382,6 +18405,7 @@ class BookReader:
             undo=True, autoseparators=True, maxundo=-1,
         )
         self.text_area.pack(fill=tk.BOTH, expand=True)
+        self._apply_reading_spacing()   # ~150% line spacing (BDA legibility)
         # Make it clear the user can select text
         self.text_area.bind("<Control-a>", self._select_all)
         # Right-click context menu — gives Cut/Copy/Paste an obvious affordance.
@@ -23474,6 +23498,9 @@ class BookReader:
 
 
 def main() -> None:
+    # Declare High-DPI awareness BEFORE any Tk root exists, so text renders crisp
+    # on scaled displays instead of being bitmap-stretched (legibility goal).
+    enable_high_dpi_awareness()
     # Use TkinterDnD's Tk subclass if available so Toplevel windows
     # (the Library, study workspace) can register as drop targets.
     # Falls back transparently to a plain Tk root if not installed.
