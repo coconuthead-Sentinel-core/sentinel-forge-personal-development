@@ -1,0 +1,42 @@
+name: CI
+
+# Automated quality gate (IEEE SWEBOK: Verification & Validation).
+# Runs on every push and pull request to main so a syntax error or a failing
+# unit test can never silently reach the source of truth.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:        # allow a manual run from the Actions tab
+
+jobs:
+  build-and-test:
+    name: py_compile + unit tests
+    runs-on: windows-latest   # the app targets Windows 11; test on the real platform
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.11", "3.13" ]   # min supported and the tested version
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # The "floor": the whole app must at least parse. Guards against the class
+      # of syntax bug fixed in commit d00ef47 (for-else).
+      - name: Syntax check (py_compile)
+        run: |
+          python -m py_compile sentinel_personal_development.py
+          python -m py_compile ai_brain.py
+
+      # The "ceiling": the pure functional core (lyceum/) must stay green. These
+      # tests import no Tkinter and touch no real database, so they run headless.
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v

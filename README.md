@@ -36,9 +36,9 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-24 unit tests cover the progress kernels, database atomicity (commit + rollback),
-and the speech normalizer — all logic kept free of Tkinter so it is testable
-without launching the GUI.
+34 unit tests cover the progress kernels, database atomicity (commit + rollback),
+the speech normalizer, and the hands-free dictation-command parser — all logic
+kept free of Tkinter so it is testable without launching the GUI.
 
 ---
 
@@ -276,10 +276,10 @@ cd sentinel-forge-personal-development
 py -3 -m pip install -r requirements.txt
 
 # 3. Run it
-py -3 book_reader.py
+py -3 sentinel_personal_development.py
 ```
 
-Or double-click **`run_book_reader.bat`** for a no-console launch.
+Or double-click **`run_sentinel.bat`** for a no-console launch.
 
 To install a Desktop shortcut:
 ```powershell
@@ -357,9 +357,9 @@ The folder where these land defaults to
 
 ```
 .
-├── book_reader.py                 ← the entire desktop app (single file)
-├── run_book_reader.bat            ← no-console launcher
-├── run_book_reader_debug.bat      ← console launcher for debugging
+├── sentinel_personal_development.py ← the entire desktop app (single file)
+├── run_sentinel.bat               ← no-console launcher
+├── run_sentinel_debug.bat         ← console launcher for debugging
 ├── requirements.txt
 ├── Sentinel-Forge.spec            ← PyInstaller spec for one-folder build
 ├── sentinel.ico                   ← app icon
