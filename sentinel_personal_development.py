@@ -19769,6 +19769,132 @@ class BookReader:
             s.configure(command=_recompute)
         _recompute()
 
+        # ---- Honest progress + trend, computed from your saved snapshots -----
+        # Baseline = your FIRST snapshot's roundness (avg of the 7 spokes); "now"
+        # = your LATEST snapshot's roundness; target = how round you're aiming
+        # for. Progress = (now - baseline)/(target - baseline) — the same cold
+        # formula the Goals panel uses. No encouragement, just where you land.
+        _st0 = self._load_handoff_state() or {}
+        try:
+            _wheel_target_init = int(_st0.get("wheel_target", 8))
+        except (TypeError, ValueError):
+            _wheel_target_init = 8
+        _wheel_target_init = max(1, min(10, _wheel_target_init))
+
+        def _snapshot_avgs():
+            """[(date, avg_of_7_spokes), …] oldest→newest from saved snapshots."""
+            cols = ",".join(k for k, _ in self._WHEEL_AREAS)
+            try:
+                rows = self._db_query(
+                    f"SELECT snapshot_date,{cols} FROM wheel_of_life "
+                    "ORDER BY snapshot_date, id")
+            except Exception:
+                rows = []
+            out = []
+            for r in rows:
+                spokes = [int(v) for v in r[1:]]
+                if spokes:
+                    out.append((r[0], sum(spokes) / len(spokes)))
+            return out
+
+        tgt_row = tk.Frame(body, bg=BG_DARK)
+        tgt_row.pack(fill=tk.X, pady=(10, 0))
+        tk.Label(tgt_row, text="🎯 Wheel target (1-10)", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        target_s = tk.Scale(tgt_row, from_=1, to=10, orient=tk.HORIZONTAL,
+                            bg=BG_DARK, fg=FG_TEXT, troughcolor=BG_INPUT,
+                            highlightthickness=0, length=140, font=("Segoe UI", 9),
+                            activebackground=ACCENT_GREEN)
+        target_s.set(_wheel_target_init)
+        target_s.pack(side=tk.LEFT, padx=(8, 0))
+
+        prog_var = tk.StringVar(value="")
+        tk.Label(body, textvariable=prog_var, bg=BG_DARK, fg=ACCENT_GREEN,
+                 wraplength=520, justify=tk.LEFT,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(6, 0))
+
+        tk.Label(body, text="Roundness over time (your snapshots)", bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9, "bold")).pack(anchor="w",
+                                                                 pady=(8, 1))
+        graph_canvas = tk.Canvas(body, bg=BG_INPUT, height=110,
+                                 highlightthickness=0)
+        graph_canvas.pack(fill=tk.X)
+
+        def _draw_wheel_graph(data=None, t=None):
+            if data is None:
+                data = _snapshot_avgs()
+            if t is None:
+                t = int(target_s.get())
+            c = graph_canvas
+            c.delete("all")
+            W = c.winfo_width() or 360
+            H = c.winfo_height() or 110
+            if W < 20:
+                W = 360
+            if H < 20:
+                H = 110
+            pad = 20
+            x0, y0, x1, y1 = pad, 10, W - pad, H - 16
+
+            def _yv(v):
+                v = max(1, min(10, v))
+                return y1 - (v - 1) / 9.0 * (y1 - y0)
+            if data:
+                base = data[0][1]
+                c.create_line(x0, _yv(base), x1, _yv(base), fill="#64748b",
+                              dash=(4, 3))
+                c.create_text(x1, _yv(base), text=f"base {base:.1f}",
+                              fill="#94a3b8", anchor="se", font=("Segoe UI", 7))
+            c.create_line(x0, _yv(t), x1, _yv(t), fill=ACCENT_GREEN, dash=(4, 3))
+            c.create_text(x1, _yv(t), text=f"target {t}", fill=ACCENT_GREEN,
+                          anchor="ne", font=("Segoe UI", 7))
+            if not data:
+                c.create_text(W // 2, H // 2,
+                              text="No snapshots yet — save one to start the graph.",
+                              fill=FG_MUTED, font=("Segoe UI", 8, "italic"))
+                return
+            n = len(data)
+            pts = []
+            for i, (_d, avg) in enumerate(data):
+                x = x0 if n == 1 else x0 + i / (n - 1) * (x1 - x0)
+                pts.append((x, _yv(avg)))
+            if len(pts) >= 2:
+                c.create_line(*[k for p in pts for k in p], fill=ACCENT_CYAN,
+                              width=2)
+            for (x, y) in pts:
+                c.create_oval(x - 3, y - 3, x + 3, y + 3, fill=ACCENT_CYAN,
+                              outline="")
+
+        def _refresh_progress(*_):
+            data = _snapshot_avgs()
+            t = int(target_s.get())
+            if not data:
+                prog_var.set("No snapshots yet — save one to start tracking.")
+            else:
+                base = data[0][1]
+                now = data[-1][1]
+                if t > base:
+                    pct = max(0, min(100, round(100 * (now - base) / (t - base))))
+                else:
+                    pct = 100 if now >= t else 0
+                arrow = "▲" if now > base else ("▼" if now < base else "■")
+                prog_var.set(
+                    f"Baseline {base:.1f} → now {now:.1f} {arrow}  "
+                    f"(target {t}) — {pct}% of the way · {len(data)} snapshot(s)")
+            _draw_wheel_graph(data, t)
+
+        def _on_target(*_):
+            stt = self._load_handoff_state() or {}
+            stt["wheel_target"] = int(target_s.get())
+            try:
+                self._save_handoff_state(stt)
+            except Exception:
+                pass
+            _refresh_progress()
+        target_s.configure(command=_on_target)
+        graph_canvas.bind("<Configure>", lambda _e: _draw_wheel_graph())
+        _refresh_progress()
+
         def _save():
             now = datetime.now().isoformat()
             today = date.today().strftime("%Y-%m-%d")
@@ -19782,10 +19908,16 @@ class BookReader:
                     (today,) + vals + (now,))
                 info.set(f"Saved snapshot for {today}.")
                 self.set_status("Wheel of Life snapshot saved.")
+                _refresh_progress()      # fold the new point into the trend
             except Exception as e:
                 messagebox.showerror("Could not save", str(e))
 
-        # (💾 Save snapshot removed — Save widgets were taken out.)
+        # 📸 Save snapshot — the Wheel's "check-in". Each save is a dated point
+        # that feeds the roundness trend + progress readout above.
+        tk.Button(foot, text="📸 Save snapshot", command=_save,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(12, 0))
         if goto_goals is not None:
             tk.Button(foot, text="🎯 Set goals on weak areas",
                       command=goto_goals,
