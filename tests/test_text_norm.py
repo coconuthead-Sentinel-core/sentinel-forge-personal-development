@@ -44,5 +44,29 @@ class NormalizeForSpeechTest(unittest.TestCase):
         self.assertEqual(normalize_for_speech(None), "")
 
 
+class YearReadingTest(unittest.TestCase):
+    def test_1900s_year(self):
+        self.assertEqual(normalize_for_speech("1999"), "nineteen ninety-nine")
+
+    def test_two_thousands(self):
+        self.assertEqual(normalize_for_speech("2007"), "two thousand seven")
+        self.assertEqual(normalize_for_speech("2000"), "two thousand")
+
+    def test_twenty_tens(self):
+        self.assertEqual(normalize_for_speech("2015"), "twenty fifteen")
+
+    def test_oh_years_and_centuries(self):
+        self.assertEqual(normalize_for_speech("1905"), "nineteen oh five")
+        self.assertEqual(normalize_for_speech("1900"), "nineteen hundred")
+
+    def test_year_in_a_sentence(self):
+        self.assertEqual(normalize_for_speech("Born in 1984."),
+                         "Born in nineteen eighty-four.")
+
+    def test_money_year_not_confused(self):
+        # Currency is handled before the year rule, so $2000 stays dollars.
+        self.assertEqual(normalize_for_speech("$2000"), "two thousand dollars")
+
+
 if __name__ == "__main__":
     unittest.main()

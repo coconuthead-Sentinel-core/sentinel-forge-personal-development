@@ -34,6 +34,7 @@ from lyceum.db.study_db import (
 from lyceum.metrics import wheel_progress, progress_pct
 from lyceum.text_norm import normalize_for_speech
 from lyceum.dictation_commands import apply_dictation_commands
+from lyceum.dictation_guard import dedup_punctuation
 from lyceum.platform_dpi import enable_high_dpi_awareness
 import subprocess
 import tempfile
@@ -14301,6 +14302,9 @@ class BookReader:
         # Hands-free accessibility: turn spoken "period"/"new line"/"cap …"
         # into the characters they name (pure, defensive — see lyceum module).
         text = apply_dictation_commands(text)
+        # Resolve collisions between Whisper's own auto-punctuation and the
+        # marks just inserted (e.g. "done. ." -> "done."); preserves numbers.
+        text = dedup_punctuation(text)
         target = getattr(self, "_mic_active_target", None) or self.notes_area
         # Entry widgets (e.g. the Planner day boxes) take plain end-insertion.
         if isinstance(target, (tk.Entry, ttk.Entry)):

@@ -99,6 +99,20 @@ def _money(match: re.Match) -> str:
     return dollars
 
 
+def _year_to_words(y: int) -> str:
+    """Read a 4-digit calendar year naturally: 1999 -> 'nineteen ninety-nine',
+    2007 -> 'two thousand seven', 2015 -> 'twenty fifteen', 1900 -> 'nineteen
+    hundred', 1905 -> 'nineteen oh five', 2000 -> 'two thousand'."""
+    if 2000 <= y <= 2009:
+        return "two thousand" if y == 2000 else "two thousand " + _int_to_words(y - 2000)
+    hi, lo = y // 100, y % 100
+    if lo == 0:
+        return _int_to_words(hi) + " hundred"
+    if lo < 10:
+        return _int_to_words(hi) + " oh " + _ONES[lo]
+    return _int_to_words(hi) + " " + _int_to_words(lo)
+
+
 def normalize_for_speech(text: str) -> str:
     """Expand numbers/currency/percents/ordinals/abbreviations for TTS.
 
@@ -119,6 +133,11 @@ def normalize_for_speech(text: str) -> str:
         # 1st / 2nd / 21st  ->  ordinals
         s = re.sub(r"\b(\d+)(?:st|nd|rd|th)\b",
                    lambda m: _ordinalize(_int_to_words(int(m.group(1)))), s)
+        # Four-digit calendar years read naturally (1999 -> "nineteen ninety-
+        # nine", not "one thousand nine hundred ninety-nine"). Bounded 1000-2099
+        # to limit false positives — a standard TTS normalization trade-off.
+        s = re.sub(r"\b(1\d{3}|20\d{2})\b",
+                   lambda m: _year_to_words(int(m.group(1))), s)
         # remaining bare numbers / decimals
         s = re.sub(r"\b\d[\d,]*(?:\.\d+)?\b",
                    lambda m: _decimal_to_words(m.group(0)), s)
