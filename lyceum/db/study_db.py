@@ -6,9 +6,17 @@ import os
 import sqlite3
 import sys
 
-# User content (highlights, matrix, prompts, …) lives here; OneDrive backs it up.
+from lyceum.db import db_location
+
+# STUDY_DIR holds user sidecar content (excerpts, session.json, HANDOFF, Workflow)
+# and is intentionally inside OneDrive — those are plain files the companion
+# platform also reads, and they sync safely.
 STUDY_DIR = os.path.expanduser(r"~\OneDrive\Documents\BookReader")
-STUDY_DB = os.path.join(STUDY_DIR, "study.db")
+# The LIVE database, however, is opened from a LOCAL (non-synced) directory to
+# avoid OneDrive's background daemon racing SQLite's file locks (see db_location).
+# Older installs kept it at STUDY_DIR/study.db; that file is migrated once.
+_LEGACY_DB = os.path.join(STUDY_DIR, "study.db")
+STUDY_DB = db_location.live_db_path()
 
 STUDY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS highlights (
@@ -622,10 +630,17 @@ CREATE INDEX IF NOT EXISTS idx_goal_checkins ON goal_checkins(goal_id, logged_at
 def init_study_db() -> None:
     """Create the study database and its tables if they don't exist."""
     try:
-        os.makedirs(STUDY_DIR, exist_ok=True)
+        os.makedirs(STUDY_DIR, exist_ok=True)          # sidecars (OneDrive)
     except OSError as e:
         print(f"[lyceum.db] Could not create {STUDY_DIR}: {e}", file=sys.stderr)
+    try:
+        os.makedirs(db_location.live_db_dir(), exist_ok=True)   # live DB (local)
+    except OSError as e:
+        print(f"[lyceum.db] Could not create live DB dir: {e}", file=sys.stderr)
         return
+    # One-time, non-destructive migration of any older OneDrive-resident DB to the
+    # new local location. MUST run before connect() creates an empty live file.
+    db_location.migrate_legacy_if_needed(STUDY_DB, _LEGACY_DB)
     try:
         con = connect()
         con.executescript(STUDY_SCHEMA)
@@ -645,6 +660,13 @@ def init_study_db() -> None:
         con.close()
     except sqlite3.Error as e:
         print(f"[lyceum.db] DB init error: {e}", file=sys.stderr)
+    # Best-effort: drop a consistent, frozen backup into the synced folder so the
+    # user keeps an OneDrive copy without the live file ever being sync-contended.
+    try:
+        db_location.snapshot(STUDY_DB,
+                             os.path.join(db_location.backup_dir(STUDY_DIR), "study.db"))
+    except Exception:
+        pass
 
 
 def connect() -> sqlite3.Connection:
