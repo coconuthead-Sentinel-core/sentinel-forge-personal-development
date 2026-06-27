@@ -111,12 +111,16 @@ A professor's release checklist for *this* project (Definition of Done):
 
 1. [ ] Requirements / feature inventory written, with acceptance criteria.
 2. [x] Methodology declared (this document).
-3. [ ] Test suite expanded to cover the core logic of each major module; QA gate
-       defined ("all tests green + manual smoke test of every window").
-4. [ ] The 3 untestable functions (CC>50) decomposed to ≤10.
-5. [ ] God-Object refactor *plan* documented (incremental Extract Class).
+3. [~] Test suite started — **24 unit tests** (progress kernels, DB atomicity,
+       speech normalizer). QA gate still informal (manual smoke test of windows).
+4. [~] Worst-case *logic* extracted to tested pure functions (shared progress
+       kernel); full UI-level decomposition of the CC>50 builders deferred to
+       visual QA (cannot screenshot `pythonw` headlessly).
+5. [x] God-Object reduction **underway** via incremental Extract-Module:
+       `lyceum/db`, `lyceum/metrics`, `lyceum/text_norm` now hold logic pulled
+       out of the 590-method class.
 6. [ ] Version tag + CHANGELOG; standalone build moved from "Planned" → built.
-7. [x] User documentation (README present).
+7. [x] User documentation (README updated with architecture + tests).
 8. [ ] Stakeholder acceptance review (sign-off against the written criteria).
 
 ---
@@ -136,3 +140,19 @@ area. Standard practice:
 > One-line answer to "are we still writing new code, or refactoring, or
 > finishing?": **Finish.** Freeze features, refactor + test + document to the
 > exit criteria, then hand a release candidate to the stakeholder.
+
+---
+
+## 9. Progress log
+
+**2026-06-27 — stabilization increment + one approved feature.**
+- ACID atomicity: `transaction()` primitive; four parent/child deletes made
+  all-or-nothing (criterion #1 of the lab).
+- Functional-core extraction: `lyceum/metrics.py` (Wheel + Goals progress) and
+  `lyceum/text_norm.py`, each with unit tests — 24 tests total, all passing.
+- Wheel of Life: honest baseline → target progress + roundness trend graph.
+- **Stakeholder-approved feature over the freeze:** read-aloud **text
+  normalization** (numbers/currency/ordinals/abbreviations) applied at a
+  highlight-safe seam so follow-along stays in sync.
+- Synced as mirror copies across GitHub (`main`), the OneDrive clone, and the
+  live install; `dashboard-work` merged and removed.

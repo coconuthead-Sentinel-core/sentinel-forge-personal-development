@@ -5,10 +5,40 @@
 > capture by Whisper voice dictation, and run focused sessions with goals,
 > accountability tracking, and a zone-tagged Library.**
 
-![Status](https://img.shields.io/badge/status-MVP-success)
+![Status](https://img.shields.io/badge/status-v0.9%20release--candidate-success)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)
+
+---
+
+## Engineering & SDLC status
+
+This project follows an **iterative / incremental** software life cycle
+(single-developer **Kanban**), documented in
+[`docs/SDLC_STATUS.md`](docs/SDLC_STATUS.md) against ISO/IEC/IEEE 12207 and the
+IEEE SWEBOK. Current working version: **v0.9 (release-candidate track)**.
+
+**Architecture — functional core / imperative shell.** The Tkinter app
+(`sentinel_personal_development.py`) is the UI shell; reusable, UI-free logic
+lives in the `lyceum/` package and is unit-tested in isolation:
+
+| Module | Responsibility |
+| --- | --- |
+| `lyceum/db/study_db.py` | SQLite schema, queries, and an atomic `transaction()` primitive (ACID) |
+| `lyceum/metrics.py` | Pure progress math (`progress_pct`, `wheel_progress`, `goal_progress`) |
+| `lyceum/text_norm.py` | `normalize_for_speech()` — expands numbers/currency/ordinals/abbreviations before TTS |
+| `lyceum/reminders.py` | Windows scheduled-task appointment reminders |
+
+**Tests** (run from the repo root):
+
+```
+python -m unittest discover -s tests
+```
+
+24 unit tests cover the progress kernels, database atomicity (commit + rollback),
+and the speech normalizer — all logic kept free of Tkinter so it is testable
+without launching the GUI.
 
 ---
 
