@@ -55,9 +55,25 @@ def extract_text(path: str) -> str:
     return ""
 
 
-def cache_path() -> str:
+def cache_dir() -> str:
+    """Where the library index cache lives. Resolution order:
+      1. SENTINEL_FORGE_INDEX_DIR (explicit override),
+      2. the roomy E: offload drive if present (keeps the small C: SSD clear),
+      3. %LOCALAPPDATA% fallback.
+    Because the 85 MB cache shouldn't sit on a near-full C:, it auto-moves to E:
+    as soon as E: is connected.
+    """
+    override = os.environ.get("SENTINEL_FORGE_INDEX_DIR")
+    if override:
+        return override
+    if os.path.isdir("E:\\"):
+        return os.path.join("E:\\", "SentinelForge")
     base = os.environ.get("LOCALAPPDATA") or os.path.expanduser(r"~\AppData\Local")
-    return os.path.join(base, "SentinelForge", "library_index.json")
+    return os.path.join(base, "SentinelForge")
+
+
+def cache_path() -> str:
+    return os.path.join(cache_dir(), "library_index.json")
 
 
 def build_index(books_dir: str, path: str | None = None, max_files: int = 4000):

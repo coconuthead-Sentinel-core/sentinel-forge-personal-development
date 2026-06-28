@@ -46,6 +46,24 @@ class BuildIndexTest(unittest.TestCase):
         self.assertEqual(sorted(n for n, _ in idx2), names)
 
 
+class CachePathTest(unittest.TestCase):
+    def test_env_override_wins(self):
+        old = os.environ.get("SENTINEL_FORGE_INDEX_DIR")
+        os.environ["SENTINEL_FORGE_INDEX_DIR"] = r"X:\custom"
+        try:
+            self.assertEqual(doc_index.cache_dir(), r"X:\custom")
+            self.assertEqual(doc_index.cache_path(),
+                             os.path.join(r"X:\custom", "library_index.json"))
+        finally:
+            if old is None:
+                os.environ.pop("SENTINEL_FORGE_INDEX_DIR", None)
+            else:
+                os.environ["SENTINEL_FORGE_INDEX_DIR"] = old
+
+    def test_default_is_a_real_path(self):
+        self.assertTrue(doc_index.cache_path().endswith("library_index.json"))
+
+
 class RetrieveFromIndexTest(unittest.TestCase):
     def setUp(self):
         self.docs = [
