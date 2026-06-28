@@ -3244,6 +3244,15 @@ class BookReader:
         self.open_study_workspace()
         self._show_study_tab("ai_chat")
 
+    def _ai_library_context(self, query: str, limit: int = 5) -> str:
+        """Local RAG: relevant excerpts from the user's Library + study.db, fed
+        to the assistant as grounding context. Read-only; "" on any failure."""
+        try:
+            from lyceum.local_context import retrieve_context
+            return retrieve_context(query, LIBRARY_DIR, limit=limit)
+        except Exception:
+            return ""
+
     def _ai_web_search_context(self, query: str, limit: int = 5) -> str:
         """Return compact web-search context for the local assistant.
 
@@ -3442,11 +3451,16 @@ class BookReader:
                         if planner_lines:
                             planner_context = "User's current day planner entries:\n" + "\n".join(planner_lines)
 
+                    # Ground the assistant in the user's OWN Library + study data
+                    # (local RAG) so it has context during a study session.
+                    local_context = self._ai_library_context(content)
+
                     web_context = ""
                     if use_web:
                         web_context = self._ai_web_search_context(web_query)
                     combined_context = "\n\n".join(
-                        part for part in (planner_context, web_context) if part
+                        part for part in
+                        (planner_context, local_context, web_context) if part
                     )
 
                     reply = brain.ask(content, context=combined_context)
