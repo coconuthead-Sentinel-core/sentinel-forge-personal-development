@@ -21,3 +21,11 @@ beautifulsoup4>=4.12.0     # .html / .htm books
 tkinterdnd2>=0.4.0         # drag-and-drop files into the Library/Study windows
 send2trash>=1.8.0          # recoverable deletes from the Library
 pyspellchecker>=0.8.0      # offline spelling suggestions for the Voice Memory Spelling Helper
+
+# --- Optional: onboard-assistant voice & accessibility ---------------------
+# All guarded by try/except — the app runs fine without them; each only enables
+# its own feature. The local AI itself needs Ollama installed separately.
+pywin32>=306               # Windows-native SAPI5 TTS for the assistant (lyceum/sapi_tts)
+vosk>=0.3.45               # low-latency offline voice commands (lyceum/stt_command; also needs a Vosk model)
+# NVDA screen-reader bridge (lyceum/accessibility_bridge) needs no pip package —
+# it loads the user's already-installed NVDA controller DLL via ctypes, if present.

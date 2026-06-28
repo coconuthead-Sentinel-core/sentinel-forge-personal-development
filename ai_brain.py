@@ -135,6 +135,46 @@ class LocalBrain:
             temperature=0.3,   # low temp: faithful, not creative
         )
 
+    def stream(self, prompt: str, system: Optional[str] = None,
+               context: str = "", temperature: float = 0.5):
+        """Yield the model's reply in text chunks as they arrive.
+
+        Enables low-latency speech: a caller can start speaking each sentence as
+        soon as it streams in, instead of waiting for the whole reply. Yields
+        nothing if the backend is unavailable, and stops cleanly on any error.
+        """
+        if not self.available:
+            return
+        sys_text = system or DEFAULT_SYSTEM
+        if context:
+            sys_text += f"\n\nContext:\n{context}"
+        try:
+            for part in ollama.chat(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": sys_text},
+                    {"role": "user", "content": prompt},
+                ],
+                keep_alive=self.keep_alive,
+                stream=True,
+                options={
+                    "temperature": temperature,
+                    "num_ctx": self.num_ctx,
+                    "num_predict": 512,
+                },
+            ):
+                # Tolerant of dict- or object-shaped chunks across ollama versions.
+                try:
+                    chunk = part["message"]["content"]
+                except (KeyError, TypeError):
+                    msg = getattr(part, "message", None)
+                    chunk = getattr(msg, "content", "") if msg else ""
+                if chunk:
+                    yield chunk
+        except Exception as e:
+            self.last_error = f"{type(e).__name__}: {e}"
+            return
+
 
 # Shared lazy singleton so the whole app talks to one warm model instance.
 _BRAIN: Optional[LocalBrain] = None
