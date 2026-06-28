@@ -37,6 +37,21 @@ class DateWindowTest(unittest.TestCase):
         self.assertEqual(util.period_start("All time", today), date(1970, 1, 1))
 
 
+class ParseClockTimeTest(unittest.TestCase):
+    def test_various_formats(self):
+        self.assertEqual(util.parse_clock_time("14:30"), "14:30")
+        self.assertEqual(util.parse_clock_time("2:30 PM"), "14:30")
+        self.assertEqual(util.parse_clock_time("2:30pm"), "14:30")
+        self.assertEqual(util.parse_clock_time("2 PM"), "14:00")
+        self.assertEqual(util.parse_clock_time("2pm"), "14:00")
+        self.assertEqual(util.parse_clock_time("14"), "14:00")
+
+    def test_invalid_returns_none(self):
+        self.assertIsNone(util.parse_clock_time("not a time"))
+        self.assertIsNone(util.parse_clock_time(""))
+        self.assertIsNone(util.parse_clock_time(None))
+
+
 class PertScheduleTest(unittest.TestCase):
     def test_schedules_backward(self):
         target = date(2026, 1, 29)            # 4 weeks out

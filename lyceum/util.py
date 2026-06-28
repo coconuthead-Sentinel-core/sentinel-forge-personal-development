@@ -6,7 +6,7 @@ the whole point of lifting it out of the 590-method GUI class.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 def zone_for_load(load) -> str:
@@ -43,6 +43,18 @@ def period_start(period, today):
     if period == "This year":
         return today.replace(month=1, day=1)
     return date(1970, 1, 1)   # All time
+
+
+def parse_clock_time(s):
+    """Lenient clock-time -> 'HH:MM' (24h), or None. Accepts '14:30', '2:30 PM',
+    '2:30pm', '2 PM', '2pm', '14'."""
+    s = (s or "").strip().upper().replace(".", "")
+    for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%H:%M")
+        except ValueError:
+            continue
+    return None
 
 
 def pert_schedule(target_date, steps):

@@ -39,6 +39,7 @@ from lyceum.platform_dpi import enable_high_dpi_awareness
 from lyceum import finance as _finance
 from lyceum import util as _util
 from lyceum import goals as _goals
+from lyceum import ideas as _ideas
 import subprocess
 import tempfile
 import threading
@@ -20641,13 +20642,8 @@ class BookReader:
                     "FROM master_tasks WHERE status!='done'")
             except Exception:
                 rows = []
-            rows = sorted(rows, key=lambda r: (
-                0 if r[5] == "open" else 1,      # open before scheduled
-                0 if r[3] else 1,                # big three first
-                prank.get(r[2], 9),              # A..E, untagged last
-                r[0]))
-            open_a = sum(1 for r in rows if r[2] == "A" and r[5] == "open")
-            big_open = sum(1 for r in rows if r[3] and r[5] == "open")
+            rows = _ideas.order_tasks(rows, prank)
+            open_a, big_open = _ideas.banner_counts(rows)
             banner.set(f"🔴 {open_a} 'A' task(s) open — do those first."
                        if open_a else "")
             if not rows:
@@ -20659,15 +20655,7 @@ class BookReader:
                 _row(_id, _t, pri, bt, sd, stt, big_open)
 
         def _parse_time(s):
-            """Lenient clock-time parser → 'HH:MM' (24h), or None.
-            Accepts '14:30', '2:30 PM', '2:30pm', '2 PM', '2pm', '14'."""
-            s = (s or "").strip().upper().replace(".", "")
-            for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p", "%I %p", "%I%p", "%H"):
-                try:
-                    return datetime.strptime(s, fmt).strftime("%H:%M")
-                except ValueError:
-                    continue
-            return None
+            return _util.parse_clock_time(s)
 
         def _intention():
             """Appointment / implementation-intention builder (James Clear):
