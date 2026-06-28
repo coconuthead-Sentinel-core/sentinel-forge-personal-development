@@ -37,6 +37,7 @@ from lyceum.dictation_commands import apply_dictation_commands
 from lyceum.dictation_guard import dedup_punctuation
 from lyceum.platform_dpi import enable_high_dpi_awareness
 from lyceum import finance as _finance
+from lyceum import util as _util
 import subprocess
 import tempfile
 import threading
@@ -2913,11 +2914,7 @@ class BookReader:
     # which the FastAPI platform reads. Persisted to STUDY_DIR/session.json.
     @staticmethod
     def _zone_for_load(load: int) -> str:
-        if load >= 7:
-            return "GREEN"
-        if load >= 4:
-            return "YELLOW"
-        return "RED"
+        return _util.zone_for_load(load)
 
     def _load_session_state(self) -> None:
         """Populate self._cognitive_load from the session JSON. Default 7
@@ -3224,8 +3221,7 @@ class BookReader:
 
     @staticmethod
     def _fmt_hm(minutes: int) -> str:
-        minutes = max(0, int(minutes)); h, m = divmod(minutes, 60)
-        return f"{h}h {m}m" if h else f"{m}m"
+        return _util.fmt_hm(minutes)
 
     def _time_log_week_totals(self) -> list[tuple[str, int]]:
         """Minutes by category for the current week (Monday → today)."""
@@ -4065,21 +4061,11 @@ class BookReader:
     # ---- Pay Yourself First (Clason/Bach wealth automator) -------------
     @staticmethod
     def _money_parse(s):
-        try:
-            s = str(s).replace("$", "").replace(",", "").strip()
-            if not s:
-                return None
-            v = float(s)
-            return v if v >= 0 else None
-        except (ValueError, TypeError):
-            return None
+        return _finance.money_parse(s)
 
     @staticmethod
     def _money_fmt(x):
-        try:
-            return "${:,.2f}".format(float(x))
-        except (ValueError, TypeError):
-            return "$0.00"
+        return _finance.money_fmt(x)
 
     def _fi_settings(self) -> tuple[float, float]:
         """(save_pct, opening_balance) — persisted in HANDOFF_STATE."""
@@ -4479,26 +4465,7 @@ class BookReader:
 
     @staticmethod
     def _core_four_eval(available: float, amounts: list) -> tuple:
-        """Pure budget logic. amounts are in survival priority order. Returns
-        (statuses, total, secured, delta): statuses[i] in 'green'/'red'/
-        'neutral'; secured = the cash covers all four; delta = available-total
-        (positive = surplus, negative = short)."""
-        total = sum(a for a in amounts if a > 0)
-        running = float(available)
-        short_hit = False
-        statuses = []
-        for a in amounts:
-            if a <= 0:
-                statuses.append("neutral")
-                continue
-            if not short_hit and running + 0.001 >= a:
-                running -= a
-                statuses.append("green")
-            else:
-                short_hit = True
-                statuses.append("red")
-        secured = total > 0 and available + 0.001 >= total
-        return statuses, total, secured, available - total
+        return _finance.core_four_eval(available, amounts)
 
     def open_core_four(self) -> None:
         """Defense-mode budget: just the four survival numbers — Rent,
@@ -6695,8 +6662,7 @@ class BookReader:
     # ---- Zero-Based Financial Auditor (recurring-expense cull) ---------
     @staticmethod
     def _subs_monthly(amount, cycle):
-        a = float(amount or 0)
-        return a / 12.0 if cycle == "yearly" else a
+        return _finance.subs_monthly(amount, cycle)
 
     def _subs_all(self, active_only=False):
         q = ("SELECT id,name,amount,cycle,active,last_reviewed "
@@ -8209,11 +8175,7 @@ class BookReader:
     # ---- Habit Stacker & Two-Minute Downscaler (James Clear) ----------
     @staticmethod
     def _habit_formula(cue, new):
-        cue = (cue or "").strip().rstrip(".")
-        new = (new or "").strip().rstrip(".")
-        if not cue and not new:
-            return ""
-        return f"After I {cue or '…'}, I will {new or '…'}."
+        return _util.habit_formula(cue, new)
 
     def _habits_all(self):
         try:
@@ -8740,21 +8702,7 @@ class BookReader:
     # ---- PERT "Back-From-The-Future" planner (reverse scheduling) ------
     @staticmethod
     def _pert_schedule(target_date, steps):
-        """steps: list of (name, weeks) in chronological order (first..last).
-        Schedules BACKWARD from target_date. Returns chronological list of
-        {name, weeks, start, end}."""
-        end = target_date
-        out = []
-        for name, weeks in reversed(steps):
-            try:
-                wk = float(weeks)
-            except (TypeError, ValueError):
-                wk = 0.0
-            start = end - timedelta(weeks=wk)
-            out.append({"name": name, "weeks": wk, "start": start, "end": end})
-            end = start
-        out.reverse()
-        return out
+        return _util.pert_schedule(target_date, steps)
 
     def _pert_plans(self):
         try:
@@ -9619,15 +9567,7 @@ class BookReader:
 
     @staticmethod
     def _paw_status(actual, expected):
-        """('PAW'|'AAW'|'UAW', ratio) — PAW >= 2x expected, UAW <= half."""
-        if expected <= 0:
-            return None
-        ratio = float(actual) / float(expected)
-        if ratio >= 2.0:
-            return ("PAW", ratio)
-        if ratio <= 0.5:
-            return ("UAW", ratio)
-        return ("AAW", ratio)
+        return _finance.paw_status(actual, expected)
 
     def _draw_wealth_gauge(self, canvas, actual, expected):
         canvas.delete("all")
@@ -9836,13 +9776,7 @@ class BookReader:
 
     @staticmethod
     def _period_start(period, today):
-        if period == "This month":
-            return today.replace(day=1)
-        if period == "Last 30 days":
-            return today - timedelta(days=30)
-        if period == "This year":
-            return today.replace(month=1, day=1)
-        return date(1970, 1, 1)   # All time
+        return _util.period_start(period, today)
 
     def _expense_add(self, spend_date, amount, category, note):
         try:
