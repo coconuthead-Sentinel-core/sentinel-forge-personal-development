@@ -40,3 +40,7 @@ HANDOFF_STATE.json
 # Build outputs
 *.exe.staging/
 Sentinel-Forge/
+
+# coverage.py
+.coverage
+htmlcov/
