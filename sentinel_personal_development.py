@@ -40,6 +40,7 @@ from lyceum import finance as _finance
 from lyceum import util as _util
 from lyceum import goals as _goals
 from lyceum import ideas as _ideas
+from lyceum import reading as _reading
 import subprocess
 import tempfile
 import threading
@@ -1659,20 +1660,12 @@ class BookReader:
         scope_val = scope.get() if scope else "Entire text"
         unit = scope_val if scope_val in ("Word", "Sentence") else "Paragraph"
         
-        # We manually compute spans against the target widget so it never throws TclError
-        import re
-        if unit == "Word":
-            pattern = re.compile(r"\S+")
-        elif unit == "Paragraph":
-            pattern = re.compile(r"[^\n]+(?:\n[^\n]+)*")
-        else:  # Sentence
-            pattern = re.compile(r"\S[^\n]*?(?:[.!?]+[\"')\]]?(?=\s|$)|(?=\n)|$)", re.MULTILINE)
+        # Pure span computation (lyceum.reading); widget index-mapping stays here
+        # so it can never throw TclError on the worker thread.
+        spans = _reading.read_spans(text, unit)
             
         chunks = []
-        for m in pattern.finditer(text):
-            s, e = m.span()
-            if not text[s:e].strip():
-                continue
+        for s, e in spans:
             try:
                 tk_s = target.index(f"{speech_start} + {s} chars")
                 tk_e = target.index(f"{speech_start} + {e} chars")
