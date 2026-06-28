@@ -110,6 +110,42 @@ def retrieve_from_text(query: str, text: str, limit: int = 4,
     return "\n…\n".join(out)
 
 
+def retrieve_from_index(query, documents, doc_limit: int = 3,
+                        per_doc_chars: int = 1500, max_context: int = 6000) -> str:
+    """Search MANY documents: rank whole docs by relevance, then pull the single
+    best passage from each of the top ``doc_limit`` docs.
+
+    ``documents`` is a list of (name, full_text) — e.g. the cached library index
+    plus live study.db rows. Pure and testable. This is how the assistant reaches
+    a whole library: the right passage from the right few books, not everything.
+    """
+    terms = _terms(query)
+    if not terms or not documents:
+        return ""
+    scored = sorted(
+        ((score(text, terms), name, text) for name, text in documents),
+        key=lambda x: x[0], reverse=True,
+    )
+    parts, total = [], 0
+    for s, name, text in scored:
+        if s <= 0 or len(parts) >= doc_limit or total >= max_context:
+            break
+        passage = retrieve_from_text(query, text, limit=1, max_context=per_doc_chars)
+        if passage:
+            parts.append(f"[{name}] {passage}")
+            total += len(passage)
+    if not parts:
+        return ""
+    return ("Relevant passages from the user's own Library and study notes "
+            "(cite these when useful):\n\n" + "\n\n".join(parts))
+
+
+def study_db_documents():
+    """Live (name, text) rows from study.db — fresh notes/journal/glossary/topics
+    so newly written entries are searchable without rebuilding the book index."""
+    return list(_iter_study_db())
+
+
 def _iter_library(books_dir: str):
     """Yield (filename, body) for Library text files, RECURSING subfolders.
 

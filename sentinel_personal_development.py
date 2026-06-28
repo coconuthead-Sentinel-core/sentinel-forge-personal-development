@@ -3284,11 +3284,35 @@ class BookReader:
         self._ai_attachment = None
         self._set_attach_label("", FG_MUTED)
 
-    def _ai_library_context(self, query: str, limit: int = 5) -> str:
-        """Local RAG: relevant excerpts from the user's Library + study.db, fed
-        to the assistant as grounding context. Read-only; "" on any failure."""
+    def _preindex_library(self) -> None:
+        """Build the cached Library index (.docx/.pdf/.md/.txt/.html) in the
+        background at startup, so the assistant can search ALL the user's books.
+        First run extracts + caches; later runs reuse the cache."""
+        def _work():
+            try:
+                from lyceum.doc_index import build_index
+                self._library_index = build_index(LIBRARY_DIR)
+            except Exception:
+                self._library_index = []
         try:
-            from lyceum.local_context import retrieve_context
+            threading.Thread(target=_work, daemon=True).start()
+        except Exception:
+            pass
+
+    def _ai_library_context(self, query: str, limit: int = 5) -> str:
+        """Local RAG: relevant passages from the user's whole Library + study.db,
+        fed to the assistant as grounding context. Read-only; "" on any failure.
+
+        Uses the cached book index (all formats) once built; until then it falls
+        back to a live scan of text files so it still works on first launch.
+        """
+        try:
+            from lyceum.local_context import (retrieve_from_index,
+                                              study_db_documents, retrieve_context)
+            index = getattr(self, "_library_index", None)
+            if index:
+                docs = list(index) + study_db_documents()   # books + fresh notes
+                return retrieve_from_index(query, docs)
             return retrieve_context(query, LIBRARY_DIR, limit=limit)
         except Exception:
             return ""
@@ -23583,6 +23607,9 @@ def main() -> None:
     # Warm the Whisper speech model in the background so the first 🎤 click
     # doesn't pause to load it.
     root.after(1500, app._preload_whisper)
+    # Build the cached Library index in the background so the assistant can
+    # search the user's whole book collection (.docx/.pdf/.md/.txt).
+    root.after(2000, app._preindex_library)
     def on_close():
         try: app._stop_mic()
         except Exception: pass
