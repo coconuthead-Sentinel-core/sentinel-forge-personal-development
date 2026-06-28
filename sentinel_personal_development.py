@@ -3244,6 +3244,47 @@ class BookReader:
         self.open_study_workspace()
         self._show_study_tab("ai_chat")
 
+    def _set_attach_label(self, text: str, color: str) -> None:
+        lbl = getattr(self, "_ai_attach_label", None)
+        if lbl is not None:
+            try:
+                lbl.config(text=text, fg=color)
+            except Exception:
+                pass
+
+    def _ai_chat_attach_file(self) -> None:
+        """📎 Attach a file to the chat: extract its text and hand it to the
+        assistant as context with the next message. Reuses the app's existing
+        multi-format extractor (.txt/.md/.docx/.pdf/.html)."""
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title="Attach a file for the assistant",
+            filetypes=[("Readable files",
+                        "*.txt *.md *.docx *.pdf *.html *.htm *.rtf"),
+                       ("All files", "*.*")])
+        if not path:
+            return
+        name = os.path.basename(path)
+        try:
+            text = self._extract_text(path) or ""
+        except Exception:
+            text = ""
+        if not text.strip():
+            self._ai_attachment = None
+            self._set_attach_label(f"⚠ couldn't read {name}", "#fca5a5")
+            return
+        MAX = 6000   # keep within the small local model's context window
+        truncated = len(text) > MAX
+        self._ai_attachment = {"name": name, "text": text[:MAX],
+                               "truncated": truncated}
+        note = " (truncated to fit)" if truncated else ""
+        self._set_attach_label(f"📎 {name}{note}    ✕ remove", FG_TEXT)
+
+    def _ai_chat_clear_attachment(self, _event=None) -> None:
+        """Remove the pending chat attachment (✕, or after it has been sent)."""
+        self._ai_attachment = None
+        self._set_attach_label("", FG_MUTED)
+
     def _ai_library_context(self, query: str, limit: int = 5) -> str:
         """Local RAG: relevant excerpts from the user's Library + study.db, fed
         to the assistant as grounding context. Read-only; "" on any failure."""
@@ -3372,6 +3413,24 @@ class BookReader:
             font=("Segoe UI", 10, "bold"), cursor="hand2",
         )
         web_toggle.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        # 📎 Attach a file — its text becomes context for the next message.
+        btn_attach = tk.Button(
+            input_frame, text="📎", bg=BG_PANEL, fg=FG_TEXT,
+            font=("Segoe UI", 12), relief=tk.FLAT, cursor="hand2",
+            activebackground=BG_PANEL,
+            command=self._ai_chat_attach_file,
+        )
+        btn_attach.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+
+        # Thin status row just above the input: shows the attached file + ✕ remove.
+        attach_bar = tk.Frame(parent, bg=BG_DARK)
+        attach_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=12, pady=(0, 2))
+        self._ai_attach_label = tk.Label(
+            attach_bar, text="", bg=BG_DARK, fg=FG_MUTED,
+            font=("Segoe UI", 9), anchor="w", cursor="hand2",
+        )
+        self._ai_attach_label.pack(side=tk.LEFT)
+        self._ai_attach_label.bind("<Button-1>", self._ai_chat_clear_attachment)
         chat_input.focus_set()
 
         # 2. History area (packed TOP, consumes remaining space)
@@ -3455,12 +3514,22 @@ class BookReader:
                     # (local RAG) so it has context during a study session.
                     local_context = self._ai_library_context(content)
 
+                    # 📎 Attached file — include its extracted text as one-shot
+                    # context for this message (cleared after the reply).
+                    attach_context = ""
+                    att = getattr(self, "_ai_attachment", None)
+                    if att:
+                        note = " (truncated)" if att.get("truncated") else ""
+                        attach_context = (f"Attached file '{att['name']}'{note}:\n"
+                                          + att.get("text", ""))
+
                     web_context = ""
                     if use_web:
                         web_context = self._ai_web_search_context(web_query)
                     combined_context = "\n\n".join(
                         part for part in
-                        (planner_context, local_context, web_context) if part
+                        (planner_context, local_context, attach_context, web_context)
+                        if part
                     )
 
                     reply = brain.ask(content, context=combined_context)
@@ -3469,6 +3538,8 @@ class BookReader:
                     reply = f"Error: {ex}"
                 
                 def _replace_thinking():
+                    # One-shot: the attached file was just used for this reply.
+                    self._ai_chat_clear_attachment()
                     chat_history.config(state=tk.NORMAL)
                     chat_history.delete(f"{thinking_idx}-1c", tk.END)
                     chat_history.insert(tk.END, "\n")
