@@ -38,6 +38,7 @@ from lyceum.dictation_guard import dedup_punctuation
 from lyceum.platform_dpi import enable_high_dpi_awareness
 from lyceum import finance as _finance
 from lyceum import util as _util
+from lyceum import goals as _goals
 import subprocess
 import tempfile
 import threading
@@ -250,6 +251,13 @@ ACCENT_PURPLE = "#7c3aed"
 ACCENT_RED    = "#dc2626"
 ACCENT_SLATE  = "#475569"
 ACCENT_MIC    = "#0ea5e9"   # mic button idle (sky-blue); turns red while recording
+
+# Goal accountability `level` -> list-item colour (presentation only; the
+# decision logic lives in the pure, tested lyceum.goals module).
+_GOAL_LEVEL_COLOR = {
+    "done": ACCENT_GREEN, "parked": FG_MUTED, "no_date": FG_MUTED,
+    "overdue": ACCENT_RED, "behind": ACCENT_RED, "on_track": ACCENT_GREEN,
+}
 ACCENT_AMBER  = "#d97706"   # paste-from-clipboard button
 ACCENT_PINK   = "#db2777"   # save-for-Claude button
 ACCENT_INDIGO = "#4f46e5"   # After-Action Review (daily reflection)
@@ -19905,39 +19913,6 @@ class BookReader:
                       relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
                       borderwidth=0).pack(side=tk.RIGHT)
 
-    def _goal_accountability(self, created_at, target_date, progress, status):
-        """Cold, honest status for a goal — no encouragement, just where the
-        numbers land. Returns (badge, colour, is_behind).
-
-        Pace = your actual progress vs the share of time that has elapsed toward
-        the target date. Fall behind that pace and it goes RED (BEHIND), then
-        OVERDUE once the date passes — so slacking stands out instead of hiding.
-        On track / done are green; parked or no-target-date are muted."""
-        prog = int(progress or 0)
-        st = (status or "active").lower()
-        if st == "done" or prog >= 100:
-            return ("✅ DONE", ACCENT_GREEN, False)
-        if st == "parked":
-            return ("⏸ PARKED", FG_MUTED, False)
-
-        def _d(s):
-            try:
-                return datetime.strptime((s or "")[:10], "%Y-%m-%d").date()
-            except Exception:
-                return None
-        today = date.today()
-        tgt = _d(target_date)
-        started = _d(created_at) or today
-        if tgt is None:
-            return ("• SET A DATE", FG_MUTED, False)
-        if tgt < today:
-            return (f"⛔ OVERDUE {(today - tgt).days}d", ACCENT_RED, True)
-        span = max(1, (tgt - started).days)
-        elapsed = max(0, (today - started).days)
-        expected = min(100, int(100 * elapsed / span))
-        if prog < expected - 10:
-            return (f"🔻 BEHIND {prog}/{expected}%", ACCENT_RED, True)
-        return (f"🟢 ON TRACK {(tgt - today).days}d", ACCENT_GREEN, False)
 
     def _build_goals_panel(self, parent: tk.Frame) -> None:
         """Ziglar's goal-setting worksheet, with a tie-in that drops a goal's
@@ -20284,22 +20259,17 @@ class BookReader:
                     "FROM goals ORDER BY (status='done'), id DESC")
             except Exception:
                 rows = []
-            n_bad = n_ok = n_done = 0
+            per, (n_bad, n_ok, n_done) = _goals.summarize(
+                [(created, target, prog, status)
+                 for (_g, _t, prog, status, target, created) in rows])
             for idx, (gid, gtitle, prog, status, target, created) in enumerate(rows):
                 records.append(gid)
-                badge, color, behind = self._goal_accountability(
-                    created, target, prog, status)
+                badge, level, _behind = per[idx]
                 lb.insert(tk.END, f"{badge} · {gtitle or '(untitled)'} ({prog}%)")
                 try:
-                    lb.itemconfig(idx, foreground=color)
+                    lb.itemconfig(idx, foreground=_GOAL_LEVEL_COLOR.get(level, FG_MUTED))
                 except tk.TclError:
                     pass
-                if behind:
-                    n_bad += 1
-                elif (status or "") == "done" or int(prog or 0) >= 100:
-                    n_done += 1
-                else:
-                    n_ok += 1
             goals_score_var.set(
                 f"🔴 {n_bad} behind    🟢 {n_ok} on track    ✅ {n_done} done")
             if select_id in records:
