@@ -54,13 +54,21 @@ def rank_snippets(query, documents, limit: int = 5, max_chars: int = 1500):
 
 
 def _iter_library(books_dir: str):
-    """Yield (filename, body) for every Library .md excerpt. I/O, isolated."""
-    for path in glob.glob(os.path.join(books_dir or "", "*.md")):
-        try:
-            with open(path, encoding="utf-8") as f:
-                yield (os.path.basename(path), f.read())
-        except OSError:
-            continue
+    """Yield (filename, body) for Library text files, RECURSING subfolders.
+
+    Covers .md excerpts and .txt notes anywhere under the Books tree (not just
+    the top level). .docx/.pdf source books need extraction and are a follow-up.
+    I/O, isolated.
+    """
+    if not books_dir:
+        return
+    for ext in ("*.md", "*.txt"):
+        for path in glob.glob(os.path.join(books_dir, "**", ext), recursive=True):
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    yield (os.path.basename(path), f.read())
+            except OSError:
+                continue
 
 
 def _iter_study_db():

@@ -3,7 +3,10 @@
 Tests the PURE ranking core (rank_snippets / score) — no files, no DB, no GUI."""
 import unittest
 
-from lyceum.local_context import rank_snippets, score
+import os
+import tempfile
+
+from lyceum.local_context import rank_snippets, score, retrieve_context
 
 
 class ScoreTest(unittest.TestCase):
@@ -47,6 +50,30 @@ class RankSnippetsTest(unittest.TestCase):
         # a.md has both 'cat' and 'mat' (score 2), c.md has 'cat' x3 (score 3)
         self.assertEqual(top[0][0], "c.md")
         self.assertIn("a.md", [s for s, _ in top])
+
+
+class RetrieveContextRecursionTest(unittest.TestCase):
+    def test_finds_files_in_subfolders(self):
+        d = tempfile.mkdtemp()
+        sub = os.path.join(d, "deep", "nested")
+        os.makedirs(sub)
+        with open(os.path.join(sub, "note.md"), "w", encoding="utf-8") as f:
+            f.write("the quokka is a small marsupial")
+        ctx = retrieve_context("quokka", d)
+        self.assertIn("quokka", ctx)
+        self.assertIn("note.md", ctx)
+
+    def test_indexes_txt_too(self):
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, "plain.txt"), "w", encoding="utf-8") as f:
+            f.write("photosynthesis converts light to energy")
+        self.assertIn("photosynthesis", retrieve_context("photosynthesis", d))
+
+    def test_no_match_returns_empty(self):
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, "x.md"), "w", encoding="utf-8") as f:
+            f.write("nothing relevant")
+        self.assertEqual(retrieve_context("zebra", d), "")
 
 
 if __name__ == "__main__":
