@@ -2912,9 +2912,6 @@ class BookReader:
     # dial). It still maps to a library zone (GREEN/YELLOW/RED) so saved
     # excerpts get a zone + cognitive_load value in their front-matter,
     # which the FastAPI platform reads. Persisted to STUDY_DIR/session.json.
-    @staticmethod
-    def _zone_for_load(load: int) -> str:
-        return _util.zone_for_load(load)
 
     def _load_session_state(self) -> None:
         """Populate self._cognitive_load from the session JSON. Default 7
@@ -2939,7 +2936,7 @@ class BookReader:
                 json.dump(
                     {
                         "cognitive_load": self._cognitive_load,
-                        "zone":           self._zone_for_load(self._cognitive_load),
+                        "zone":           _util.zone_for_load(self._cognitive_load),
                         "last_updated":   datetime.now().isoformat(timespec="seconds"),
                     },
                     f, indent=2,
@@ -3219,9 +3216,6 @@ class BookReader:
             pass
         self._refresh_time_log_report()
 
-    @staticmethod
-    def _fmt_hm(minutes: int) -> str:
-        return _util.fmt_hm(minutes)
 
     def _time_log_week_totals(self) -> list[tuple[str, int]]:
         """Minutes by category for the current week (Monday → today)."""
@@ -3737,10 +3731,10 @@ class BookReader:
             row = tk.Frame(legend, bg=BG_DARK); row.pack(fill=tk.X, anchor="w", pady=1)
             tk.Label(row, text="    ", bg=color_of.get(label, "#888888")).pack(
                 side=tk.LEFT)
-            tk.Label(row, text=f"  {label} — {self._fmt_hm(mins)} ({pct}%)",
+            tk.Label(row, text=f"  {label} — {_util.fmt_hm(mins)} ({pct}%)",
                      bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 10)).pack(side=tk.LEFT)
         distract = sum(m for l, m in totals if "Distract" in l)
-        summary = f"This week: {self._fmt_hm(total_min)} logged"
+        summary = f"This week: {_util.fmt_hm(total_min)} logged"
         if distract and total_min:
             summary += f"   ·   😵 {round(100 * distract / total_min)}% distracted"
         if hasattr(self, "_time_log_summary_var"):
@@ -4059,13 +4053,7 @@ class BookReader:
         _pulse(times)
 
     # ---- Pay Yourself First (Clason/Bach wealth automator) -------------
-    @staticmethod
-    def _money_parse(s):
-        return _finance.money_parse(s)
 
-    @staticmethod
-    def _money_fmt(x):
-        return _finance.money_fmt(x)
 
     def _fi_settings(self) -> tuple[float, float]:
         """(save_pct, opening_balance) — persisted in HANDOFF_STATE."""
@@ -4229,15 +4217,15 @@ class BookReader:
         pay_ent.pack(side=tk.LEFT, padx=(4, 6), ipady=3)
 
         def _refresh_balance():
-            bal_var.set(self._money_fmt(self._fi_balance()))
+            bal_var.set(_finance.money_fmt(self._fi_balance()))
 
         def _refresh_list(select_pid=None):
             listbox.delete(0, tk.END)
             rows = self._fi_paychecks()
             self._fi_list_pids = [r[0] for r in rows]
             for _id, pdate, gross, spct, saved in rows:
-                listbox.insert(tk.END, f"{pdate}   {self._money_fmt(gross)}"
-                               f"   🔒{self._money_fmt(saved)}")
+                listbox.insert(tk.END, f"{pdate}   {_finance.money_fmt(gross)}"
+                               f"   🔒{_finance.money_fmt(saved)}")
             if select_pid is not None and select_pid in self._fi_list_pids:
                 i = self._fi_list_pids.index(select_pid)
                 listbox.selection_clear(0, tk.END); listbox.selection_set(i)
@@ -4249,7 +4237,7 @@ class BookReader:
                 _load_paycheck(None)
 
         def _add_paycheck():
-            g = self._money_parse(pay_var.get())
+            g = _finance.money_parse(pay_var.get())
             if g is None or g <= 0:
                 messagebox.showinfo("Paycheck",
                                     "Enter your paycheck amount, e.g. 1200")
@@ -4259,8 +4247,8 @@ class BookReader:
             pay_var.set("")
             _refresh_balance()
             _refresh_list(select_pid=pid)
-            self.set_status(f"💰 Paid yourself first: {self._money_fmt(saved)} "
-                            f"locked away. {self._money_fmt(g - saved)} to budget.")
+            self.set_status(f"💰 Paid yourself first: {_finance.money_fmt(saved)} "
+                            f"locked away. {_finance.money_fmt(g - saved)} to budget.")
         tk.Button(addrow, text="💵 Pay yourself first", command=_add_paycheck,
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_EMERALD, fg="white",
                   activebackground=ACCENT_EMERALD, relief=tk.FLAT, padx=12,
@@ -4367,13 +4355,13 @@ class BookReader:
             items = self._fi_budget_items(pid)
             self._fi_budget_ids = [it[0] for it in items]
             for _iid, cat, amt in items:
-                b_list.insert(tk.END, f"{cat:<12} {self._money_fmt(amt):>12}")
+                b_list.insert(tk.END, f"{cat:<12} {_finance.money_fmt(amt):>12}")
             budgeted = self._fi_budgeted(pid)
             left_to = spend - budgeted
-            locked_var.set(f"🔒 Saved first (locked): {self._money_fmt(saved)}")
-            spend_var.set(f"💵 Spendable to budget: {self._money_fmt(spend)}")
-            remain_var.set(f"Budgeted {self._money_fmt(budgeted)}   ·   "
-                           f"Left to budget {self._money_fmt(left_to)}")
+            locked_var.set(f"🔒 Saved first (locked): {_finance.money_fmt(saved)}")
+            spend_var.set(f"💵 Spendable to budget: {_finance.money_fmt(spend)}")
+            remain_var.set(f"Budgeted {_finance.money_fmt(budgeted)}   ·   "
+                           f"Left to budget {_finance.money_fmt(left_to)}")
             remain_lbl.configure(
                 fg=("#f87171" if left_to < -0.001 else
                     "#34d399" if abs(left_to) < 0.001 else FG_MUTED))
@@ -4384,7 +4372,7 @@ class BookReader:
                 _refresh_budget(); return
             spend, gross, saved = _spendable(pid)
             pdate = next((r[1] for r in self._fi_paychecks() if r[0] == pid), "")
-            pc_title.set(f"Paycheck {pdate} — {self._money_fmt(gross)}")
+            pc_title.set(f"Paycheck {pdate} — {_finance.money_fmt(gross)}")
             _refresh_budget()
 
         def _add_budget():
@@ -4392,7 +4380,7 @@ class BookReader:
             if pid is None:
                 messagebox.showinfo("Budget", "Add a paycheck first.")
                 return
-            a = self._money_parse(amt_var.get())
+            a = _finance.money_parse(amt_var.get())
             if a is None or a <= 0:
                 messagebox.showinfo("Budget", "Enter an amount, e.g. 600")
                 return
@@ -4402,7 +4390,7 @@ class BookReader:
                 messagebox.showwarning(
                     "Over budget",
                     f"That's more than you have left to budget "
-                    f"({self._money_fmt(left_to)}).\n\nYour savings are locked "
+                    f"({_finance.money_fmt(left_to)}).\n\nYour savings are locked "
                     f"and can't be spent — trim this category.")
                 return
             try:
@@ -4463,9 +4451,6 @@ class BookReader:
                 "core_food": g("core_food"),
                 "core_gas": g("core_gas")}
 
-    @staticmethod
-    def _core_four_eval(available: float, amounts: list) -> tuple:
-        return _finance.core_four_eval(available, amounts)
 
     def open_core_four(self) -> None:
         """Defense-mode budget: just the four survival numbers — Rent,
@@ -4584,9 +4569,9 @@ class BookReader:
 
         def _save_all():
             st = self._load_handoff_state() or {}
-            st["core_available"] = self._money_parse(avail_var.get()) or 0.0
+            st["core_available"] = _finance.money_parse(avail_var.get()) or 0.0
             for icon, name, key in self.CORE_FOUR:
-                st[key] = self._money_parse(boxes[key]["var"].get()) or 0.0
+                st[key] = _finance.money_parse(boxes[key]["var"].get()) or 0.0
             try:
                 self._save_handoff_state(st)
             except Exception:
@@ -4610,10 +4595,10 @@ class BookReader:
                 pass
 
         def _recompute(*_a):
-            avail = self._money_parse(avail_var.get()) or 0.0
-            amounts = [self._money_parse(boxes[key]["var"].get()) or 0.0
+            avail = _finance.money_parse(avail_var.get()) or 0.0
+            amounts = [_finance.money_parse(boxes[key]["var"].get()) or 0.0
                        for _i, _n, key in self.CORE_FOUR]
-            statuses, total, _secured, _delta = self._core_four_eval(avail, amounts)
+            statuses, total, _secured, _delta = _finance.core_four_eval(avail, amounts)
             cmap = {"green": (GREEN, "✅ secured"), "red": (RED, "🛑 not covered"),
                     "neutral": (NEUTRAL, "set amount")}
             for (_i, _n, key), st in zip(self.CORE_FOUR, statuses):
@@ -4624,14 +4609,14 @@ class BookReader:
                                  bg=BG_DARK, fg=FG_MUTED)
             elif avail + 0.001 >= total:
                 banner.configure(
-                    text=f"✅ Core Four secured — {self._money_fmt(total)} needed, "
-                         f"{self._money_fmt(avail - total)} left over.",
+                    text=f"✅ Core Four secured — {_finance.money_fmt(total)} needed, "
+                         f"{_finance.money_fmt(avail - total)} left over.",
                     bg="#064e3b", fg="#6ee7b7")
             else:
                 banner.configure(
-                    text=f"🛑 Short by {self._money_fmt(total - avail)} — "
-                         f"{self._money_fmt(total)} needed, only "
-                         f"{self._money_fmt(avail)} available. Defense first: "
+                    text=f"🛑 Short by {_finance.money_fmt(total - avail)} — "
+                         f"{_finance.money_fmt(total)} needed, only "
+                         f"{_finance.money_fmt(avail)} available. Defense first: "
                          f"cover Rent → Utilities → Food → Gas in that order.",
                     bg="#7f1d1d", fg="#fecaca")
 
@@ -4741,7 +4726,7 @@ class BookReader:
                  font=("Segoe UI", 8)).pack(side=tk.LEFT)
 
         def _add(amount=None, label=None):
-            a = amount if amount is not None else self._money_parse(amt_var.get())
+            a = amount if amount is not None else _finance.money_parse(amt_var.get())
             if a is None or a <= 0:
                 messagebox.showinfo("Latte Factor", "Enter an amount, e.g. 4.50")
                 return
@@ -4816,20 +4801,20 @@ class BookReader:
             listbox.delete(0, tk.END)
             for _id, sdate, amt, lab in rows:
                 tag = f"  {lab}" if lab else ""
-                listbox.insert(tk.END, f"{sdate}   {self._money_fmt(amt):>9}{tag}")
+                listbox.insert(tk.END, f"{sdate}   {_finance.money_fmt(amt):>9}{tag}")
             total = sum(r[2] for r in rows)
-            wk_var.set(f"This week's leaks: {self._money_fmt(total)}")
+            wk_var.set(f"This week's leaks: {_finance.money_fmt(total)}")
             monthly = total * 4.33
             yearly = total * 52
-            yr_var.set(f"At this pace: {self._money_fmt(monthly)}/month  ·  "
-                       f"{self._money_fmt(yearly)}/year")
+            yr_var.set(f"At this pace: {_finance.money_fmt(monthly)}/month  ·  "
+                       f"{_finance.money_fmt(yearly)}/year")
             # The real cost: what these leaks become if invested instead (8%, 20yr)
             if total > 0:
                 per_day = total / 7.0
-                fv20 = self._compound_series(total, 8, 20)[-1]
+                fv20 = _finance.compound_series(total, 8, 20)[-1]
                 cost_var.set(
-                    f"💸 That's {self._money_fmt(per_day)}/day. Invested at 8% "
-                    f"instead, it becomes {self._money_fmt(fv20)} in 20 years — "
+                    f"💸 That's {_finance.money_fmt(per_day)}/day. Invested at 8% "
+                    f"instead, it becomes {_finance.money_fmt(fv20)} in 20 years — "
                     f"that's the real cost of the leak.")
             else:
                 cost_var.set("")
@@ -4840,11 +4825,11 @@ class BookReader:
                 b = max(buckets, key=lambda r: r[2])
                 name, target = b[1], b[2]
                 pct = min(999, round(100 * yearly / target)) if target else 0
-                buy_var.set(f"A year of this = {self._money_fmt(yearly)} — that's "
-                            f"{pct}% of your {name} dream ({self._money_fmt(target)}). "
+                buy_var.set(f"A year of this = {_finance.money_fmt(yearly)} — that's "
+                            f"{pct}% of your {name} dream ({_finance.money_fmt(target)}). "
                             f"Skip them and fund the bucket instead.")
             else:
-                buy_var.set(f"A year of this = {self._money_fmt(yearly)}. Skipped "
+                buy_var.set(f"A year of this = {_finance.money_fmt(yearly)}. Skipped "
                             f"and saved, that becomes a Dream Bucket.")
 
         _refresh()
@@ -4876,7 +4861,7 @@ class BookReader:
         result = {"v": None}
 
         def _ok():
-            result["v"] = self._money_parse(var.get())
+            result["v"] = _finance.money_parse(var.get())
             dlg.destroy()
 
         def _cancel():
@@ -5057,7 +5042,7 @@ class BookReader:
                 winsound.MessageBeep(winsound.MB_OK)
             except Exception:
                 pass
-            self.set_status(f"🎉 {self._money_fmt(amt)} into your dream bucket!")
+            self.set_status(f"🎉 {_finance.money_fmt(amt)} into your dream bucket!")
             _render()
 
         def _set_target(bid):
@@ -5125,9 +5110,9 @@ class BookReader:
                 topline = tk.Frame(body, bg=BG_PANEL); topline.pack(fill=tk.X)
                 tk.Label(topline, text=name, bg=BG_PANEL, fg=FG_TEXT,
                          font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
-                goal = (f"{self._money_fmt(saved)} / {self._money_fmt(target)}"
+                goal = (f"{_finance.money_fmt(saved)} / {_finance.money_fmt(target)}"
                         if target > 0 else
-                        f"{self._money_fmt(saved)} saved — set a target")
+                        f"{_finance.money_fmt(saved)} saved — set a target")
                 tk.Label(topline, text=f"{goal}   {round(pct*100)}%", bg=BG_PANEL,
                          fg=("#34d399" if pct >= 1 else FG_MUTED),
                          font=("Segoe UI", 10, "bold")).pack(side=tk.RIGHT)
@@ -5167,7 +5152,7 @@ class BookReader:
                 winsound.MessageBeep(winsound.MB_OK)
             except Exception:
                 pass
-            self.set_status(f"🎉 +{self._money_fmt(amt)} — keep filling that bucket!")
+            self.set_status(f"🎉 +{_finance.money_fmt(amt)} — keep filling that bucket!")
             _render()
 
         _render()
@@ -5373,7 +5358,7 @@ class BookReader:
                 messagebox.showinfo("Wishlist", "What do you want to buy?")
                 return
             days = 30 if delay_var.get().startswith("30") else 7
-            self._wishlist_add(name, self._money_parse(price_var.get()) or 0, days)
+            self._wishlist_add(name, _finance.money_parse(price_var.get()) or 0, days)
             item_var.set(""); price_var.set("")
             self.set_status(f"⏳ '{name}' locked for {days} days. Sleep on it.")
             _render()
@@ -5443,7 +5428,7 @@ class BookReader:
                 tk.Label(topline, text=item, bg=BG_PANEL, fg=FG_TEXT,
                          font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
                 if price and price > 0:
-                    tk.Label(topline, text=self._money_fmt(price), bg=BG_PANEL,
+                    tk.Label(topline, text=_finance.money_fmt(price), bg=BG_PANEL,
                              fg=FG_MUTED, font=("Segoe UI", 11, "bold")).pack(
                                  side=tk.RIGHT)
                 tk.Label(card, text=self._wishlist_fmt_remaining(secs),
@@ -5464,7 +5449,7 @@ class BookReader:
                 # (🗑 Let it go removed — Delete/Remove widgets were taken out.)
             dn, dsum, bn = self._wishlist_counts()
             stat_var.set(f"🧊 Cooling off: {len(rows)}   ·   💪 Let go: {dn} "
-                         f"({self._money_fmt(dsum)} kept)   ·   🛒 Bought: {bn}")
+                         f"({_finance.money_fmt(dsum)} kept)   ·   🛒 Bought: {bn}")
 
         def _tick():
             self._wishlist_after_id = None
@@ -5481,9 +5466,6 @@ class BookReader:
         item_ent.focus_set()
 
     # ---- Run Rate / Emergency-Fund calculator --------------------------
-    @staticmethod
-    def _run_rate_months(cash, monthly):
-        return _finance.run_rate_months(cash, monthly)
 
     def _emergency_fund_goal(self, target, cash):
         """Create/refresh a '🔋 Emergency Fund' Dream Bucket as the auto-goal."""
@@ -5672,16 +5654,16 @@ class BookReader:
 
         def _save():
             stt = self._load_handoff_state() or {}
-            stt["run_rate_expenses"] = self._money_parse(exp_var.get()) or 0.0
-            stt["emergency_cash"] = self._money_parse(cash_var.get()) or 0.0
+            stt["run_rate_expenses"] = _finance.money_parse(exp_var.get()) or 0.0
+            stt["emergency_cash"] = _finance.money_parse(cash_var.get()) or 0.0
             try:
                 self._save_handoff_state(stt)
             except Exception:
                 pass
 
         def _make_goal():
-            exp = self._money_parse(exp_var.get()) or 0.0
-            cash = self._money_parse(cash_var.get()) or 0.0
+            exp = _finance.money_parse(exp_var.get()) or 0.0
+            cash = _finance.money_parse(cash_var.get()) or 0.0
             if exp <= 0:
                 messagebox.showinfo("Run Rate",
                                     "Set your monthly survival expenses first.")
@@ -5692,13 +5674,13 @@ class BookReader:
             messagebox.showinfo(
                 "Goal set",
                 "Added a '🔋 Emergency Fund' bucket targeting 3 months "
-                f"({self._money_fmt(exp * 3)}) in your Dream Buckets. "
+                f"({_finance.money_fmt(exp * 3)}) in your Dream Buckets. "
                 "Fund it there to charge the battery.")
 
         def _recompute(*_a):
-            exp = self._money_parse(exp_var.get()) or 0.0
-            cash = self._money_parse(cash_var.get()) or 0.0
-            months = self._run_rate_months(cash, exp)
+            exp = _finance.money_parse(exp_var.get()) or 0.0
+            cash = _finance.money_parse(cash_var.get()) or 0.0
+            months = _finance.run_rate_months(cash, exp)
             if months is None:
                 self._draw_battery(battery, 0.0)
                 big_var.set("Enter your monthly survival expenses to see your "
@@ -5720,8 +5702,8 @@ class BookReader:
                 ztxt = "✅ Solid 3-month base, well inside the safe band — push to 6. "
             else:
                 ztxt = "🏆 Fully charged — 6+ months. Total protection, real peace. "
-            zone_var.set(ztxt + (f"To 3 mo: add {self._money_fmt(to3)}  ·  "
-                                 f"To 6 mo: add {self._money_fmt(to6)}"
+            zone_var.set(ztxt + (f"To 3 mo: add {_finance.money_fmt(to3)}  ·  "
+                                 f"To 6 mo: add {_finance.money_fmt(to6)}"
                                  if (to3 > 0 or to6 > 0) else "Goal met!"))
 
         exp_ent.bind("<KeyRelease>", _recompute)
@@ -5735,9 +5717,6 @@ class BookReader:
         (cash_ent if cash0 == 0 else exp_ent).focus_set()
 
     # ---- Time vs. Money translator (price -> hours of your life) -------
-    @staticmethod
-    def _time_cost_hours(price, wage, tax_pct):
-        return _finance.time_cost_hours(price, wage, tax_pct)
 
     def open_time_money(self) -> None:
         """The Time vs. Money translator: a price isn't dollars, it's the hours
@@ -5858,7 +5837,7 @@ class BookReader:
 
         def _save():
             stt = self._load_handoff_state() or {}
-            stt["tvm_wage"] = self._money_parse(wage_var.get()) or 0.0
+            stt["tvm_wage"] = _finance.money_parse(wage_var.get()) or 0.0
             try:
                 stt["tvm_tax"] = float(tax_var.get() or 0)
             except ValueError:
@@ -5870,15 +5849,15 @@ class BookReader:
                 pass
 
         def _cur_hours():
-            price = self._money_parse(price_var.get()) or 0.0
-            wage = self._money_parse(wage_var.get()) or 0.0
+            price = _finance.money_parse(price_var.get()) or 0.0
+            wage = _finance.money_parse(wage_var.get()) or 0.0
             try:
                 tax = float(tax_var.get() or 0)
             except ValueError:
                 tax = 0.0
             if price <= 0:
                 return None, price
-            return self._time_cost_hours(price, wage, tax), price
+            return _finance.time_cost_hours(price, wage, tax), price
 
         def _recompute(*_a):
             hours, price = _cur_hours()
@@ -5961,7 +5940,7 @@ class BookReader:
             cash = float(st.get("emergency_cash", 0))
         except (TypeError, ValueError):
             cash = 0.0
-        months = self._run_rate_months(cash, exp)
+        months = _finance.run_rate_months(cash, exp)
         # latte this week
         latte = sum(r[2] for r in self._latte_week_rows())
         # nearest dream bucket (closest to done, target>0)
@@ -6066,7 +6045,7 @@ class BookReader:
 
         # 💰 savings
         card("💰", ACCENT_EMERALD, "FINANCIAL INDEPENDENCE (locked savings)",
-             f"{self._money_fmt(s['fi'])}", self.open_pay_yourself_first)
+             f"{_finance.money_fmt(s['fi'])}", self.open_pay_yourself_first)
         # 🔋 run rate
         if s["months"] is None:
             rr = "Set your wage & expenses"
@@ -6078,37 +6057,34 @@ class BookReader:
         if s["avail"] <= 0 and s["cf_total"] <= 0:
             cfv = "Set your survival numbers"
         elif s["avail"] + 0.001 >= s["cf_total"] and s["cf_total"] > 0:
-            cfv = f"✅ Secured — {self._money_fmt(s['avail'] - s['cf_total'])} left"
+            cfv = f"✅ Secured — {_finance.money_fmt(s['avail'] - s['cf_total'])} left"
         elif s["cf_total"] > 0:
-            cfv = f"🛑 Short {self._money_fmt(s['cf_total'] - s['avail'])}"
+            cfv = f"🛑 Short {_finance.money_fmt(s['cf_total'] - s['avail'])}"
         else:
             cfv = "Set your survival numbers"
         card("🛡", ACCENT_GREEN, "CORE FOUR (Rent·Utilities·Food·Gas)", cfv,
              self.open_core_four)
         # ☕ latte
         card("☕", ACCENT_AMBER, "LATTE FACTOR (small leaks this week)",
-             f"{self._money_fmt(s['latte'])}  →  {self._money_fmt(s['latte']*52)}/yr",
+             f"{_finance.money_fmt(s['latte'])}  →  {_finance.money_fmt(s['latte']*52)}/yr",
              self.open_latte_factor)
         # 🪣 dream bucket
         if s["best_bucket"]:
             name, saved, pct, target, emoji = s["best_bucket"]
-            dv = f"{emoji} {name}: {self._money_fmt(saved)}/{self._money_fmt(target)} ({round(pct*100)}%)"
+            dv = f"{emoji} {name}: {_finance.money_fmt(saved)}/{_finance.money_fmt(target)} ({round(pct*100)}%)"
         else:
             dv = "Set a target on a bucket"
         card("🪣", ACCENT_PINK, "DREAM BUCKET (closest to funded)", dv,
              self.open_dream_buckets)
         # ⏳ wishlist
         card("⏳", ACCENT_INDIGO, "WISHLIST (cooling off · money kept)",
-             f"{s['waiting']} waiting  ·  {self._money_fmt(s['kept'])} kept",
+             f"{s['waiting']} waiting  ·  {_finance.money_fmt(s['kept'])} kept",
              self.open_wishlist)
         # ⌛ time cost
         card("⌛", ACCENT_PURPLE, "TIME COST (price → hours of life)",
              "Check before you buy", self.open_time_money)
 
     # ---- Save More Tomorrow (SMarT) raise auto-escalator ---------------
-    @staticmethod
-    def _wedge_split(old_wage, new_wage, hours_per_week, pct):
-        return _finance.wedge_split(old_wage, new_wage, hours_per_week, pct)
 
     def _smart_get(self) -> dict:
         try:
@@ -6147,7 +6123,7 @@ class BookReader:
         old = c["current_wage"] or c["base_wage"]
         if new_wage <= old:
             return None
-        sp = self._wedge_split(old, new_wage, c["hours"], c["pct"])
+        sp = _finance.wedge_split(old, new_wage, c["hours"], c["pct"])
         now = datetime.now()
         try:
             self._db_exec(
@@ -6281,7 +6257,7 @@ class BookReader:
             _row(3, "Sign (your name)", name_var, 22, "")
 
             def _sign():
-                wage = self._money_parse(wage_var.get())
+                wage = _finance.money_parse(wage_var.get())
                 if wage is None or wage <= 0:
                     messagebox.showinfo("Sign", "Enter your current hourly pay.")
                     return
@@ -6312,7 +6288,7 @@ class BookReader:
                      font=("Segoe UI", 11, "bold"), wraplength=w - 80,
                      justify=tk.LEFT).pack(anchor="w")
             tk.Label(top, text=f"💰 Committed from raises: "
-                     f"{self._money_fmt(mo)}/month  ·  {self._money_fmt(yr)}/year "
+                     f"{_finance.money_fmt(mo)}/month  ·  {_finance.money_fmt(yr)}/year "
                      "to savings — money you never had to give up.",
                      bg="#042f2e", fg="#99f6e4", font=("Segoe UI", 11, "bold"),
                      wraplength=w - 80, justify=tk.LEFT).pack(anchor="w", pady=(4, 0))
@@ -6330,7 +6306,7 @@ class BookReader:
                      font=("Segoe UI", 11)).pack(side=tk.LEFT)
 
             def _log():
-                nw = self._money_parse(new_var.get())
+                nw = _finance.money_parse(new_var.get())
                 if nw is None or nw <= 0:
                     messagebox.showinfo("Raise", "Enter your new hourly pay.")
                     return
@@ -6341,12 +6317,12 @@ class BookReader:
                     return
                 messagebox.showinfo(
                     "Raise banked! 🎉",
-                    f"Raise of {self._money_fmt(sp['inc_hr'])}/hr.\n\n"
+                    f"Raise of {_finance.money_fmt(sp['inc_hr'])}/hr.\n\n"
                     f"🏖 Lifestyle (yours to enjoy): "
-                    f"{self._money_fmt(sp['life_monthly'])}/mo\n"
+                    f"{_finance.money_fmt(sp['life_monthly'])}/mo\n"
                     f"💰 Swept to savings (automatic): "
-                    f"{self._money_fmt(sp['save_monthly'])}/mo "
-                    f"({self._money_fmt(sp['save_annual'])}/yr)\n\n"
+                    f"{_finance.money_fmt(sp['save_monthly'])}/mo "
+                    f"({_finance.money_fmt(sp['save_annual'])}/yr)\n\n"
                     "You upgraded your life with half and built wealth with "
                     "the other half.")
                 new_var.set(""); _render()
@@ -6369,9 +6345,9 @@ class BookReader:
                         self._save_handoff_state(st)
                     except Exception:
                         pass
-                    self.set_status(f"💸 Swept {self._money_fmt(mo)} into savings "
+                    self.set_status(f"💸 Swept {_finance.money_fmt(mo)} into savings "
                                     "(added to your Financial Independence balance).")
-                tk.Button(body, text=f"💸 Sweep this month (+{self._money_fmt(mo)} "
+                tk.Button(body, text=f"💸 Sweep this month (+{_finance.money_fmt(mo)} "
                           "to savings)", command=_sweep,
                           font=("Segoe UI", 10, "bold"), bg=ACCENT_EMERALD,
                           fg="white", activebackground=ACCENT_EMERALD,
@@ -6395,7 +6371,7 @@ class BookReader:
                 hb.insert(tk.END, "  No raises logged yet — your contract is ready.")
             for ow, nw, mw, aw, rdate in rows:
                 hb.insert(tk.END, f"{rdate}   ${ow:g}→${nw:g}/hr   "
-                          f"+{self._money_fmt(mw)}/mo saved")
+                          f"+{_finance.money_fmt(mw)}/mo saved")
 
             # reset / re-sign
             tk.Button(body, text="✎ Edit contract", command=lambda: (
@@ -6409,9 +6385,6 @@ class BookReader:
         _render()
 
     # ---- Rule of 72 compound-interest simulator ------------------------
-    @staticmethod
-    def _compound_series(weekly, rate_pct, years, start=0.0):
-        return _finance.compound_series(weekly, rate_pct, years, start)
 
     def _draw_growth(self, canvas, series, start_age):
         canvas.delete("all")
@@ -6451,7 +6424,7 @@ class BookReader:
                            anchor="w", font=("Segoe UI", 8))
         canvas.create_text(pl + pw, H - 6, text=f"age {start_age + n}",
                            fill=FG_MUTED, anchor="e", font=("Segoe UI", 8))
-        canvas.create_text(pl + pw, pt + 2, text=self._money_fmt(final),
+        canvas.create_text(pl + pw, pt + 2, text=_finance.money_fmt(final),
                            fill="#4ade80", anchor="ne", font=("Segoe UI", 12, "bold"))
 
     def _draw_doubling_ladder(self, canvas, base, rate):
@@ -6485,7 +6458,7 @@ class BookReader:
             y0 = base_y - bh
             canvas.create_rectangle(x0, y0, x1, base_y, fill=greens[k], outline="")
             canvas.create_text((x0 + x1) / 2, y0 - 2, anchor="s",
-                               text=self._money_fmt(val), fill="#e2e8f0",
+                               text=_finance.money_fmt(val), fill="#e2e8f0",
                                font=("Segoe UI", 8, "bold"))
             lbl = "now" if k == 0 else f"yr {yr:.0f}"
             canvas.create_text((x0 + x1) / 2, base_y + 10, text=lbl, fill=FG_MUTED,
@@ -6609,22 +6582,22 @@ class BookReader:
 
         def _save():
             stt = self._load_handoff_state() or {}
-            stt["r72_weekly"] = self._money_parse(weekly_var.get()) or 0.0
+            stt["r72_weekly"] = _finance.money_parse(weekly_var.get()) or 0.0
             try:
                 stt["r72_rate"] = float(rate_var.get() or 0)
                 stt["r72_age"] = float(age_var.get() or 0)
                 stt["r72_retire"] = float(retire_var.get() or 0)
             except ValueError:
                 pass
-            stt["r72_start"] = self._money_parse(start_var.get()) or 0.0
+            stt["r72_start"] = _finance.money_parse(start_var.get()) or 0.0
             try:
                 self._save_handoff_state(stt)
             except Exception:
                 pass
 
         def _recompute(*_a):
-            weekly = self._money_parse(weekly_var.get()) or 0.0
-            start = self._money_parse(start_var.get()) or 0.0
+            weekly = _finance.money_parse(weekly_var.get()) or 0.0
+            start = _finance.money_parse(start_var.get()) or 0.0
             try:
                 rate = float(rate_var.get() or 0)
                 age = int(float(age_var.get() or 0))
@@ -6632,20 +6605,20 @@ class BookReader:
             except ValueError:
                 rate, age, retire = 8.0, 30, 65
             years = max(0, retire - age)
-            series = self._compound_series(weekly, rate, years, start)
+            series = _finance.compound_series(weekly, rate, years, start)
             self._draw_growth(graph, series, age)
             self._draw_doubling_ladder(ladder, start, rate)
             final = series[-1]
             contributed = start + weekly * 52 * years
             growth = final - contributed
-            big_var.set(f"By age {retire}: ≈ {self._money_fmt(final)}")
+            big_var.set(f"By age {retire}: ≈ {_finance.money_fmt(final)}")
             if rate > 0 and years > 0:
                 dbl = 72.0 / rate
                 sub_var.set(
-                    f"You put in {self._money_fmt(contributed)} — compounding "
-                    f"added {self._money_fmt(growth)} for free. At {rate:g}%, "
+                    f"You put in {_finance.money_fmt(contributed)} — compounding "
+                    f"added {_finance.money_fmt(growth)} for free. At {rate:g}%, "
                     f"your money doubles every {dbl:.0f} years (Rule of 72). "
-                    f"That's {self._money_fmt(weekly)}/week, never touched.")
+                    f"That's {_finance.money_fmt(weekly)}/week, never touched.")
             else:
                 sub_var.set("Enter a return rate and a retirement age to see the "
                             "magic.")
@@ -6660,9 +6633,6 @@ class BookReader:
         e1.focus_set()
 
     # ---- Zero-Based Financial Auditor (recurring-expense cull) ---------
-    @staticmethod
-    def _subs_monthly(amount, cycle):
-        return _finance.subs_monthly(amount, cycle)
 
     def _subs_all(self, active_only=False):
         q = ("SELECT id,name,amount,cycle,active,last_reviewed "
@@ -6708,7 +6678,7 @@ class BookReader:
             pass
 
     def _subs_monthly_total(self, active_only=True):
-        return sum(self._subs_monthly(a, c)
+        return sum(_finance.subs_monthly(a, c)
                    for _i, _n, a, c, _act, _lr in self._subs_all(active_only))
 
     def _maybe_quarterly_audit(self):
@@ -6809,7 +6779,7 @@ class BookReader:
 
         def _add():
             nm = name_var.get().strip()
-            a = self._money_parse(amt_var.get())
+            a = _finance.money_parse(amt_var.get())
             if not nm or a is None or a <= 0:
                 messagebox.showinfo("Add", "Name and amount, e.g. Netflix 15.99")
                 return
@@ -6853,22 +6823,22 @@ class BookReader:
             subs = self._subs_all(active_only=False)
             active = [s for s in subs if s[4]]
             mtot = self._subs_monthly_total(active_only=True)
-            total_var.set(f"Active: {len(active)}   ·   {self._money_fmt(mtot)}/mo "
-                          f"·   {self._money_fmt(mtot * 12)}/yr")
+            total_var.set(f"Active: {len(active)}   ·   {_finance.money_fmt(mtot)}/mo "
+                          f"·   {_finance.money_fmt(mtot * 12)}/yr")
             if not subs:
                 tk.Label(rows_f, text="No subscriptions yet. Add Netflix, your "
                          "phone bill, internet, gym, apps…", bg=BG_DARK,
                          fg=FG_MUTED, font=("Segoe UI", 11), wraplength=w - 90,
                          justify=tk.LEFT).pack(anchor="w", pady=10)
             for sid, name, amount, cycle, act, lastr in subs:
-                mo = self._subs_monthly(amount, cycle)
+                mo = _finance.subs_monthly(amount, cycle)
                 bg = BG_PANEL if act else "#1a1f2e"
                 row = tk.Frame(rows_f, bg=bg, padx=10, pady=6); row.pack(fill=tk.X, pady=2)
                 fg = FG_TEXT if act else FG_MUTED
                 strike = "" if act else "  (cancelled)"
                 tk.Label(row, text=f"{name}{strike}", bg=bg, fg=fg,
                          font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
-                tk.Label(row, text=f"{self._money_fmt(mo)}/mo", bg=bg,
+                tk.Label(row, text=f"{_finance.money_fmt(mo)}/mo", bg=bg,
                          fg=(ACCENT_AMBER if act else FG_MUTED),
                          font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT, padx=(10, 0))
                 if lastr:
@@ -6908,14 +6878,14 @@ class BookReader:
         # Build a combined queue: subscriptions + investment holdings.
         items = []
         for sid, name, amount, cycle, act, lastr in self._subs_all(active_only=True):
-            mo = self._subs_monthly(amount, cycle)
+            mo = _finance.subs_monthly(amount, cycle)
             items.append({"kind": "sub", "id": sid, "name": name, "mo": mo,
-                          "detail": f"{self._money_fmt(mo)}/mo"})
+                          "detail": f"{_finance.money_fmt(mo)}/mo"})
         for bkt in ("security", "growth", "dream"):
             for hid, hname, hamt in self._assets_in(bkt):
                 items.append({"kind": "invest", "id": hid, "name": hname,
                               "value": float(hamt),
-                              "detail": f"{self._money_fmt(hamt)} invested"})
+                              "detail": f"{_finance.money_fmt(hamt)} invested"})
         if not items:
             if not force:
                 messagebox.showinfo(
@@ -6992,10 +6962,10 @@ class BookReader:
             parts = [f"Kept {state['kept']}"]
             if state["cut"]:
                 parts.append(f"cancelled {state['cut']} subs "
-                             f"({self._money_fmt(state['saved'] * 12)}/yr)")
+                             f"({_finance.money_fmt(state['saved'] * 12)}/yr)")
             if state["sold"]:
                 parts.append(f"flagged {state['sold']} investments to sell "
-                             f"({self._money_fmt(state['freed'])})")
+                             f"({_finance.money_fmt(state['freed'])})")
             tail = ("Good money no longer chasing bad. 💪"
                     if (state["cut"] or state["sold"])
                     else "Everything still earns its place. 👍")
@@ -7036,14 +7006,14 @@ class BookReader:
                 messagebox.showinfo(
                     "Cancel it now",
                     f"Go cancel {it['name']} right now, while you're thinking "
-                    f"about it.\n\nThat's {self._money_fmt(it['mo'] * 12)}/year "
+                    f"about it.\n\nThat's {_finance.money_fmt(it['mo'] * 12)}/year "
                     "back in your pocket.")
             else:
                 self._asset_delete(it["id"])
                 state["sold"] += 1; state["freed"] += it["value"]
                 messagebox.showinfo(
                     "Liquidate it",
-                    f"Sell {it['name']} and redeploy the {self._money_fmt(it['value'])}.\n\n"
+                    f"Sell {it['name']} and redeploy the {_finance.money_fmt(it['value'])}.\n\n"
                     "Don't throw good money after bad — the loss is already sunk.")
             try:
                 win.attributes("-topmost", True)
@@ -8066,8 +8036,8 @@ class BookReader:
         def _add_lag():
             if not lt.get().strip():
                 return
-            self._lag_add(lt.get().strip(), self._money_parse(lcur.get()) or 0,
-                          self._money_parse(ltar.get()) or 0, lun.get().strip())
+            self._lag_add(lt.get().strip(), _finance.money_parse(lcur.get()) or 0,
+                          _finance.money_parse(ltar.get()) or 0, lun.get().strip())
             lt.set(""); lcur.set(""); ltar.set(""); lun.set("")
             _render()
         tk.Button(lar, text="+ Lag", command=_add_lag, font=("Segoe UI", 9, "bold"),
@@ -8173,9 +8143,6 @@ class BookReader:
         _render()
 
     # ---- Habit Stacker & Two-Minute Downscaler (James Clear) ----------
-    @staticmethod
-    def _habit_formula(cue, new):
-        return _util.habit_formula(cue, new)
 
     def _habits_all(self):
         try:
@@ -8331,7 +8298,7 @@ class BookReader:
         two_e.bind("<FocusIn>", lambda _ev: self._set_mic_target(two_e), add="+")
 
         def _preview(*_a):
-            f = self._habit_formula(cue_var.get(), new_var.get())
+            f = _util.habit_formula(cue_var.get(), new_var.get())
             prev_var.set(f if f else "After I … , I will … .")
         cue_e.bind("<KeyRelease>", _preview)
         new_e.bind("<KeyRelease>", _preview)
@@ -8392,7 +8359,7 @@ class BookReader:
                     tk.Label(topl, text=f"🔥 {streak}d", bg=rb, fg=ACCENT_AMBER,
                              font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(8, 0))
                 # (🗑 Delete habit removed — Delete/Remove widgets were taken out.)
-                tk.Label(card, text=self._habit_formula(cue, new), bg=rb, fg=FG_TEXT,
+                tk.Label(card, text=_util.habit_formula(cue, new), bg=rb, fg=FG_TEXT,
                          font=("Segoe UI", 12, "bold"), wraplength=w - 130,
                          justify=tk.LEFT, anchor=tk.W).pack(fill=tk.X, pady=(4, 0))
                 if two.strip():
@@ -8560,7 +8527,7 @@ class BookReader:
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
         names = {}
         for hid, cue, new, two in habits:
-            label = (new.strip() or self._habit_formula(cue, new))[:40]
+            label = (new.strip() or _util.habit_formula(cue, new))[:40]
             names[label] = hid
         self._tracker_hid = habits[0][0]
         sel_var = tk.StringVar(value=list(names)[0])
@@ -8700,9 +8667,6 @@ class BookReader:
         _render()
 
     # ---- PERT "Back-From-The-Future" planner (reverse scheduling) ------
-    @staticmethod
-    def _pert_schedule(target_date, steps):
-        return _util.pert_schedule(target_date, steps)
 
     def _pert_plans(self):
         try:
@@ -8981,7 +8945,7 @@ class BookReader:
             if not nm:
                 return
             self._pert_add_step(self._pert_current, nm,
-                                self._money_parse(wk_var.get()) or 1)
+                                _finance.money_parse(wk_var.get()) or 1)
             nm_var.set(""); wk_var.set("4"); _render()
         tk.Button(arow, text="+ Add", command=_add_step,
                   font=("Segoe UI", 10, "bold"), bg=ACCENT_GOLD, fg="white",
@@ -9036,7 +9000,7 @@ class BookReader:
                                  bg="#3b0a0a", fg="#fca5a5")
                 self._draw_pert_timeline(timeline, [], date.today())
                 return
-            sched = self._pert_schedule(target, [(s[1], s[2]) for s in steps])
+            sched = _util.pert_schedule(target, [(s[1], s[2]) for s in steps])
             self._draw_pert_timeline(timeline, sched, target)
             today = date.today()
             if not steps:
@@ -9561,13 +9525,7 @@ class BookReader:
         self._vision_after = self.root.after(1000, _tick)
 
     # ---- Expected Net Worth (PAW vs. UAW) calculator ------------------
-    @staticmethod
-    def _expected_net_worth(age, income):
-        return _finance.expected_net_worth(age, income)
 
-    @staticmethod
-    def _paw_status(actual, expected):
-        return _finance.paw_status(actual, expected)
 
     def _draw_wealth_gauge(self, canvas, actual, expected):
         canvas.delete("all")
@@ -9718,30 +9676,30 @@ class BookReader:
 
         def _save():
             stt = self._load_handoff_state() or {}
-            stt["nw_age"] = self._money_parse(age_var.get()) or 0.0
-            stt["nw_income"] = self._money_parse(inc_var.get()) or 0.0
-            stt["nw_actual"] = self._money_parse(act_var.get()) or 0.0
+            stt["nw_age"] = _finance.money_parse(age_var.get()) or 0.0
+            stt["nw_income"] = _finance.money_parse(inc_var.get()) or 0.0
+            stt["nw_actual"] = _finance.money_parse(act_var.get()) or 0.0
             try:
                 self._save_handoff_state(stt)
             except Exception:
                 pass
 
         def _recompute(*_a):
-            age = self._money_parse(age_var.get()) or 0.0
-            income = self._money_parse(inc_var.get()) or 0.0
-            actual = self._money_parse(act_var.get()) or 0.0
+            age = _finance.money_parse(age_var.get()) or 0.0
+            income = _finance.money_parse(inc_var.get()) or 0.0
+            actual = _finance.money_parse(act_var.get()) or 0.0
             if age <= 0 or income <= 0:
                 exp_var.set("Enter your age and income to see your target.")
                 cmp_var.set(""); banner.configure(text="", bg=BG_DARK)
                 self._draw_wealth_gauge(gauge, 0, 0)
                 return
-            expected = self._expected_net_worth(age, income)
-            exp_var.set(f"🎯 Expected net worth: {self._money_fmt(expected)}")
-            status = self._paw_status(actual, expected)
-            cmp_var.set(f"You have {self._money_fmt(actual)} — "
+            expected = _finance.expected_net_worth(age, income)
+            exp_var.set(f"🎯 Expected net worth: {_finance.money_fmt(expected)}")
+            status = _finance.paw_status(actual, expected)
+            cmp_var.set(f"You have {_finance.money_fmt(actual)} — "
                         f"{(actual / expected * 100):.0f}% of the target "
                         f"({'+' if actual >= expected else ''}"
-                        f"{self._money_fmt(actual - expected)}).")
+                        f"{_finance.money_fmt(actual - expected)}).")
             self._draw_wealth_gauge(gauge, actual, expected)
             kind = status[0] if status else "AAW"
             if kind == "PAW":
@@ -9774,9 +9732,6 @@ class BookReader:
                     "Subscriptions", "Other")
     CORE_DEFENSE = ("Rent", "Utilities", "Food", "Transportation")
 
-    @staticmethod
-    def _period_start(period, today):
-        return _util.period_start(period, today)
 
     def _expense_add(self, spend_date, amount, category, note):
         try:
@@ -9842,7 +9797,7 @@ class BookReader:
             canvas.create_rectangle(labelw, y + 3, labelw + bw, y + rowh - 3,
                                     fill=self._expense_cat_color(cat), outline="")
             canvas.create_text(labelw + bw + 6, y + rowh // 2, anchor="w",
-                               text=self._money_fmt(total), fill=FG_MUTED,
+                               text=_finance.money_fmt(total), fill=FG_MUTED,
                                font=("Segoe UI", 9, "bold"))
 
     def open_expense_tracker(self):
@@ -9920,7 +9875,7 @@ class BookReader:
                  font=("Segoe UI", 8)).pack(side=tk.LEFT)
 
         def _add():
-            a = self._money_parse(amt_var.get())
+            a = _finance.money_parse(amt_var.get())
             if a is None or a <= 0:
                 messagebox.showinfo("Spending", "Enter an amount, e.g. 42.50")
                 return
@@ -9987,7 +9942,7 @@ class BookReader:
 
         def _render():
             period = period_var.get()
-            start = self._period_start(period, date.today()).isoformat()
+            start = _util.period_start(period, date.today()).isoformat()
             cats = self._expense_by_category(start)
             total = sum(cats.values())
             cf = self._core_four_load()
@@ -9996,15 +9951,15 @@ class BookReader:
             for cat in self.CORE_DEFENSE:
                 v, sub, lab2 = cd_cells[cat]
                 spent = cats.get(cat, 0.0)
-                v.set(self._money_fmt(spent))
+                v.set(_finance.money_fmt(spent))
                 tgt = tmap.get(cat, 0)
                 if period == "This month" and tgt:
                     over = spent > tgt + 0.001
-                    sub.set(f"of {self._money_fmt(tgt)} target")
+                    sub.set(f"of {_finance.money_fmt(tgt)} target")
                     lab2.configure(fg=("#f87171" if over else "#34d399"))
                 else:
                     sub.set("logged"); lab2.configure(fg=FG_MUTED)
-            total_var.set(f"Total {period.lower()}: {self._money_fmt(total)}")
+            total_var.set(f"Total {period.lower()}: {_finance.money_fmt(total)}")
             items = sorted(((c, t) for c, t in cats.items() if t > 0),
                            key=lambda x: -x[1])
             chart.configure(height=max(40, len(items) * 22 + 10))
@@ -10015,7 +9970,7 @@ class BookReader:
             self._exp_ids = [r[0] for r in rows]
             for _id, sd, amt, cat, note in rows[:200]:
                 tag = f"  {note}" if note else ""
-                lb.insert(tk.END, f"{sd}  {self._money_fmt(amt):>10}  "
+                lb.insert(tk.END, f"{sd}  {_finance.money_fmt(amt):>10}  "
                           f"{cat:<14}{tag}")
 
         _render()
@@ -10149,7 +10104,7 @@ class BookReader:
             for ch in cols.winfo_children():
                 ch.destroy()
             grand = self._asset_total()
-            total_var.set(f"Portfolio: {self._money_fmt(grand)}")
+            total_var.set(f"Portfolio: {_finance.money_fmt(grand)}")
             for ci, (key, label, color, dark, desc) in enumerate(self.ASSET_BUCKETS):
                 bt = self._asset_bucket_total(key)
                 pct = (bt / grand * 100) if grand else 0
@@ -10159,7 +10114,7 @@ class BookReader:
                 hd = tk.Frame(col, bg=color, padx=8, pady=6); hd.pack(fill=tk.X)
                 tk.Label(hd, text=label, bg=color, fg="white",
                          font=("Segoe UI", 12, "bold")).pack(anchor="w")
-                tk.Label(hd, text=f"{self._money_fmt(bt)}   ·   {pct:.0f}%",
+                tk.Label(hd, text=f"{_finance.money_fmt(bt)}   ·   {pct:.0f}%",
                          bg=color, fg="white",
                          font=("Segoe UI", 14, "bold")).pack(anchor="w")
                 # share bar
@@ -10189,7 +10144,7 @@ class BookReader:
                              font=("Segoe UI", 10, "bold"), anchor=tk.W,
                              wraplength=w // 3 - 130, justify=tk.LEFT).pack(
                                  side=tk.LEFT, fill=tk.X, expand=True)
-                    tk.Label(r, text=self._money_fmt(amount), bg=BG_PANEL,
+                    tk.Label(r, text=_finance.money_fmt(amount), bg=BG_PANEL,
                              fg=FG_MUTED, font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT)
                     # (🗑 Delete asset removed — Delete/Remove widgets were taken out.)
                     tk.Button(r, text="→", command=lambda i=hid, b=key: (
@@ -10216,7 +10171,7 @@ class BookReader:
 
                 def _add(b=key, n=nm, a=am):
                     nme = n.get().strip()
-                    amt = self._money_parse(a.get())
+                    amt = _finance.money_parse(a.get())
                     if not nme or amt is None or amt <= 0:
                         return
                     self._asset_add(b, nme, amt); _render()
@@ -10273,7 +10228,7 @@ class BookReader:
         canvas.create_oval(x0 + d * 0.30, y0 + d * 0.30, x1 - d * 0.30,
                            y1 - d * 0.30, fill=BG_DARK, outline="")
         canvas.create_text(W // 2, H // 2,
-                           text=(self._money_fmt(amount) if amount > 0
+                           text=(_finance.money_fmt(amount) if amount > 0
                                  else "All\nSeasons"),
                            fill="white", font=("Segoe UI", 11, "bold"),
                            justify=tk.CENTER)
@@ -10366,14 +10321,14 @@ class BookReader:
 
         def _save():
             stt = self._load_handoff_state() or {}
-            stt["allseasons_amount"] = self._money_parse(amt_var.get()) or 0.0
+            stt["allseasons_amount"] = _finance.money_parse(amt_var.get()) or 0.0
             try:
                 self._save_handoff_state(stt)
             except Exception:
                 pass
 
         def _render(*_a):
-            amount = self._money_parse(amt_var.get()) or 0.0
+            amount = _finance.money_parse(amt_var.get()) or 0.0
             self._draw_alloc_pie(pie, amount)
             for ch in legend.winfo_children():
                 ch.destroy()
@@ -10383,7 +10338,7 @@ class BookReader:
                 tk.Label(row, text="  ", bg=color).pack(side=tk.LEFT)
                 txt = f"  {pct:g}%  {name}"
                 if amount > 0:
-                    txt += f"  →  {self._money_fmt(dollars)}"
+                    txt += f"  →  {_finance.money_fmt(dollars)}"
                 tk.Label(row, text=txt, bg=BG_DARK, fg=FG_TEXT,
                          font=("Segoe UI", 10), anchor=tk.W, justify=tk.LEFT,
                          wraplength=w - 300).pack(side=tk.LEFT)
@@ -10396,9 +10351,6 @@ class BookReader:
         amt_e.focus_set()
 
     # ---- Hidden Fee Checker & Optimizer -------------------------------
-    @staticmethod
-    def _fee_future_value(start, monthly, years, gross_pct, fee_pct):
-        return _finance.fee_future_value(start, monthly, years, gross_pct, fee_pct)
 
     LOW_COST_FUNDS = (
         ("Total US Stock Market index", "~0.03%", "the whole US market in one fund"),
@@ -10432,7 +10384,7 @@ class BookReader:
             canvas.create_rectangle(x, base - bh, x + bw, base, fill=color,
                                     outline="")
             canvas.create_text(x + bw // 2, base - bh - 8,
-                               text=self._money_fmt(val), fill="#e2e8f0",
+                               text=_finance.money_fmt(val), fill="#e2e8f0",
                                font=("Segoe UI", 10, "bold"))
             canvas.create_text(x + bw // 2, base + 11, text=label, fill=FG_MUTED,
                                font=("Segoe UI", 9))
@@ -10559,8 +10511,8 @@ class BookReader:
 
         def _save():
             stt = self._load_handoff_state() or {}
-            stt["hf_balance"] = self._money_parse(bal_v.get()) or 0.0
-            stt["hf_monthly"] = self._money_parse(mon_v.get()) or 0.0
+            stt["hf_balance"] = _finance.money_parse(bal_v.get()) or 0.0
+            stt["hf_monthly"] = _finance.money_parse(mon_v.get()) or 0.0
             for k, v in (("hf_years", yrs_v), ("hf_gross", gr_v),
                          ("hf_yourfee", yf_v), ("hf_indexfee", xf_v)):
                 try:
@@ -10573,8 +10525,8 @@ class BookReader:
                 pass
 
         def _recompute(*_a):
-            bal = self._money_parse(bal_v.get()) or 0.0
-            mon = self._money_parse(mon_v.get()) or 0.0
+            bal = _finance.money_parse(bal_v.get()) or 0.0
+            mon = _finance.money_parse(mon_v.get()) or 0.0
             try:
                 yrs = float(yrs_v.get() or 0); gross = float(gr_v.get() or 0)
                 yf = float(yf_v.get() or 0); xf = float(xf_v.get() or 0)
@@ -10585,12 +10537,12 @@ class BookReader:
                              "damage.")
                 sub_var.set(""); self._draw_fee_bars(bars, 0, 0)
                 return
-            fv_index = self._fee_future_value(bal, mon, yrs, gross, xf)
-            fv_yours = self._fee_future_value(bal, mon, yrs, gross, yf)
+            fv_index = _finance.fee_future_value(bal, mon, yrs, gross, xf)
+            fv_yours = _finance.fee_future_value(bal, mon, yrs, gross, yf)
             lost = max(0.0, fv_index - fv_yours)
             pct = (lost / fv_index * 100) if fv_index else 0
             self._draw_fee_bars(bars, fv_index, fv_yours)
-            head_var.set(f"💸 Those fees will cost you {self._money_fmt(lost)} "
+            head_var.set(f"💸 Those fees will cost you {_finance.money_fmt(lost)} "
                          f"— {pct:.0f}% of your nest egg.")
             # years of retirement stolen, using Core Four monthly expenses
             cf = self._core_four_load()
@@ -10600,9 +10552,9 @@ class BookReader:
             if monthly_need > 0:
                 yrs_stolen = lost / (monthly_need * 12)
                 extra = (f"  That's ~{yrs_stolen:.1f} years of your retirement "
-                         f"(at {self._money_fmt(monthly_need)}/mo expenses).")
-            sub_var.set(f"You'd keep {self._money_fmt(fv_index)} in a "
-                        f"{xf:g}%-fee index fund vs {self._money_fmt(fv_yours)} in "
+                         f"(at {_finance.money_fmt(monthly_need)}/mo expenses).")
+            sub_var.set(f"You'd keep {_finance.money_fmt(fv_index)} in a "
+                        f"{xf:g}%-fee index fund vs {_finance.money_fmt(fv_yours)} in "
                         f"your {yf:g}%-fee fund." + extra)
 
         for e in (e1, e2, e3, e4, e5, e6):
@@ -10614,13 +10566,7 @@ class BookReader:
         e1.focus_set()
 
     # ---- Critical Mass / decumulation longevity simulator -------------
-    @staticmethod
-    def _critical_mass(income, wd_rate):
-        return _finance.critical_mass(income, wd_rate)
 
-    @staticmethod
-    def _years_until_depleted(nest, annual_withdrawal, return_pct, cap=70):
-        return _finance.years_until_depleted(nest, annual_withdrawal, return_pct, cap)
 
     def open_critical_mass(self):
         """Decumulation: accumulating is only half the climb — you must not
@@ -10744,8 +10690,8 @@ class BookReader:
 
         def _save():
             stt = self._load_handoff_state() or {}
-            stt["cm_income"] = self._money_parse(inc_v.get()) or 0.0
-            stt["cm_nest"] = self._money_parse(nest_v.get()) or 0.0
+            stt["cm_income"] = _finance.money_parse(inc_v.get()) or 0.0
+            stt["cm_nest"] = _finance.money_parse(nest_v.get()) or 0.0
             for k, v in (("cm_wd", wd_v), ("cm_ret", ret_v), ("cm_fia", fia_v),
                          ("cm_age", age_v)):
                 try:
@@ -10770,8 +10716,8 @@ class BookReader:
                                       outline="")
 
         def _recompute(*_a):
-            income = self._money_parse(inc_v.get()) or 0.0
-            nest = self._money_parse(nest_v.get()) or 0.0
+            income = _finance.money_parse(inc_v.get()) or 0.0
+            nest = _finance.money_parse(nest_v.get()) or 0.0
             try:
                 wd = float(wd_v.get() or 0); ret = float(ret_v.get() or 0)
                 fiap = float(fia_v.get() or 0); age = int(float(age_v.get() or 0))
@@ -10782,39 +10728,39 @@ class BookReader:
                            "rate.")
                 prog_var.set(""); _draw_prog(0); decum.configure(text="")
                 fia.configure(text=""); return
-            crit = self._critical_mass(income, wd)
-            cm_var.set(f"🏁 Your Critical Mass: {self._money_fmt(crit)}")
+            crit = _finance.critical_mass(income, wd)
+            cm_var.set(f"🏁 Your Critical Mass: {_finance.money_fmt(crit)}")
             frac = (nest / crit) if crit else 0
             _draw_prog(frac)
             if nest >= crit:
                 prog_var.set(f"🎉 You've reached Critical Mass — work is optional! "
-                             f"({self._money_fmt(nest)} ≥ {self._money_fmt(crit)})")
+                             f"({_finance.money_fmt(nest)} ≥ {_finance.money_fmt(crit)})")
             else:
                 prog_var.set(f"{frac * 100:.0f}% there — "
-                             f"{self._money_fmt(crit - nest)} to go.")
+                             f"{_finance.money_fmt(crit - nest)} to go.")
             # decumulation
-            yrs = self._years_until_depleted(nest, income, ret)
+            yrs = _finance.years_until_depleted(nest, income, ret)
             if nest <= 0:
                 decum.configure(text="Enter your current nest egg to model how long "
                                 "it lasts.")
             elif yrs is None:
                 decum.configure(
-                    text=f"✅ Self-sustaining: drawing {self._money_fmt(income)}/yr "
-                    f"at {ret:g}% growth, your {self._money_fmt(nest)} never runs "
+                    text=f"✅ Self-sustaining: drawing {_finance.money_fmt(income)}/yr "
+                    f"at {ret:g}% growth, your {_finance.money_fmt(nest)} never runs "
                     "out. You won't outlive your money.")
             else:
                 to_age = f" — to age {age + yrs}" if age else ""
                 decum.configure(
-                    text=f"⚠ Drawing {self._money_fmt(income)}/yr, your "
-                    f"{self._money_fmt(nest)} lasts about {yrs} years{to_age}. "
+                    text=f"⚠ Drawing {_finance.money_fmt(income)}/yr, your "
+                    f"{_finance.money_fmt(nest)} lasts about {yrs} years{to_age}. "
                     "Build more, spend less, or add guaranteed income.")
             # FIA
             if nest > 0 and fiap > 0:
                 gtd = nest * fiap / 100.0
                 cover = (gtd / income * 100) if income else 0
                 fia.configure(
-                    text=f"🔒 A Fixed Indexed Annuity on {self._money_fmt(nest)} "
-                    f"could guarantee ≈ {self._money_fmt(gtd)}/yr for life "
+                    text=f"🔒 A Fixed Indexed Annuity on {_finance.money_fmt(nest)} "
+                    f"could guarantee ≈ {_finance.money_fmt(gtd)}/yr for life "
                     f"({fiap:g}% payout) — covering {cover:.0f}% of your target "
                     "income, with market upside and zero downside.")
             else:
@@ -23393,7 +23339,7 @@ class BookReader:
         # the current zone — saving while at load=5 (YELLOW) used to
         # write a GREEN file the user couldn't find. Now load=5 saves
         # land in YELLOW, load=2 saves land in RED, etc.
-        zone = self._zone_for_load(self._cognitive_load)
+        zone = _util.zone_for_load(self._cognitive_load)
         load = int(self._cognitive_load)
 
         # Naming standard from Sentinel Prime spec:
