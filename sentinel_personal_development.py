@@ -3273,12 +3273,11 @@ class BookReader:
             self._ai_attachment = None
             self._set_attach_label(f"⚠ couldn't read {name}", "#fca5a5")
             return
-        MAX = 6000   # keep within the small local model's context window
-        truncated = len(text) > MAX
-        self._ai_attachment = {"name": name, "text": text[:MAX],
-                               "truncated": truncated}
-        note = " (truncated to fit)" if truncated else ""
-        self._set_attach_label(f"📎 {name}{note}    ✕ remove", FG_TEXT)
+        CAP = 2_000_000   # keep the whole doc (capped); we retrieve from it per-question
+        self._ai_attachment = {"name": name, "text": text[:CAP]}
+        kb = max(1, len(text) // 1024)
+        hint = "I'll pull the relevant parts" if len(text) > 6000 else "full text"
+        self._set_attach_label(f"📎 {name} ({kb} KB — {hint})    ✕ remove", FG_TEXT)
 
     def _ai_chat_clear_attachment(self, _event=None) -> None:
         """Remove the pending chat attachment (✕, or after it has been sent)."""
@@ -3514,14 +3513,17 @@ class BookReader:
                     # (local RAG) so it has context during a study session.
                     local_context = self._ai_library_context(content)
 
-                    # 📎 Attached file — include its extracted text as one-shot
-                    # context for this message (cleared after the reply).
+                    # 📎 Attached file — retrieve the passages relevant to THIS
+                    # question (chunk + rank), so a whole book works, not just its
+                    # opening. One-shot: cleared after the reply.
                     attach_context = ""
                     att = getattr(self, "_ai_attachment", None)
                     if att:
-                        note = " (truncated)" if att.get("truncated") else ""
-                        attach_context = (f"Attached file '{att['name']}'{note}:\n"
-                                          + att.get("text", ""))
+                        from lyceum.local_context import retrieve_from_text
+                        body = retrieve_from_text(content, att.get("text", ""))
+                        if body:
+                            attach_context = (f"From the attached file "
+                                              f"'{att['name']}':\n{body}")
 
                     web_context = ""
                     if use_web:

@@ -6,7 +6,8 @@ import unittest
 import os
 import tempfile
 
-from lyceum.local_context import rank_snippets, score, retrieve_context
+from lyceum.local_context import (rank_snippets, score, retrieve_context,
+                                  chunk_text, retrieve_from_text)
 
 
 class ScoreTest(unittest.TestCase):
@@ -50,6 +51,45 @@ class RankSnippetsTest(unittest.TestCase):
         # a.md has both 'cat' and 'mat' (score 2), c.md has 'cat' x3 (score 3)
         self.assertEqual(top[0][0], "c.md")
         self.assertIn("a.md", [s for s, _ in top])
+
+
+class ChunkTextTest(unittest.TestCase):
+    def test_short_text_one_chunk(self):
+        self.assertEqual(chunk_text("hello", chunk_chars=100), ["hello"])
+
+    def test_empty_is_no_chunks(self):
+        self.assertEqual(chunk_text("   "), [])
+        self.assertEqual(chunk_text(""), [])
+
+    def test_long_text_splits_with_overlap(self):
+        text = "abcdefghij" * 50          # 500 chars
+        chunks = chunk_text(text, chunk_chars=200, overlap=50)
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(c) <= 200 for c in chunks))
+        # overlap: end of chunk 0 reappears at the start of chunk 1
+        self.assertTrue(chunks[1].startswith(chunks[0][-50:]))
+
+    def test_covers_to_end(self):
+        text = "".join(str(i % 10) for i in range(1000))
+        chunks = chunk_text(text, chunk_chars=300, overlap=50)
+        self.assertTrue(chunks[-1].endswith(text[-10:]))
+
+
+class RetrieveFromTextTest(unittest.TestCase):
+    def test_pulls_relevant_passage_from_a_long_doc(self):
+        doc = ("intro filler " * 200) + " the mitochondria is the powerhouse "
+        doc += ("more filler " * 200)
+        out = retrieve_from_text("mitochondria powerhouse", doc, chunk_chars=400)
+        self.assertIn("mitochondria", out)
+
+    def test_no_match_falls_back_to_opening(self):
+        doc = "alpha beta gamma " * 100
+        out = retrieve_from_text("zebra", doc, max_context=50)
+        self.assertTrue(out.startswith("alpha"))
+        self.assertLessEqual(len(out), 50)
+
+    def test_empty_doc(self):
+        self.assertEqual(retrieve_from_text("anything", ""), "")
 
 
 class RetrieveContextRecursionTest(unittest.TestCase):

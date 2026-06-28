@@ -53,6 +53,63 @@ def rank_snippets(query, documents, limit: int = 5, max_chars: int = 1500):
     return [(src, snip) for _, src, snip in scored[:limit]]
 
 
+def chunk_text(text: str, chunk_chars: int = 1200, overlap: int = 150):
+    """Split text into overlapping chunks for retrieval. Pure.
+
+    Overlap keeps a sentence that straddles a boundary from being lost. A short
+    text returns a single chunk; empty/whitespace returns []. This is what lets a
+    whole book be searched a passage at a time instead of truncated.
+    """
+    text = text or ""
+    if not text.strip():
+        return []
+    if len(text) <= chunk_chars:
+        return [text]
+    step = max(1, chunk_chars - overlap)
+    chunks = []
+    for start in range(0, len(text), step):
+        piece = text[start:start + chunk_chars]
+        if piece.strip():
+            chunks.append(piece)
+        if start + chunk_chars >= len(text):
+            break
+    return chunks
+
+
+def retrieve_from_text(query: str, text: str, limit: int = 4,
+                       chunk_chars: int = 1200, overlap: int = 150,
+                       max_context: int = 6000) -> str:
+    """Chunk ONE document and return the passages most relevant to the query,
+    joined and capped at ``max_context`` chars.
+
+    This is the "chat with a whole book" core: instead of sending the first N
+    characters, we send the few chunks that actually match the question. With no
+    keyword hits (or a short doc) we fall back to the opening. Pure — testable
+    without files. Used by the 📎 attach feature.
+    """
+    if not text:
+        return ""
+    chunks = chunk_text(text, chunk_chars, overlap)
+    if not chunks:
+        return ""
+    ranked = rank_snippets(
+        query,
+        [(f"part {i + 1}", c) for i, c in enumerate(chunks)],
+        limit=limit, max_chars=chunk_chars,
+    )
+    if not ranked:
+        return text[:max_context]            # no match -> the opening
+    out, total = [], 0
+    for _src, snip in ranked:
+        if total >= max_context:
+            break
+        if total + len(snip) > max_context:
+            snip = snip[:max_context - total]
+        out.append(snip)
+        total += len(snip)
+    return "\n…\n".join(out)
+
+
 def _iter_library(books_dir: str):
     """Yield (filename, body) for Library text files, RECURSING subfolders.
 
