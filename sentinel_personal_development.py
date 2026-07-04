@@ -11999,15 +11999,23 @@ class BookReader:
             style.theme_use(style.theme_use())  # keep current theme
         except Exception:
             pass
+        # Row height MUST come from the actual rendered font, not a fixed
+        # pixel count: the app is High-DPI aware, so on a scaled screen a
+        # hardcoded 24px is SHORTER than the text — every row gets clipped
+        # and crushed into the next (unreadable, especially for dyslexia).
+        # ~1.6× line spacing gives each row clear air above and below.
+        lib_list_font = tkfont.Font(family="Segoe UI", size=12)
+        lib_row_h = max(30, int(lib_list_font.metrics("linespace") * 1.6))
         style.configure(
             "Library.Treeview",
             background=BG_INPUT, fieldbackground=BG_INPUT, foreground=FG_TEXT,
-            rowheight=24, borderwidth=0, font=("Segoe UI", 11),
+            rowheight=lib_row_h, borderwidth=0, font=lib_list_font,
         )
         style.configure(
             "Library.Treeview.Heading",
             background=BG_PANEL, foreground=FG_TEXT,
-            font=("Segoe UI", 10, "bold"), relief=tk.FLAT, borderwidth=0,
+            font=("Segoe UI", 11, "bold"), relief=tk.FLAT, borderwidth=0,
+            padding=(6, 8),
         )
         style.map(
             "Library.Treeview",
