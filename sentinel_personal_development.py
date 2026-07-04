@@ -7675,7 +7675,9 @@ class BookReader:
         except Exception:
             return ""
 
-    def _ten_goals_save(self, text):
+    def _ten_goals_save(self, text) -> bool:
+        """Write today's goals. Returns True on success — and NEVER fails
+        silently: a save the user can't see or verify reads as broken."""
         now = datetime.now().isoformat()
         try:
             self._db_exec(
@@ -7683,8 +7685,13 @@ class BookReader:
                 "VALUES (?,?,?,?) ON CONFLICT(entry_date) DO UPDATE SET "
                 "goals=excluded.goals, updated_at=excluded.updated_at",
                 (date.today().isoformat(), text, now, now))
-        except Exception:
-            pass
+            return True
+        except Exception as e:
+            try:
+                messagebox.showerror("Could not save today's goals", str(e))
+            except Exception:
+                pass
+            return False
 
     def _ten_goals_streak(self):
         dates = set(self._ten_goals_dates())
@@ -7844,15 +7851,26 @@ class BookReader:
                     lines.append("I " + v)
             if not lines:
                 messagebox.showinfo("10 Goals",
-                                    "Write at least one goal in the present tense.")
+                                    "Write at least one goal in the present tense.",
+                                    parent=win)
                 return
-            self._ten_goals_save("\n".join(lines))
-            self.set_status(f"✍ {len(lines)} goals written into your "
-                            "subconscious. See you tomorrow.")
+            if not self._ten_goals_save("\n".join(lines)):
+                return
             _refresh_streak()
+            # Confirm INSIDE this window — the main status bar is hidden
+            # behind it, so a save with no visible change reads as broken.
+            n = len(lines)
+            saved_var.set(f"✓ Saved {n} goal{'s' if n != 1 else ''} for today")
+            self.set_status(f"✍ {n} goals written into your "
+                            "subconscious. See you tomorrow.")
+            win.after(1600, _close)
         # 💾 restored: the sweep orphaned _save — the 10 goals could be
         # written but never recorded, so the streak never counted. Enter
-        # on the last line saves too.
+        # on the last line saves too. A big green ✓ confirms in-window,
+        # then the notebook closes itself: written, recorded, done.
+        saved_var = tk.StringVar(value="")
+        tk.Label(srow, textvariable=saved_var, bg=BG_DARK, fg=ACCENT_GREEN,
+                 font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
         tk.Button(srow, text="💾 Save today's goals", command=_save,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16,
