@@ -1235,17 +1235,19 @@ class BookReader:
              "Which text-to-speech voice does the reading."),
             (add_btn, "➕ Add",
              "Adds an item to whatever you're working in. In the Prompt "
-             "Library it creates a new entry, ready for a title. Also "
-             "works on the Planner, Matrix, Journal, and more."),
+             "Library it creates a new entry, ready for a title. In the "
+             "📚 Library it opens the add-books picker. Also works on "
+             "the Planner, Matrix, Journal, and more."),
             (rem_btn, "➖ Remove",
              "Removes what's selected. In the Prompt Library it deletes "
-             "the selected entry — it always asks before deleting. "
-             "Select something first, then press Remove."),
+             "the selected entry; in the 📚 Library it sends the "
+             "selected book to the Recycle Bin. It always asks before "
+             "deleting. Select something first, then press Remove."),
             (self._ftb_dock_btn, "⇱ / ⇲ Dock",
              "⇱ Undock pops the bar out so it floats. While floating, "
-             "⇲ Dock ▼ opens a menu of your open windows — including the "
-             "Prompt Library — and the bar attaches to the top of the "
-             "one you pick."),
+             "⇲ Dock ▼ opens a menu of your open windows — including "
+             "the 📚 Library and the Prompt Library — and the bar "
+             "attaches to the top of the one you pick."),
         ]
 
     def _floating_toolbar_dock_to(self, target_host: str) -> None:
@@ -1310,6 +1312,12 @@ class BookReader:
             except tk.TclError:
                 host_frame.pack(side=tk.TOP, fill=tk.X)
             host_frame.pack_propagate(False)
+            # If the host window is closed while the bar lives in it,
+            # send the bar home to the dashboard instead of letting it
+            # vanish with the window.
+            host_frame.bind(
+                "<Destroy>",
+                lambda e, key=target_host: self._ftb_host_destroyed(e, key))
             setattr(self, host_attr_name, host_frame)
             self._ftb_current_host = host_frame
             
@@ -1324,6 +1332,34 @@ class BookReader:
         saved = st.get("floating_toolbar") or {}
         target = saved.get("host", "main")
         self._floating_toolbar_dock_to(target)
+
+    def _ftb_host_destroyed(self, event, dock_key: str) -> None:
+        """A dock host frame died with its window. If the bar was living
+        there, re-dock it to the main dashboard shortly after — deferred
+        so the window finishes closing first, and skipped when the whole
+        app (or just this dock) is going away anyway."""
+        host = getattr(self, f"_ftb_host_{dock_key}", None)
+        if host is not None and event.widget is not host:
+            return
+        if getattr(self, "_ftb_dock_target", None) != dock_key:
+            return
+
+        def _rescue():
+            try:
+                if not self.root.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            if getattr(self, "_ftb_dock_target", None) == dock_key:
+                try:
+                    self._floating_toolbar_dock_to("main")
+                except tk.TclError:
+                    pass
+
+        try:
+            self.root.after(80, _rescue)
+        except tk.TclError:
+            pass
 
     def _floating_toolbar_undock(self) -> None:
         # Same defensive cleanup as _floating_toolbar_dock_to — the old
@@ -1415,6 +1451,45 @@ class BookReader:
             self._ftb_float_xy = (x, y)
         except tk.TclError:
             pass
+
+    def _ftb_should_act_on(self, win, dock_key: str) -> bool:
+        """Shared routing test for the toolbar's ➕/➖ buttons: True when
+        `win` is open AND either the bar is docked to it (parking the
+        bar there is an explicit statement of intent), or the user's
+        most recent focus is inside it."""
+        if win is None:
+            return False
+        try:
+            if not win.winfo_exists():
+                return False
+        except tk.TclError:
+            return False
+        if getattr(self, "_ftb_dock_target", None) == dock_key:
+            return True
+        for target in self._ftb_action_targets():
+            # Bare windows say nothing about where the user is working;
+            # only a real widget should decide the routing.
+            if isinstance(target, (tk.Tk, tk.Toplevel)):
+                continue
+            return self._ftb_widget_is_descendant(target, win)
+        return False
+
+    def _library_add_from_toolbar(self) -> bool:
+        """Toolbar ➕ in the Library: open the add-books file picker."""
+        if not self._ftb_should_act_on(getattr(self, "_library_win", None),
+                                       "library"):
+            return False
+        self._library_add_files()
+        return True
+
+    def _library_remove_from_toolbar(self) -> bool:
+        """Toolbar ➖ in the Library: Recycle-Bin the selected book
+        (confirms first; friendly nudge when nothing is selected)."""
+        if not self._ftb_should_act_on(getattr(self, "_library_win", None),
+                                       "library"):
+            return False
+        self._library_remove_selected()
+        return True
 
     # ---- ❓ Toolbar tour -------------------------------------------------
     # One control per step: the control is flashed amber on the bar while
@@ -1571,6 +1646,8 @@ class BookReader:
         """Context-aware Add button from the floating toolbar."""
         if self._prompt_lib_add_from_toolbar():
             return
+        if self._library_add_from_toolbar():
+            return
         dstr = self._ftb_planner_day_for_target()
         if dstr is not None:
             self._planner_add_task(dstr)
@@ -1588,6 +1665,8 @@ class BookReader:
     def _ftb_action_remove(self) -> None:
         """Context-aware Remove button from the floating toolbar."""
         if self._prompt_lib_remove_from_toolbar():
+            return
+        if self._library_remove_from_toolbar():
             return
         dstr = self._ftb_planner_day_for_target()
         if dstr is not None:
@@ -14906,27 +14985,8 @@ class BookReader:
         self._prompt_lib_refresh()
 
     def _prompt_lib_toolbar_should_act(self) -> bool:
-        """True when the floating toolbar's ➕/➖ should target the Prompt
-        Library: the window is open AND either the bar is docked to it
-        (parking the bar there is an explicit statement of intent), or
-        the user's most recent focus is inside it."""
-        win = self._prompt_lib_win
-        if win is None:
-            return False
-        try:
-            if not win.winfo_exists():
-                return False
-        except tk.TclError:
-            return False
-        if getattr(self, "_ftb_dock_target", None) == "prompt_library":
-            return True
-        for target in self._ftb_action_targets():
-            # Bare windows say nothing about where the user is working;
-            # only a real widget should decide the routing.
-            if isinstance(target, (tk.Tk, tk.Toplevel)):
-                continue
-            return self._ftb_widget_is_descendant(target, win)
-        return False
+        return self._ftb_should_act_on(self._prompt_lib_win,
+                                       "prompt_library")
 
     def _prompt_lib_add_from_toolbar(self) -> bool:
         if not self._prompt_lib_toolbar_should_act():
