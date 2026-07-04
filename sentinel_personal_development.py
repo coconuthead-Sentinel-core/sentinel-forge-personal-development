@@ -2024,20 +2024,16 @@ class BookReader:
                             proc.communicate(input=chunk_text.encode("utf-8"), timeout=60)
                             if (proc.returncode == 0 and os.path.exists(wav_path)
                                     and os.path.getsize(wav_path) > 44):
-                                import wave
-                                with wave.open(wav_path, 'rb') as wf:
-                                    import pyaudio
-                                    p = pyaudio.PyAudio()
-                                    stream = p.open(format=p.get_format_from_width(wf.getsampwidth()), channels=wf.getnchannels(), rate=wf.getframerate(), output=True)
-                                    data = wf.readframes(1024)
-                                    while data:
-                                        if not getattr(self, "_ftb_reading", False) or self._ftb_worker_id != current_worker_id:
-                                            break
-                                        stream.write(data)
-                                        data = wf.readframes(1024)
-                                    stream.stop_stream()
-                                    stream.close()
-                                    p.terminate()
+                                # winsound, not pyaudio: PortAudio raises
+                                # "Unanticipated host error" on this
+                                # hardware (silent highlight-only reads).
+                                # The stop path's SND_PURGE interrupts.
+                                if (getattr(self, "_ftb_reading", False)
+                                        and self._ftb_worker_id == current_worker_id):
+                                    winsound.PlaySound(
+                                        wav_path,
+                                        winsound.SND_FILENAME
+                                        | winsound.SND_NODEFAULT)
                         finally:
                             if os.path.exists(wav_path):
                                 try: os.unlink(wav_path)
@@ -13687,25 +13683,21 @@ class BookReader:
                         break
                     if os.path.exists(wav_path) and os.path.getsize(wav_path) > 44:
                         try:
-                            import wave
-                            import pyaudio
-                            with wave.open(wav_path, 'rb') as wf:
-                                p = pyaudio.PyAudio()
-                                stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                                                channels=wf.getnchannels(),
-                                                rate=wf.getframerate(),
-                                                output=True)
-                                data = wf.readframes(1024)
-                                while data:
-                                    if not self.is_reading:
-                                        break
-                                    stream.write(data)
-                                    data = wf.readframes(1024)
-                                stream.stop_stream()
-                                stream.close()
-                                p.terminate()
-                        except Exception:
-                            pass
+                            # Stdlib winmm playback, exactly as the design
+                            # note above says. A pyaudio version swapped in
+                            # by a refactor died with PortAudio
+                            # "Unanticipated host error" on this hardware
+                            # and swallowed the exception — the highlight
+                            # marched on with NO audio. winsound plays the
+                            # chunk synchronously (which paces the loop) and
+                            # stop_reading()'s SND_PURGE cuts it instantly.
+                            winsound.PlaySound(
+                                wav_path,
+                                winsound.SND_FILENAME | winsound.SND_NODEFAULT)
+                        except Exception as e:
+                            self._highlight_queue.put(
+                                ("error", f"audio playback: {e}"))
+                            return
                 except Exception as e:
                     self._highlight_queue.put(("error", str(e)))
                     return
