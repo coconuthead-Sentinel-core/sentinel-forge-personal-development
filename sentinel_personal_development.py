@@ -767,6 +767,27 @@ class BookReader:
         self.available_voices.append("Microsoft System")
         self.voice_var = tk.StringVar(value=self.available_voices[0])
 
+        # 🐢/🐇 Reading speed — ONE shared setting for every speak path.
+        # Piper: --length_scale (bigger = slower AND clearer speech).
+        # SAPI/PowerShell: $s.Rate (-10..10). Persisted in HANDOFF_STATE
+        # so the choice survives restarts. Workers read it per chunk, so
+        # changing speed mid-read applies from the next sentence.
+        self.READ_SPEEDS = {
+            "🐢 Slowest": (1.55, -5),
+            "🐢 Slower":  (1.25, -2),
+            "Normal":     (1.0, 0),
+            "🐇 Faster":  (0.85, 2),
+        }
+        _saved_speed = ""
+        try:
+            _saved_speed = (self._load_handoff_state() or {}).get(
+                "read_speed", "")
+        except Exception:
+            pass
+        self.read_speed_var = tk.StringVar(
+            value=_saved_speed if _saved_speed in self.READ_SPEEDS
+            else "Normal")
+
         # --- Reading controls (font face, text size, mic accuracy, highlight,
         # color, voice) now live ON the 📖 Reader tab itself — see
         # _build_reader_controls() — so they sit right where the reading
@@ -1174,6 +1195,15 @@ class BookReader:
         _ftb_voice.configure(width=12, font=("Segoe UI", 9, "bold"))
         _ftb_voice.pack(side=tk.LEFT, padx=(6, 0))
 
+        # 🐢/🐇 Reading speed picker — rushed speech is garbled speech,
+        # especially for dyslexia; slower Piper output is also clearer.
+        _ftb_sp = tk.OptionMenu(body, self.read_speed_var,
+                                *self.READ_SPEEDS.keys(),
+                                command=self._on_read_speed_change)
+        _style_optionmenu(_ftb_sp)
+        _ftb_sp.configure(width=9, font=("Segoe UI", 9, "bold"))
+        _ftb_sp.pack(side=tk.LEFT, padx=(4, 0))
+
         # Universal Add/Remove buttons
         add_btn = tk.Button(
             body, text="➕ Add", command=self._ftb_action_add,
@@ -1233,6 +1263,10 @@ class BookReader:
              "your eye can follow along."),
             (_ftb_voice, "Voice picker",
              "Which text-to-speech voice does the reading."),
+            (_ftb_sp, "🐢 / 🐇 Reading speed",
+             "How fast the voice reads. Pick 🐢 Slower or Slowest if the "
+             "words sound rushed or garbled — slower is also clearer. "
+             "Changing it mid-read takes effect from the next sentence."),
             (add_btn, "➕ Add",
              "Adds an item to whatever you're working in. In the Prompt "
              "Library it creates a new entry, ready for a title. In the "
@@ -1382,9 +1416,9 @@ class BookReader:
         win.title("Toolbar")
         win.configure(bg=BG_PANEL)
         if self._ftb_float_xy:
-            geo = f"720x36+{self._ftb_float_xy[0]}+{self._ftb_float_xy[1]}"
+            geo = f"830x36+{self._ftb_float_xy[0]}+{self._ftb_float_xy[1]}"
         else:
-            geo = "720x36+240+180"
+            geo = "830x36+240+180"
         win.geometry(geo)
         win.minsize(160, 30)
         win.protocol("WM_DELETE_WINDOW", self._floating_toolbar_dock)
@@ -2014,6 +2048,7 @@ class BookReader:
                         try:
                             proc = subprocess.Popen(
                                 [PIPER_EXE, "--model", self.current_piper_voice,
+                                 "--length_scale", f"{self._read_speed()[0]:g}",
                                  "--output_file", wav_path],
                                 stdin=subprocess.PIPE,
                                 stdout=subprocess.DEVNULL,
@@ -2049,6 +2084,7 @@ class BookReader:
                                 f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
                                 f"{self._sapi_select_voice_ps()}"
+                                f"{self._sapi_rate_ps()}"
                                 "$s.Speak($t)"
                             )
                             proc = subprocess.Popen(
@@ -2177,6 +2213,29 @@ class BookReader:
             return ""
         quoted = self._ps_single_quote(voice)
         return f"try {{ $s.SelectVoice({quoted}) }} catch {{ }} "
+
+    def _read_speed(self) -> tuple[float, int]:
+        """(piper_length_scale, sapi_rate) for the current speed choice."""
+        try:
+            return self.READ_SPEEDS.get(self.read_speed_var.get(), (1.0, 0))
+        except Exception:
+            return (1.0, 0)
+
+    def _sapi_rate_ps(self) -> str:
+        """PowerShell fragment applying the reading speed to a SAPI $s."""
+        rate = self._read_speed()[1]
+        return f"$s.Rate = {rate}; " if rate else ""
+
+    def _on_read_speed_change(self, _value=None) -> None:
+        """Persist the speed choice. No engine restart needed — every
+        speak worker reads the setting per chunk."""
+        try:
+            st = self._load_handoff_state() or {}
+            st["read_speed"] = self.read_speed_var.get()
+            self._save_handoff_state(st)
+        except Exception:
+            pass
+        self.set_status(f"🔊 Reading speed: {self.read_speed_var.get()}")
 
     def _on_voice_change(self, value=None) -> None:
         voice = self.voice_var.get()
@@ -13421,6 +13480,12 @@ class BookReader:
         causes the engine to play audio but silently drop event callbacks
         — the "voice works, no highlight" symptom we hit before.
         """
+        try:
+            # Apply the shared 🐢/🐇 speed (base SAPI speaking rate ~200 wpm).
+            self.tts_engine.setProperty(
+                "rate", int(200 / self._read_speed()[0]))
+        except Exception:
+            pass
         # Compute spans lazily — only the granularity currently selected
         # gets built up front. The other two are computed on demand if
         # the user changes the highlight unit mid-read. This used to
@@ -13656,6 +13721,7 @@ class BookReader:
                     _vlog(f"  piper.Popen  --model {self.current_piper_voice!r}  chunk_len={len(chunk_text)}")
                     proc = subprocess.Popen(
                         [PIPER_EXE, "--model", self.current_piper_voice,
+                          "--length_scale", f"{self._read_speed()[0]:g}",
                           "--output_file", wav_path],
                         stdin=subprocess.PIPE,
                         stdout=subprocess.DEVNULL,
@@ -13747,6 +13813,7 @@ class BookReader:
                         f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                         "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
                         f"{self._sapi_select_voice_ps()}"
+                        f"{self._sapi_rate_ps()}"
                         "$s.Speak($t)"
                     )
                     _vlog(f"  SAPI.Popen   chunk_len={len(chunk_text)}  tmp={tmp!r}")
@@ -14300,6 +14367,7 @@ class BookReader:
                 f"$t = Get-Content -Raw -Encoding UTF8 -LiteralPath {self._ps_single_quote(tmp)}; "
                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
                 f"{self._sapi_select_voice_ps()}"
+                f"{self._sapi_rate_ps()}"
                 "$s.Speak($t)"
             )
             prev = getattr(self, "_word_speak_proc", None)
