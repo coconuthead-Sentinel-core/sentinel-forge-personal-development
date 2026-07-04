@@ -7634,8 +7634,18 @@ class BookReader:
                 return
             self._v2mom_delete(gid)
             _new(); _refresh_list()
-        # (💾 Save goal removed — Save widgets were taken out of the project.)
-        # (🗑 Delete removed — Delete/Remove widgets were taken out.)
+        # 💾/🗑 restored: the "remove Save widgets" sweep orphaned _save
+        # and _delete — goals could be typed here but never kept.
+        tk.Button(srow, text="💾 Save goal", command=_save,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=14,
+                  pady=5, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.RIGHT)
+        tk.Button(srow, text="🗑 Delete", command=_delete,
+                  font=("Segoe UI", 10), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=12,
+                  pady=5, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.LEFT)
         paned.add(right)
 
         listbox.bind("<<ListboxSelect>>", lambda _e: (
@@ -7840,7 +7850,15 @@ class BookReader:
             self.set_status(f"✍ {len(lines)} goals written into your "
                             "subconscious. See you tomorrow.")
             _refresh_streak()
-        # (💾 Save today's goals removed — Save widgets were taken out of the project.)
+        # 💾 restored: the sweep orphaned _save — the 10 goals could be
+        # written but never recorded, so the streak never counted. Enter
+        # on the last line saves too.
+        tk.Button(srow, text="💾 Save today's goals", command=_save,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16,
+                  pady=6, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.RIGHT)
+        entries[9][1].bind("<Return>", lambda _e: _save())
 
         _refresh_streak()
         entries[0][1].focus_set()
@@ -11763,7 +11781,14 @@ class BookReader:
             self.set_status(f"⏹ Handoff saved — next task: {nxt}")
             _close()
 
-        # (Save Handoff ✓ removed — Save widgets were taken out of the project.)
+        # ✓ Save restored: the sweep orphaned _save — the End-of-Session
+        # wizard could be filled in but the handoff was never written.
+        tk.Button(btn_row, text="✓ Save handoff", command=_save,
+                  bg=ACCENT_GREEN, fg="white",
+                  font=("Segoe UI", 10, "bold"),
+                  relief=tk.FLAT, padx=16, pady=6,
+                  cursor="hand2", borderwidth=0
+                  ).pack(side=tk.RIGHT)
         tk.Button(btn_row, text="Cancel", command=_close,
                   bg=ACCENT_SLATE, fg="white",
                   font=("Segoe UI", 10),
@@ -15747,7 +15772,7 @@ class BookReader:
         dlg.geometry("560x460")
 
         tk.Label(dlg, text="Term:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 10), padx=14, pady=(12, 2)).pack(anchor=tk.W)
+                 font=("Segoe UI", 10), padx=14).pack(anchor=tk.W, pady=(12, 2))
         term_var = tk.StringVar(value=term)
         term_e = tk.Entry(dlg, textvariable=term_var,
                           bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
@@ -15755,7 +15780,7 @@ class BookReader:
         term_e.pack(fill=tk.X, padx=14, ipady=5)
 
         tk.Label(dlg, text="Definition:", bg=BG_DARK, fg=FG_MUTED,
-                 font=("Segoe UI", 10), padx=14, pady=(10, 2)).pack(anchor=tk.W)
+                 font=("Segoe UI", 10), padx=14).pack(anchor=tk.W, pady=(10, 2))
         body = scrolledtext.ScrolledText(
             dlg, wrap=tk.WORD, font=("Segoe UI", 11),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
@@ -15813,7 +15838,13 @@ class BookReader:
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=10)
         row.pack(fill=tk.X)
-        # (Save removed — Save widgets were taken out of the project.)
+        # 💾 restored: the sweep orphaned save() — glossary entries could
+        # be typed but never stored.
+        tk.Button(row, text="💾 Save", command=save,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT,
+                  padx=16, pady=6, cursor="hand2", borderwidth=0,
+                  ).pack(side=tk.LEFT)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
@@ -18247,7 +18278,7 @@ class BookReader:
         def labeled(label_text, var, focus_first=False):
             tk.Label(dlg, text=label_text, bg=BG_DARK, fg=FG_MUTED,
                      font=("Segoe UI", 10),
-                     padx=14, pady=(10, 2)).pack(anchor=tk.W)
+                     padx=14).pack(anchor=tk.W, pady=(10, 2))
             e = tk.Entry(dlg, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
                          insertbackground=FG_TEXT, font=("Segoe UI", 11),
                          relief=tk.FLAT, bd=0)
@@ -18263,7 +18294,7 @@ class BookReader:
 
         tk.Label(dlg, text="Color:", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 10),
-                 padx=14, pady=(12, 2)).pack(anchor=tk.W)
+                 padx=14).pack(anchor=tk.W, pady=(12, 2))
         color_row = tk.Frame(dlg, bg=BG_DARK, padx=14)
         color_row.pack(fill=tk.X, pady=(0, 8))
         for key, label in (("green", "🟢 Green"),
@@ -18294,7 +18325,13 @@ class BookReader:
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=12)
         row.pack(fill=tk.X, side=tk.BOTTOM)
-        # (Save removed — Save widgets were taken out of the project.)
+        # ✓ restored: commit() was reachable only via a hidden Enter-key
+        # binding after the sweep — invisible, so folders "couldn't" be made.
+        tk.Button(row, text="✓ Create", command=commit,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT,
+                  padx=16, pady=6, cursor="hand2", borderwidth=0,
+                  ).pack(side=tk.LEFT)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
@@ -20711,8 +20748,16 @@ class BookReader:
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=3,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        # (🗑 Delete goal removed — Delete/Remove widgets were taken out.)
-        # (💾 Save goal removed — Save widgets were taken out of the project.)
+        # 💾/🗑 restored: the sweep orphaned _save_goal and _delete_goal —
+        # the worksheet could be filled in but never saved.
+        tk.Button(lbtn, text="💾 Save", command=_save_goal,
+                  font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(6, 0))
+        tk.Button(lbtn, text="🗑 Delete", command=_delete_goal,
+                  font=("Segoe UI", 9), bg=ACCENT_RED, fg="white",
+                  activebackground=ACCENT_RED, relief=tk.FLAT, padx=8, pady=3,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(6, 0))
 
         _refresh_list()
         _clear_form()
@@ -21475,11 +21520,18 @@ class BookReader:
 
         br_ = tk.Frame(win, bg=BG_DARK)
         br_.pack(fill=tk.X, padx=14, pady=14)
-        # (💾 Save removed — Save widgets were taken out of the project.)
+        # 💾 Save restored: the earlier "remove Save widgets" sweep left
+        # this dialog with a working _save() and NO way to call it — typed
+        # measures were silently lost. Enter in any box saves too.
+        tk.Button(br_, text="💾 Save", command=_save,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16, pady=5,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT, padx=(8, 0))
         tk.Button(br_, text="Cancel", command=_close,
                   font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=14, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        win.bind("<Return>", lambda _e: _save())
 
     # ---- "Not-To-Do" list + distraction (site) blocker ----------------
     _HOSTS_MARK_START = "# >>> Sentinel Forge focus block >>>"
@@ -23225,7 +23277,7 @@ class BookReader:
 
         tk.Label(dlg, text="Title:", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 10),
-                 padx=14, pady=(12, 2)).pack(anchor=tk.W)
+                 padx=14).pack(anchor=tk.W, pady=(12, 2))
         title_var = tk.StringVar(
             value=existing["title"] if existing else "")
         title_e = tk.Entry(dlg, textvariable=title_var,
@@ -23239,7 +23291,7 @@ class BookReader:
         tk.Label(dlg, text="Duration (Pomodoro length):",
                  bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 10),
-                 padx=14, pady=(12, 2)).pack(anchor=tk.W)
+                 padx=14).pack(anchor=tk.W, pady=(12, 2))
         duration_var = tk.StringVar(
             value=str(existing["duration_min"]) if existing else "25")
         dur_row = tk.Frame(dlg, bg=BG_DARK, padx=14)
@@ -23269,7 +23321,7 @@ class BookReader:
 
         tk.Label(dlg, text="Notes (optional):", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 10),
-                 padx=14, pady=(12, 2)).pack(anchor=tk.W)
+                 padx=14).pack(anchor=tk.W, pady=(12, 2))
         notes_w = scrolledtext.ScrolledText(
             dlg, wrap=tk.WORD, font=("Segoe UI", 11),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
@@ -23333,7 +23385,15 @@ class BookReader:
 
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=10)
         row.pack(fill=tk.X)
-        # (Save removed — Save widgets were taken out of the project.)
+        # 💾 restored: commit() was reachable only via Enter in the title
+        # box after the sweep — from the multi-line notes box there was
+        # no way to save the block at all.
+        tk.Button(row, text="💾 Save", command=commit,
+                  font=("Segoe UI", 11, "bold"),
+                  bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
+                  relief=tk.FLAT, padx=16, pady=6,
+                  cursor="hand2", borderwidth=0,
+                  ).pack(side=tk.LEFT)
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"),
                   bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
