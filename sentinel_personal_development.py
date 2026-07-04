@@ -1044,6 +1044,16 @@ class BookReader:
         self._ftb_is_docked = True
         self._ftb_float_xy: tuple[int, int] | None = None
         self._ftb_last_focus_target = None
+        # Which host the bar is currently docked to ("main",
+        # "prompt_library", ...) — None while floating. Lets Add/Remove
+        # act on the docked window even before anything there has focus.
+        self._ftb_dock_target: str | None = None
+        # ❓ Tour state: [(widget, title, text), ...] rebuilt with the bar;
+        # _ftb_tour_lit remembers the control being flashed so its colors
+        # can be restored.
+        self._ftb_tour_items: list[tuple] = []
+        self._ftb_tour_win = None
+        self._ftb_tour_lit = None
 
         # Restore persisted state from HANDOFF_STATE.
         st = self._load_handoff_state() or {}
@@ -1193,6 +1203,51 @@ class BookReader:
             padx=8, pady=2, cursor="hand2", borderwidth=0)
         self._ftb_dock_btn.pack(side=tk.RIGHT, padx=4, pady=3)
 
+        # ❓ Tour — guided walkthrough of every control on this bar.
+        tour_btn = tk.Button(
+            parent, text="❓ Tour", command=self._ftb_show_tour,
+            font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
+            activebackground=ACCENT_CYAN, relief=tk.FLAT,
+            padx=8, pady=2, cursor="hand2", borderwidth=0)
+        tour_btn.pack(side=tk.RIGHT, padx=(0, 2), pady=3)
+
+        # The tour walks these in order, flashing each control amber.
+        self._ftb_tour_items = [
+            (grip, "⋮⋮  Drag grip",
+             "When the bar is floating, hold this grip and drag to move "
+             "the bar anywhere on the screen."),
+            (_ftb_q, "Quality picker",
+             "How carefully the microphone listens. Fast types quickest, "
+             "Best is the most accurate but slower."),
+            (mic_btn, "🎤 Voice",
+             "Starts and stops dictation. Click into any text box, press "
+             "Voice, and speak — your words are typed for you."),
+            (read_btn, "🔊 Read",
+             "Reads back what you just typed or dictated, so you can "
+             "proofread by ear. Click it again to stop."),
+            (_ftb_rs, "Read scope",
+             "How much 🔊 Read speaks: the entire text, one sentence, or "
+             "one word."),
+            (_ftb_rc, "Follow-along color",
+             "While reading, the spoken part is painted this color so "
+             "your eye can follow along."),
+            (_ftb_voice, "Voice picker",
+             "Which text-to-speech voice does the reading."),
+            (add_btn, "➕ Add",
+             "Adds an item to whatever you're working in. In the Prompt "
+             "Library it creates a new entry, ready for a title. Also "
+             "works on the Planner, Matrix, Journal, and more."),
+            (rem_btn, "➖ Remove",
+             "Removes what's selected. In the Prompt Library it deletes "
+             "the selected entry — it always asks before deleting. "
+             "Select something first, then press Remove."),
+            (self._ftb_dock_btn, "⇱ / ⇲ Dock",
+             "⇱ Undock pops the bar out so it floats. While floating, "
+             "⇲ Dock ▼ opens a menu of your open windows — including the "
+             "Prompt Library — and the bar attaches to the top of the "
+             "one you pick."),
+        ]
+
     def _floating_toolbar_dock_to(self, target_host: str) -> None:
         """Docks the floating toolbar to a specific parent host."""
         if self._ftb_win is not None:
@@ -1202,20 +1257,24 @@ class BookReader:
                 pass
             self._ftb_win = None
             
-        # Clean current host 
-        if hasattr(self, "_ftb_current_host") and getattr(self, "_ftb_current_host", None):
-            for ch in self._ftb_current_host.winfo_children():
+        # Clean current host. The previous host may already be DEAD (its
+        # window was closed) — winfo_children() on a destroyed frame
+        # raises TclError, which used to kill the whole re-dock and lose
+        # the toolbar until restart. Clean both candidates defensively.
+        for host in (getattr(self, "_ftb_current_host", None),
+                     self._ftb_dock_host):
+            if host is None:
+                continue
+            try:
+                children = host.winfo_children()
+            except tk.TclError:
+                continue
+            for ch in children:
                 try:
                     ch.destroy()
                 except tk.TclError:
                     pass
-        else:
-            for ch in self._ftb_dock_host.winfo_children():
-                try:
-                    ch.destroy()
-                except tk.TclError:
-                    pass
-                    
+
         # Apply new host dynamically
         window_map = {
             "main": self.root,
@@ -1223,7 +1282,8 @@ class BookReader:
             "session_start": getattr(self, "_session_start_win", None),
             "session_end": getattr(self, "_session_end_win", None),
             "library": getattr(self, "_library_win", None),
-            "planning": getattr(self, "_planning_win", None)
+            "planning": getattr(self, "_planning_win", None),
+            "prompt_library": getattr(self, "_prompt_lib_win", None)
         }
         
         target_win = window_map.get(target_host, self.root)
@@ -1254,6 +1314,7 @@ class BookReader:
             self._ftb_current_host = host_frame
             
         self._ftb_is_docked = True
+        self._ftb_dock_target = target_host
         self._build_floating_toolbar_widgets(self._ftb_current_host)
         self._save_floating_toolbar_state(target_host=target_host)
 
@@ -1265,19 +1326,22 @@ class BookReader:
         self._floating_toolbar_dock_to(target)
 
     def _floating_toolbar_undock(self) -> None:
-        if hasattr(self, "_ftb_current_host") and getattr(self, "_ftb_current_host", None):
-            for ch in self._ftb_current_host.winfo_children():
+        # Same defensive cleanup as _floating_toolbar_dock_to — the old
+        # host may live in a window that's already been destroyed.
+        for host in (getattr(self, "_ftb_current_host", None),
+                     self._ftb_dock_host):
+            if host is None:
+                continue
+            try:
+                children = host.winfo_children()
+            except tk.TclError:
+                continue
+            for ch in children:
                 try:
                     ch.destroy()
                 except tk.TclError:
                     pass
-        else:
-            for ch in self._ftb_dock_host.winfo_children():
-                try:
-                    ch.destroy()
-                except tk.TclError:
-                    pass
-                    
+
         win = tk.Toplevel(self.root)
         win.title("Toolbar")
         win.configure(bg=BG_PANEL)
@@ -1290,6 +1354,7 @@ class BookReader:
         win.protocol("WM_DELETE_WINDOW", self._floating_toolbar_dock)
         self._ftb_win = win
         self._ftb_is_docked = False
+        self._ftb_dock_target = None
         self._build_floating_toolbar_widgets(win)
         self._save_floating_toolbar_state(target_host=getattr(self._load_handoff_state() or {}, "floating_toolbar", {}).get("host", "main"))
 
@@ -1307,7 +1372,8 @@ class BookReader:
                 "Session Start": "_session_start_win",
                 "Session End": "_session_end_win",
                 "Library": "_library_win",
-                "Planning Hub": "_planning_win"
+                "Planning Hub": "_planning_win",
+                "Prompt Library": "_prompt_lib_win"
             }
             
             for label, attr in panels.items():
@@ -1350,8 +1416,161 @@ class BookReader:
         except tk.TclError:
             pass
 
+    # ---- ❓ Toolbar tour -------------------------------------------------
+    # One control per step: the control is flashed amber on the bar while
+    # a card explains what it does. Short sentences on purpose.
+    def _ftb_tour_unflash(self) -> None:
+        """Restore the original colors of the control the tour lit up."""
+        lit = self._ftb_tour_lit
+        self._ftb_tour_lit = None
+        if not lit:
+            return
+        widget, opts = lit
+        try:
+            if widget.winfo_exists():
+                widget.configure(**opts)
+        except tk.TclError:
+            pass
+
+    def _ftb_tour_flash(self, widget) -> None:
+        """Paint one toolbar control amber so the eye lands on it."""
+        self._ftb_tour_unflash()
+        if widget is None:
+            return
+        opts = {}
+        try:
+            if not widget.winfo_exists():
+                return
+            opts["bg"] = widget.cget("bg")
+        except tk.TclError:
+            return
+        try:
+            opts["activebackground"] = widget.cget("activebackground")
+        except tk.TclError:
+            pass
+        try:
+            widget.configure(**{k: ACCENT_AMBER for k in opts})
+        except tk.TclError:
+            return
+        self._ftb_tour_lit = (widget, opts)
+
+    def _ftb_show_tour(self) -> None:
+        """❓ Tour — step-by-step guided tour of the floating toolbar,
+        ending on ➕ Add / ➖ Remove / Dock — the three that matter for
+        adding and removing Prompt Library entries."""
+        items = list(self._ftb_tour_items or [])
+        if not items:
+            return
+        old = self._ftb_tour_win
+        if old is not None:
+            try:
+                old.destroy()
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._ftb_tour_win = win
+        win.title("❓ Toolbar tour")
+        win.configure(bg=BG_PANEL)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+
+        # Size relative to the screen (small displays with DPI scaling),
+        # and sit just under the toolbar so both stay visible together.
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        w = min(470, sw - 60)
+        h = min(240, sh - 120)
+        anchor = None
+        for cand in (getattr(self, "_ftb_win", None),
+                     getattr(self, "_ftb_current_host", None)):
+            if cand is None:
+                continue
+            try:
+                if cand.winfo_exists():
+                    anchor = cand
+                    break
+            except tk.TclError:
+                continue
+        if anchor is not None:
+            try:
+                x = anchor.winfo_rootx()
+                y = anchor.winfo_rooty() + anchor.winfo_height() + 12
+            except tk.TclError:
+                x, y = 200, 160
+        else:
+            x, y = 200, 160
+        x = max(8, min(x, sw - w - 8))
+        y = max(8, min(y, sh - h - 60))
+        win.geometry(f"{w}x{h}+{x}+{y}")
+
+        step_var = tk.StringVar()
+        title_var = tk.StringVar()
+        body_var = tk.StringVar()
+        tk.Label(win, textvariable=step_var, bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")
+                 ).pack(anchor=tk.W, padx=14, pady=(10, 0))
+        tk.Label(win, textvariable=title_var, bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")
+                 ).pack(anchor=tk.W, padx=14, pady=(2, 4))
+        tk.Label(win, textvariable=body_var, bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 10), justify=tk.LEFT,
+                 wraplength=w - 32
+                 ).pack(anchor=tk.W, fill=tk.X, padx=14)
+
+        btns = tk.Frame(win, bg=BG_PANEL)
+        btns.pack(side=tk.BOTTOM, fill=tk.X, padx=12, pady=10)
+        state = {"i": 0}
+
+        def _close():
+            self._ftb_tour_unflash()
+            self._ftb_tour_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+
+        def _show(i: int) -> None:
+            i = max(0, min(i, len(items) - 1))
+            state["i"] = i
+            widget, title, text = items[i]
+            step_var.set(f"Step {i + 1} of {len(items)}")
+            title_var.set(title)
+            body_var.set(text)
+            self._ftb_tour_flash(widget)
+            back_btn.configure(
+                state=(tk.NORMAL if i > 0 else tk.DISABLED))
+            next_btn.configure(
+                text=("✓ Done" if i == len(items) - 1 else "Next ▶"))
+
+        def _next():
+            if state["i"] >= len(items) - 1:
+                _close()
+            else:
+                _show(state["i"] + 1)
+
+        back_btn = tk.Button(
+            btns, text="◀ Back", command=lambda: _show(state["i"] - 1),
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
+            activebackground=ACCENT_SLATE, relief=tk.FLAT,
+            padx=12, pady=4, cursor="hand2", borderwidth=0)
+        back_btn.pack(side=tk.LEFT)
+        next_btn = tk.Button(
+            btns, text="Next ▶", command=_next,
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+            activebackground=ACCENT_GREEN, relief=tk.FLAT,
+            padx=12, pady=4, cursor="hand2", borderwidth=0)
+        next_btn.pack(side=tk.RIGHT)
+
+        win.protocol("WM_DELETE_WINDOW", _close)
+        _show(0)
+
     def _ftb_action_add(self) -> None:
         """Context-aware Add button from the floating toolbar."""
+        if self._prompt_lib_add_from_toolbar():
+            return
         dstr = self._ftb_planner_day_for_target()
         if dstr is not None:
             self._planner_add_task(dstr)
@@ -1368,6 +1587,8 @@ class BookReader:
 
     def _ftb_action_remove(self) -> None:
         """Context-aware Remove button from the floating toolbar."""
+        if self._prompt_lib_remove_from_toolbar():
+            return
         dstr = self._ftb_planner_day_for_target()
         if dstr is not None:
             self._planner_delete_selected(dstr)
@@ -14562,6 +14783,13 @@ class BookReader:
                 win.destroy()
             except tk.TclError:
                 pass
+            # The toolbar's dock host dies with this window — send the
+            # bar home to the dashboard instead of letting it vanish.
+            if getattr(self, "_ftb_dock_target", None) == "prompt_library":
+                try:
+                    self._floating_toolbar_dock_to("main")
+                except tk.TclError:
+                    pass
 
         win.protocol("WM_DELETE_WINDOW", _close)
         self._prompt_lib_refresh(select_id=select_id)
@@ -14676,6 +14904,45 @@ class BookReader:
         self._prompt_lib_current_id = None
         self._prompt_lib_clear_detail()
         self._prompt_lib_refresh()
+
+    def _prompt_lib_toolbar_should_act(self) -> bool:
+        """True when the floating toolbar's ➕/➖ should target the Prompt
+        Library: the window is open AND either the bar is docked to it
+        (parking the bar there is an explicit statement of intent), or
+        the user's most recent focus is inside it."""
+        win = self._prompt_lib_win
+        if win is None:
+            return False
+        try:
+            if not win.winfo_exists():
+                return False
+        except tk.TclError:
+            return False
+        if getattr(self, "_ftb_dock_target", None) == "prompt_library":
+            return True
+        for target in self._ftb_action_targets():
+            # Bare windows say nothing about where the user is working;
+            # only a real widget should decide the routing.
+            if isinstance(target, (tk.Tk, tk.Toplevel)):
+                continue
+            return self._ftb_widget_is_descendant(target, win)
+        return False
+
+    def _prompt_lib_add_from_toolbar(self) -> bool:
+        if not self._prompt_lib_toolbar_should_act():
+            return False
+        self._prompt_lib_new()
+        self.set_status("🗒 New Prompt Library entry — give it a title.")
+        return True
+
+    def _prompt_lib_remove_from_toolbar(self) -> bool:
+        if not self._prompt_lib_toolbar_should_act():
+            return False
+        if self._prompt_lib_current_id is None:
+            self.set_status("Select a Prompt Library entry to remove.")
+            return True
+        self._prompt_lib_delete_current()
+        return True
 
     def _prompt_lib_paste_response(self) -> None:
         """Append the clipboard to the Response box — quick way to drop a
