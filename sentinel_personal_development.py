@@ -3673,6 +3673,151 @@ class BookReader:
         except Exception:
             return ""
 
+    # ---- 📄 Draft document (assistant writes real Word/Excel files) -----
+    def _sentinel_documents_dir(self) -> str:
+        return os.path.join(self._onedrive_root(), "Desktop",
+                            "Sentinel Documents")
+
+    def _open_draft_doc_dialog(self) -> None:
+        """📄 Describe a document; the assistant drafts it and the app
+        writes a REAL file — .docx letter or .xlsx table with live SUM
+        formulas — into OneDrive\\Desktop\\Sentinel Documents, then opens
+        it in Word/Excel."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("📄 Draft a document")
+        dlg.configure(bg=BG_DARK)
+        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        w, h = min(560, sw - 80), min(360, sh - 140)
+        dlg.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}+{max(0, (sh - h) // 2)}")
+
+        tk.Label(dlg, text="📄 What should the assistant write?",
+                 bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 12, "bold"),
+                 padx=14).pack(anchor=tk.W, pady=(12, 2))
+        tk.Label(dlg, text="e.g. \"a budget for my July expenses: rent 900, "
+                 "utilities 140, food 250\" or \"a letter asking my landlord "
+                 "for a rent receipt\"", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9), wraplength=w - 40, justify=tk.LEFT,
+                 padx=14).pack(anchor=tk.W)
+
+        kind_var = tk.StringVar(value="xlsx")
+        krow = tk.Frame(dlg, bg=BG_DARK, padx=14)
+        krow.pack(fill=tk.X, pady=(8, 4))
+        for val, lab in (("xlsx", "📊 Excel spreadsheet (.xlsx)"),
+                         ("docx", "📝 Word document (.docx)")):
+            tk.Radiobutton(krow, text=lab, variable=kind_var, value=val,
+                           bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_INPUT,
+                           activebackground=BG_DARK, activeforeground=FG_TEXT,
+                           font=("Segoe UI", 10, "bold")
+                           ).pack(side=tk.LEFT, padx=(0, 14))
+
+        box = scrolledtext.ScrolledText(
+            dlg, wrap=tk.WORD, height=5, font=("Segoe UI", 11),
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            relief=tk.FLAT, padx=10, pady=8, undo=True)
+        box.pack(fill=tk.BOTH, expand=True, padx=14, pady=(4, 4))
+        box.bind("<FocusIn>", lambda _e, b=box: self._set_mic_target(b),
+                 add="+")
+
+        def _create():
+            request = box.get("1.0", tk.END).strip()
+            if not request:
+                messagebox.showinfo("Describe the document",
+                                    "Type (or dictate) what you want the "
+                                    "assistant to write.", parent=dlg)
+                return
+            kind = kind_var.get()
+            try:
+                dlg.destroy()
+            except tk.TclError:
+                pass
+            threading.Thread(target=self._draft_doc_worker,
+                             args=(kind, request), daemon=True).start()
+
+        brow = tk.Frame(dlg, bg=BG_DARK, padx=14)
+        brow.pack(fill=tk.X, pady=(0, 12))
+        tk.Button(brow, text="📄 Create document", command=_create,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16,
+                  pady=6, cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(brow, text="Cancel", command=dlg.destroy,
+                  font=("Segoe UI", 11), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=14,
+                  pady=6, cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        box.focus_set()
+
+    def _chat_say(self, text: str) -> None:
+        """Post a Sentinel line into the chat history if it's open; always
+        mirror to the status bar."""
+        append = getattr(self, "_ai_chat_append", None)
+        if append is not None:
+            try:
+                self.root.after(0, lambda: append("Sentinel", text))
+            except Exception:
+                pass
+        try:
+            self.root.after(0, lambda: self.set_status(text[:120]))
+        except Exception:
+            pass
+
+    def _draft_doc_worker(self, kind: str, request: str) -> None:
+        """Background: model drafts → file written → file opened.
+        Reports honestly into the chat at every failure point."""
+        from lyceum import doc_writer as dw
+        brain = getattr(self, "_ai_brain", None)
+        if brain is None or not getattr(brain, "available", False):
+            try:
+                import ai_brain
+                brain = ai_brain.get_brain()
+            except Exception:
+                brain = None
+        if brain is None or not brain.available:
+            self._chat_say("📄 I can't draft right now — the local AI "
+                           "isn't available. Is Ollama running?")
+            return
+        self._chat_say("📄 Drafting your document…")
+        try:
+            if kind == "xlsx":
+                reply = brain.ask(dw.sheet_prompt(request),
+                                  system=dw.SHEET_SYSTEM)
+                if dw.looks_like_refusal(reply or ""):
+                    reply = brain.ask(
+                        "This is my own routine personal paperwork. "
+                        + dw.sheet_prompt(request), system=dw.SHEET_SYSTEM)
+                title, headers, rows = dw.parse_table(reply or "")
+                if not rows:
+                    self._chat_say(
+                        "📄 I couldn't turn that into a table this time — "
+                        "try describing the columns and values more "
+                        "plainly, e.g. \"rent 900, food 250\". "
+                        f"(The draft came back as: {(reply or '')[:160]})")
+                    return
+                path = os.path.join(self._sentinel_documents_dir(),
+                                    dw.suggest_filename("xlsx", title))
+                dw.write_table_xlsx(path, title or "Sheet1", headers, rows)
+            else:
+                reply = brain.ask(dw.letter_prompt(request),
+                                  system=dw.LETTER_SYSTEM)
+                if dw.looks_like_refusal(reply or ""):
+                    reply = brain.ask(
+                        "This is my own routine personal correspondence. "
+                        + dw.letter_prompt(request), system=dw.LETTER_SYSTEM)
+                if not (reply or "").strip() or dw.looks_like_refusal(reply):
+                    self._chat_say("📄 The model declined to draft that — "
+                                   "try rewording the request.")
+                    return
+                title = " ".join(request.split()[:6])
+                path = os.path.join(self._sentinel_documents_dir(),
+                                    dw.suggest_filename("docx", title))
+                dw.write_letter_docx(path, None, reply)
+            self._chat_say(f"📄 Done — saved to {path}. Opening it now. "
+                           "Please review before you use it.")
+            try:
+                os.startfile(path)
+            except Exception:
+                pass
+        except Exception as e:
+            self._chat_say(f"📄 Could not create the document: {e}")
+
     # ---- ☁ OneDrive access for the assistant ----------------------------
     # OneDrive is synced to disk, so "give the assistant my OneDrive" is
     # plain LOCAL file reading — same cached index machinery as the
@@ -3886,6 +4031,15 @@ class BookReader:
             command=self._ai_chat_attach_file,
         )
         btn_attach.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        # 📄 Draft document — the assistant WRITES a real Word or Excel
+        # file (letters, budgets with live formulas) into OneDrive.
+        btn_draft = tk.Button(
+            input_frame, text="📄 Draft", bg=ACCENT_GREEN, fg="white",
+            font=("Segoe UI", 10, "bold"), relief=tk.FLAT, cursor="hand2",
+            activebackground=ACCENT_GREEN,
+            command=self._open_draft_doc_dialog,
+        )
+        btn_draft.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
 
         # Thin status row just above the input: shows the attached file + ✕ remove.
         attach_bar = tk.Frame(parent, bg=BG_DARK)
@@ -3935,6 +4089,10 @@ class BookReader:
         except Exception as e:
             brain = None
             _append_msg("Error", f"Could not load AI module: {e}")
+
+        # Shared with the 📄 Draft-document flow (runs outside this closure).
+        self._ai_chat_append = _append_msg
+        self._ai_brain = brain
 
         def _send(event=None):
             if not brain or not brain.available:
