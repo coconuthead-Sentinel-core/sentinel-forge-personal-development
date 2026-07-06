@@ -3664,6 +3664,73 @@ class BookReader:
         except Exception:
             return ""
 
+    # ---- ☁ OneDrive access for the assistant ----------------------------
+    # OneDrive is synced to disk, so "give the assistant my OneDrive" is
+    # plain LOCAL file reading — same cached index machinery as the
+    # Library, walked over the whole OneDrive tree (repos/caches pruned).
+    # Nothing leaves the machine; the model only sees retrieved passages.
+    @staticmethod
+    def _onedrive_root() -> str:
+        return (os.environ.get("OneDrive")
+                or os.path.expanduser(r"~\OneDrive"))
+
+    def _ensure_onedrive_index(self) -> None:
+        """Start the background OneDrive index build (first ☁ check).
+        The extraction cache makes every later run fast."""
+        if getattr(self, "_onedrive_index", None) is not None:
+            return
+        if getattr(self, "_onedrive_index_building", False):
+            return
+        self._onedrive_index_building = True
+        self.set_status("☁ Indexing your OneDrive for the assistant — the "
+                        "first time can take a few minutes…")
+
+        def _work():
+            try:
+                from lyceum.doc_index import (EXCLUDE_DIRS, build_index_over,
+                                              cache_dir)
+                cache_file = os.path.join(cache_dir(), "onedrive_index.json")
+                # The Books folder is already covered by the always-on
+                # Library context — exclude it here so the same passages
+                # don't arrive twice.
+                idx = build_index_over(
+                    self._onedrive_root(), cache_file,
+                    exclude_dirs=EXCLUDE_DIRS | {"books"})
+                self._onedrive_index = idx
+                msg = (f"☁ OneDrive ready — {len(idx)} files searchable "
+                       "by the assistant.")
+            except Exception as e:
+                self._onedrive_index = []
+                msg = f"☁ OneDrive indexing failed: {e}"
+            self._onedrive_index_building = False
+            try:
+                self.root.after(0, lambda: self.set_status(msg))
+            except Exception:
+                pass
+
+        threading.Thread(target=_work, daemon=True).start()
+
+    def _ai_onedrive_context(self, query: str) -> str:
+        """Passages from the user's OneDrive relevant to the query — or an
+        honest note while the index is still building."""
+        try:
+            index = getattr(self, "_onedrive_index", None)
+            if index is None:
+                self._ensure_onedrive_index()
+                return ("NOTE: the user's OneDrive files are still being "
+                        "indexed. Tell the user the OneDrive index is still "
+                        "building and to ask again in a few minutes.")
+            if not index:
+                return ""
+            from lyceum.local_context import retrieve_from_index
+            hits = retrieve_from_index(query, index)
+            if hits:
+                return ("From the user's OneDrive files (path shown per "
+                        "passage):\n" + hits)
+            return ""
+        except Exception:
+            return ""
+
     def _ai_web_search_context(self, query: str, limit: int = 5) -> str:
         """Return compact web-search context for the local assistant.
 
@@ -3783,6 +3850,25 @@ class BookReader:
             font=("Segoe UI", 10, "bold"), cursor="hand2",
         )
         web_toggle.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+
+        # ☁ OneDrive — check it and the assistant can search every
+        # readable document in the user's synced OneDrive folder (local
+        # read-only retrieval; the index builds in the background on the
+        # first check and is cached afterwards).
+        onedrive_var = tk.BooleanVar(value=False)
+
+        def _onedrive_toggled():
+            if onedrive_var.get():
+                self._ensure_onedrive_index()
+
+        onedrive_toggle = tk.Checkbutton(
+            input_frame, text="☁ OneDrive", variable=onedrive_var,
+            command=_onedrive_toggled,
+            bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_PANEL,
+            activebackground=BG_DARK, activeforeground=FG_TEXT,
+            font=("Segoe UI", 10, "bold"), cursor="hand2",
+        )
+        onedrive_toggle.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
         # 📎 Attach a file — its text becomes context for the next message.
         btn_attach = tk.Button(
             input_frame, text="📎", bg=BG_PANEL, fg=FG_TEXT,
@@ -3836,7 +3922,7 @@ class BookReader:
             if not brain.available:
                 _append_msg("Sentinel", f"Offline. {brain.last_error}")
             else:
-                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. Just ask me to \"search the web for …\" and I'll look it up online for you. (The 🌐 Web search checkbox forces a search for every message.)")
+                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. Just ask me to \"search the web for …\" and I'll look it up online. Check ☁ OneDrive and I can also search every readable document in your OneDrive. (🌐 Web search forces a web search for every message.)")
         except Exception as e:
             brain = None
             _append_msg("Error", f"Could not load AI module: {e}")
@@ -3849,6 +3935,7 @@ class BookReader:
             if not content:
                 return "break"
             use_web = bool(web_var.get())
+            use_onedrive = bool(onedrive_var.get())
             web_query = content
             lower = content.lower()
             if lower.startswith("/web "):
@@ -3875,8 +3962,10 @@ class BookReader:
             # Show temporary thinking indicator
             chat_history.config(state=tk.NORMAL)
             thinking_idx = chat_history.index(tk.END)
-            thinking_text = ("🌐 Searching the web...\n\n" if use_web
-                             else "Thinking...\n\n")
+            searching = ([" the web"] if use_web else []) + \
+                        ([" your OneDrive"] if use_onedrive else [])
+            thinking_text = (f"🔎 Searching{' +'.join(searching)}...\n\n"
+                             if searching else "Thinking...\n\n")
             chat_history.insert(tk.END, f"Sentinel:\n{thinking_text}", "Sentinel")
             chat_history.see(tk.END)
             chat_history.config(state=tk.DISABLED)
@@ -3916,9 +4005,13 @@ class BookReader:
                     web_context = ""
                     if use_web:
                         web_context = self._ai_web_search_context(web_query)
+                    onedrive_context = ""
+                    if use_onedrive:
+                        onedrive_context = self._ai_onedrive_context(content)
                     combined_context = "\n\n".join(
                         part for part in
-                        (planner_context, local_context, attach_context, web_context)
+                        (planner_context, local_context, attach_context,
+                         onedrive_context, web_context)
                         if part
                     )
 

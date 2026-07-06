@@ -118,3 +118,71 @@ def build_index(books_dir: str, path: str | None = None, max_files: int = 4000):
         except OSError:
             pass
     return out
+
+
+# ---- Broad-folder indexing (☁ OneDrive) -----------------------------------
+# Same cached-extraction idea as build_index, but walked with directory
+# exclusions (a user folder tree contains git repos, caches, and vendored
+# binaries that must never be indexed) and labeled with RELATIVE paths so
+# the assistant can say WHERE it found something.
+
+EXCLUDE_DIRS = {".git", "__pycache__", ".claude", "node_modules", "tts",
+                "dist", "build", ".venv", "venv", "site-packages"}
+
+
+def iter_supported_files(root: str, exclude_dirs=EXCLUDE_DIRS):
+    """Yield supported files under ``root``, pruning excluded / dot dirs."""
+    for dirpath, dirnames, filenames in os.walk(root or ""):
+        dirnames[:] = [d for d in dirnames
+                       if d.lower() not in exclude_dirs
+                       and not d.startswith(".")]
+        for fn in filenames:
+            if fn.lower().endswith(SUPPORTED):
+                yield os.path.join(dirpath, fn)
+
+
+def build_index_over(root: str, cache_file: str, max_files: int = 4000,
+                     exclude_dirs=EXCLUDE_DIRS):
+    """Return [(relative_path, text), ...] for supported files under ``root``,
+    using the same path+mtime extraction cache pattern as build_index but
+    persisted to its own ``cache_file``. Safe/defensive: never raises."""
+    try:
+        with open(cache_file, encoding="utf-8") as f:
+            cache = json.load(f)
+    except Exception:
+        cache = {}
+
+    files = []
+    for fp in iter_supported_files(root, exclude_dirs):
+        files.append(fp)
+        if len(files) >= max_files:
+            break
+
+    out, new_cache, changed = [], {}, False
+    for fp in files:
+        try:
+            mtime = os.path.getmtime(fp)
+        except OSError:
+            continue
+        ent = cache.get(fp)
+        if ent and ent.get("mtime") == mtime and "text" in ent:
+            text = ent["text"]                      # cache hit
+        else:
+            text = extract_text(fp) or ""           # extract + remember
+            changed = True
+        new_cache[fp] = {"mtime": mtime, "text": text}
+        if text.strip():
+            try:
+                label = os.path.relpath(fp, root)
+            except ValueError:
+                label = os.path.basename(fp)
+            out.append((label, text))
+
+    if changed or len(new_cache) != len(cache):
+        try:
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(new_cache, f)
+        except OSError:
+            pass
+    return out

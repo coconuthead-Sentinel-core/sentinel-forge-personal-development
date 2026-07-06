@@ -89,3 +89,48 @@ class RetrieveFromIndexTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BuildIndexOverTest(unittest.TestCase):
+    """The broad-folder (☁ OneDrive) walker: exclusions, relative labels,
+    and cache reuse."""
+
+    def _make_tree(self):
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "Paperwork"))
+        os.makedirs(os.path.join(d, ".git"))
+        os.makedirs(os.path.join(d, "node_modules"))
+        with open(os.path.join(d, "Paperwork", "lease.md"), "w",
+                  encoding="utf-8") as f:
+            f.write("the monthly rent is due on the first")
+        with open(os.path.join(d, ".git", "notes.md"), "w",
+                  encoding="utf-8") as f:
+            f.write("git internals must never be indexed")
+        with open(os.path.join(d, "node_modules", "readme.md"), "w",
+                  encoding="utf-8") as f:
+            f.write("vendored package docs must never be indexed")
+        return d
+
+    def test_excludes_repo_dirs_and_labels_relative(self):
+        d = self._make_tree()
+        cache = os.path.join(d, "od.json")
+        idx = doc_index.build_index_over(d, cache)
+        labels = [label for label, _ in idx]
+        self.assertEqual(labels, [os.path.join("Paperwork", "lease.md")])
+        self.assertIn("rent", idx[0][1])
+
+    def test_cache_reused_on_second_run(self):
+        d = self._make_tree()
+        cache = os.path.join(d, "od.json")
+        doc_index.build_index_over(d, cache)
+        # Second run must hit the cache and return identical content.
+        idx2 = doc_index.build_index_over(d, cache)
+        self.assertEqual(len(idx2), 1)
+        self.assertIn("rent", idx2[0][1])
+
+    def test_retrieval_over_index(self):
+        d = self._make_tree()
+        cache = os.path.join(d, "od.json")
+        idx = doc_index.build_index_over(d, cache)
+        hits = retrieve_from_index("when is my rent due", idx)
+        self.assertIn("rent", hits)
