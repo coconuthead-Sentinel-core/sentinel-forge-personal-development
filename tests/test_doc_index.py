@@ -134,3 +134,44 @@ class BuildIndexOverTest(unittest.TestCase):
         idx = doc_index.build_index_over(d, cache)
         hits = retrieve_from_index("when is my rent due", idx)
         self.assertIn("rent", hits)
+
+
+@unittest.skipIf(doc_index._openpyxl is None, "openpyxl not installed")
+class XlsxExtractTest(unittest.TestCase):
+    """Excel (.xlsx) reading for the assistant — read-only extraction."""
+
+    def _make_xlsx(self, d):
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Budget"
+        ws.append(["Item", "Amount"])
+        ws.append(["Rent", 900])
+        ws.append(["Food", 250])
+        p = os.path.join(d, "budget.xlsx")
+        wb.save(p)
+        return p
+
+    def test_extracts_sheet_rows(self):
+        d = tempfile.mkdtemp()
+        p = self._make_xlsx(d)
+        text = doc_index.extract_text(p)
+        self.assertIn("Sheet: Budget", text)
+        self.assertIn("Rent | 900", text)
+        self.assertIn("Food | 250", text)
+
+    def test_csv_reads_as_text(self):
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "log.csv")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("date,minutes\n2026-07-01,45\n")
+        self.assertIn("45", doc_index.extract_text(p))
+
+    def test_xlsx_indexed_and_retrievable(self):
+        d = tempfile.mkdtemp()
+        self._make_xlsx(d)
+        cache = os.path.join(d, "od.json")
+        idx = doc_index.build_index_over(d, cache)
+        self.assertEqual(len(idx), 1)
+        hits = retrieve_from_index("how much is rent", idx)
+        self.assertIn("900", hits)

@@ -16,6 +16,7 @@ noisereduce>=3.0.0         # mic noise suppression before transcription
 python-docx>=1.1.0         # .docx books
 pypdf>=4.0.0               # .pdf books
 beautifulsoup4>=4.12.0     # .html / .htm books
+openpyxl>=3.1.0            # .xlsx/.xlsm spreadsheets for the assistant (read-only)
 
 # --- Optional niceties ----------------------------------------------------
 tkinterdnd2>=0.4.0         # drag-and-drop files into the Library/Study windows

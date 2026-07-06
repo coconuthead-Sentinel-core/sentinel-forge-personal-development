@@ -29,17 +29,55 @@ try:
     from bs4 import BeautifulSoup as _BS
 except Exception:
     _BS = None
+try:
+    import openpyxl as _openpyxl
+except Exception:
+    _openpyxl = None
 
-SUPPORTED = (".md", ".txt", ".docx", ".pdf", ".html", ".htm")
+SUPPORTED = (".md", ".txt", ".docx", ".pdf", ".html", ".htm",
+             ".xlsx", ".xlsm", ".csv")
+
+# Spreadsheets can be enormous; the assistant needs the content, not a
+# million empty rows. Per-sheet row cap keeps extraction fast and sane.
+_XLSX_MAX_ROWS = 1500
+
+
+def _extract_xlsx(path: str) -> str:
+    """Spreadsheet → readable text: 'Sheet: <name>' header, then one line
+    per row with cells joined by ' | '. data_only=True returns the last
+    CALCULATED value for formula cells (what the user sees in Excel)."""
+    wb = _openpyxl.load_workbook(path, read_only=True, data_only=True)
+    parts = []
+    try:
+        for ws in wb.worksheets:
+            lines = [f"Sheet: {ws.title}"]
+            for i, row in enumerate(ws.iter_rows(values_only=True)):
+                if i >= _XLSX_MAX_ROWS:
+                    lines.append(f"... (first {_XLSX_MAX_ROWS} rows shown)")
+                    break
+                cells = [str(c).strip() for c in row
+                         if c is not None and str(c).strip()]
+                if cells:
+                    lines.append(" | ".join(cells))
+            if len(lines) > 1:
+                parts.append("\n".join(lines))
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+    return "\n\n".join(parts)
 
 
 def extract_text(path: str) -> str:
     """Best-effort plain text from a file. "" on any failure / unsupported type."""
     ext = os.path.splitext(path)[1].lower()
     try:
-        if ext in (".md", ".txt"):
+        if ext in (".md", ".txt", ".csv"):
             with open(path, encoding="utf-8", errors="replace") as f:
                 return f.read()
+        if ext in (".xlsx", ".xlsm") and _openpyxl is not None:
+            return _extract_xlsx(path)
         if ext == ".docx" and _docx is not None:
             return "\n".join(p.text for p in _docx.Document(path).paragraphs)
         if ext == ".pdf" and _pypdf is not None:

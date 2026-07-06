@@ -3601,19 +3601,28 @@ class BookReader:
 
     def _ai_chat_attach_file(self) -> None:
         """📎 Attach a file to the chat: extract its text and hand it to the
-        assistant as context with the next message. Reuses the app's existing
-        multi-format extractor (.txt/.md/.docx/.pdf/.html)."""
+        assistant as context with the next message. Documents go through the
+        app's extractor (.txt/.md/.docx/.pdf/.html/.rtf); spreadsheets
+        (.xlsx/.xlsm/.csv) through the index extractor — read-only, rows
+        rendered as readable lines."""
         from tkinter import filedialog
         path = filedialog.askopenfilename(
             title="Attach a file for the assistant",
             filetypes=[("Readable files",
-                        "*.txt *.md *.docx *.pdf *.html *.htm *.rtf"),
+                        "*.txt *.md *.docx *.pdf *.html *.htm *.rtf "
+                        "*.xlsx *.xlsm *.csv"),
+                       ("Excel / CSV", "*.xlsx *.xlsm *.csv"),
                        ("All files", "*.*")])
         if not path:
             return
         name = os.path.basename(path)
         try:
-            text = self._extract_text(path) or ""
+            ext = os.path.splitext(path)[1].lower()
+            if ext in (".xlsx", ".xlsm", ".csv"):
+                from lyceum.doc_index import extract_text as _dx_extract
+                text = _dx_extract(path) or ""
+            else:
+                text = self._extract_text(path) or ""
         except Exception:
             text = ""
         if not text.strip():
