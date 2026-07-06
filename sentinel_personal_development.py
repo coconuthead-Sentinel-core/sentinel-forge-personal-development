@@ -3777,7 +3777,7 @@ class BookReader:
         btn_send.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
         web_var = tk.BooleanVar(value=False)
         web_toggle = tk.Checkbutton(
-            input_frame, text="🌐 Web", variable=web_var,
+            input_frame, text="🌐 Web search", variable=web_var,
             bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_PANEL,
             activebackground=BG_DARK, activeforeground=FG_TEXT,
             font=("Segoe UI", 10, "bold"), cursor="hand2",
@@ -3836,7 +3836,7 @@ class BookReader:
             if not brain.available:
                 _append_msg("Sentinel", f"Offline. {brain.last_error}")
             else:
-                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. Turn on 🌐 Web or start with /web when you want me to search the internet.")
+                _append_msg("Sentinel", f"Hello, Shannon. I am online and running on {brain.model}. Just ask me to \"search the web for …\" and I'll look it up online for you. (The 🌐 Web search checkbox forces a search for every message.)")
         except Exception as e:
             brain = None
             _append_msg("Error", f"Could not load AI module: {e}")
@@ -3850,17 +3850,34 @@ class BookReader:
                 return "break"
             use_web = bool(web_var.get())
             web_query = content
-            if content.lower().startswith("/web "):
+            lower = content.lower()
+            if lower.startswith("/web "):
                 use_web = True
                 web_query = content[5:].strip() or content
-            
+            elif not use_web:
+                # Natural-language triggers: asking the assistant to search
+                # should just WORK — no slash command or checkbox required.
+                # Over-triggering is cheap (extra grounded context); a
+                # missed search reads like a broken feature.
+                for phrase in ("search the web", "search the internet",
+                               "search online", "web search",
+                               "look online", "look it up online",
+                               "look this up", "look up online",
+                               "check the internet", "check online",
+                               "google ", "on the internet"):
+                    if phrase in lower:
+                        use_web = True
+                        break
+
             chat_input.delete("1.0", tk.END)
             _append_msg("You", content)
-            
+
             # Show temporary thinking indicator
             chat_history.config(state=tk.NORMAL)
             thinking_idx = chat_history.index(tk.END)
-            chat_history.insert(tk.END, "Sentinel:\nThinking...\n\n", "Sentinel")
+            thinking_text = ("🌐 Searching the web...\n\n" if use_web
+                             else "Thinking...\n\n")
+            chat_history.insert(tk.END, f"Sentinel:\n{thinking_text}", "Sentinel")
             chat_history.see(tk.END)
             chat_history.config(state=tk.DISABLED)
 
