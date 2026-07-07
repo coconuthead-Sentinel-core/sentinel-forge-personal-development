@@ -22,6 +22,7 @@ openpyxl>=3.1.0            # .xlsx/.xlsm spreadsheets for the assistant (read-on
 tkinterdnd2>=0.4.0         # drag-and-drop files into the Library/Study windows
 send2trash>=1.8.0          # recoverable deletes from the Library
 pyspellchecker>=0.8.0      # offline spelling suggestions for the Voice Memory Spelling Helper
+fsrs                       # py-fsrs — MIT-licensed FSRS spaced-repetition scheduler (lyceum/srs.py)
 
 # --- Optional: onboard-assistant voice & accessibility ---------------------
 # All guarded by try/except — the app runs fine without them; each only enables

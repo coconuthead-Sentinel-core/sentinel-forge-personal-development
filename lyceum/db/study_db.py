@@ -624,6 +624,71 @@ CREATE TABLE IF NOT EXISTS goal_checkins (
     logged_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_goal_checkins ON goal_checkins(goal_id, logged_at);
+
+-- ── Spaced-repetition memory training (RELAY-SRS-001, Sprint 1) ────────────
+-- Additive only. Scheduling is delegated to py-fsrs (MIT); lyceum/srs.py is
+-- the sole writer. fsrs_card_json is the single source of truth for scheduler
+-- state; due/state/lapses/reps are denormalized copies kept in step by
+-- srs.py so plain SQL can answer "what's due" without deserializing JSON.
+
+CREATE TABLE IF NOT EXISTS memory_decks (
+    deck_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE,          -- e.g. 'Glossary', 'Peg System 00-99'
+    deck_type   TEXT NOT NULL DEFAULT 'basic'  -- 'basic' | 'glossary' | 'peg'
+                CHECK (deck_type IN ('basic','glossary','peg','palace','faces')),
+    created_at  TEXT NOT NULL,                 -- ISO 8601 UTC
+    archived    INTEGER NOT NULL DEFAULT 0     -- 0/1; soft delete, never hard-delete
+);
+
+CREATE TABLE IF NOT EXISTS memory_cards (
+    card_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    deck_id         INTEGER NOT NULL REFERENCES memory_decks(deck_id),
+    front           TEXT NOT NULL,             -- prompt (term, number, image path label)
+    back            TEXT NOT NULL,             -- answer (definition, peg word, name)
+    media_path      TEXT,                      -- optional image (faces, vision-board style)
+    source_kind     TEXT NOT NULL DEFAULT 'manual'
+                    CHECK (source_kind IN ('manual','glossary','excerpt','peg','palace','faces')),
+    source_ref      TEXT,                      -- glossary term / excerpt doc_id / peg number
+    zone            TEXT NOT NULL DEFAULT 'GREEN'
+                    CHECK (zone IN ('GREEN','YELLOW','RED')),
+    cognitive_load  INTEGER CHECK (cognitive_load BETWEEN 1 AND 10),
+    tags            TEXT NOT NULL DEFAULT '[]',  -- JSON array, lowercase_underscore
+    fsrs_card_json  TEXT NOT NULL,             -- authoritative: py-fsrs Card.to_dict() as JSON
+    due             TEXT NOT NULL,             -- ISO 8601 UTC, denormalized for fast queries
+    state           TEXT NOT NULL DEFAULT 'new'
+                    CHECK (state IN ('new','learning','review','relearning')),
+    lapses          INTEGER NOT NULL DEFAULT 0,
+    reps            INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    suspended       INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_cards_due
+    ON memory_cards (suspended, due);
+CREATE INDEX IF NOT EXISTS idx_memory_cards_deck
+    ON memory_cards (deck_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_cards_source
+    ON memory_cards (source_kind, source_ref)
+    WHERE source_ref IS NOT NULL;              -- prevents duplicate glossary imports
+
+-- Append-only: never UPDATE or DELETE — this is the FSRS optimizer's future
+-- training data and the dashboard's lead-measure feed.
+CREATE TABLE IF NOT EXISTS memory_review_log (
+    review_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id         INTEGER NOT NULL REFERENCES memory_cards(card_id),
+    rating          INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 4),
+                    -- 1=Again 2=Hard 3=Good 4=Easy (py-fsrs Rating values)
+    reviewed_at     TEXT NOT NULL,             -- ISO 8601 UTC
+    review_duration_ms INTEGER,                -- optional; UI supplies later
+    scheduled_days  REAL,                      -- interval FSRS assigned at this review
+    state_before    TEXT NOT NULL,
+    state_after     TEXT NOT NULL,
+    session_load    INTEGER CHECK (session_load BETWEEN 1 AND 10)
+                    -- optional cognitive-load stamp for the session
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_log_card ON memory_review_log (card_id);
+CREATE INDEX IF NOT EXISTS idx_review_log_time ON memory_review_log (reviewed_at);
 """
 
 
