@@ -16418,6 +16418,18 @@ class BookReader:
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6, pady=5,
                   cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
+        # 🧠 Review — FSRS spaced-repetition flashcards over the Glossary
+        # (Sprint 2 of RELAY-SRS-001). Badge shows how many cards are due.
+        self._srs_review_btn = tk.Button(
+            tabbar, text="🧠 Review", command=self.open_srs_review,
+            font=("Segoe UI", 9, "bold"), bg=ACCENT_INDIGO, fg="white",
+            activebackground=ACCENT_INDIGO, relief=tk.FLAT, padx=6, pady=5,
+            cursor="hand2", borderwidth=0)
+        self._srs_review_btn.pack(side=tk.LEFT, padx=(0, 2))
+        try:
+            self.root.after(3000, self._srs_update_review_badge)
+        except tk.TclError:
+            pass
 
         # Minimize button — sends the Study window to the taskbar.
         # (Expand/Restore removed; use the window's own title-bar controls.)
@@ -17819,6 +17831,268 @@ class BookReader:
         self._refresh_tab_bookmarks()
 
     # ---- Workspace tab: Glossary ---------------------------------------
+    # ---- 🧠 Spaced-repetition review (Sprint 2 of RELAY-SRS-001) ---------
+    # Thin imperative shell over lyceum/srs.py: sync the Glossary into
+    # cards, show what's due, record ratings. All scheduling logic lives
+    # (and is tested) in the functional core.
+    _SRS_LEAD_MEASURE = "🧠 Reviewed my flashcards"
+
+    def _srs_service(self):
+        """Lazy singleton SRSService; None (with _srs_err set) when the
+        py-fsrs package isn't installed — the rest of the app is fine."""
+        if getattr(self, "_srs_svc", None) is not None:
+            return self._srs_svc
+        try:
+            from lyceum import srs as _srs_mod
+            from lyceum.db import study_db as _sdb
+            self._srs_svc = _srs_mod.SRSService(_sdb)
+        except Exception as e:
+            self._srs_svc = None
+            self._srs_err = str(e)
+        return self._srs_svc
+
+    def _srs_update_review_badge(self) -> None:
+        """Show the due-card count on the 🧠 Review tab button."""
+        btn = getattr(self, "_srs_review_btn", None)
+        if btn is None:
+            return
+        try:
+            if not btn.winfo_exists():
+                return
+            svc = self._srs_service()
+            if svc is None:
+                return
+            n = svc.stats().due_now
+            btn.configure(text=(f"🧠 Review ({n})" if n else "🧠 Review"))
+        except Exception:
+            pass
+
+    def _srs_mark_scoreboard(self) -> None:
+        """First review of the day auto-marks the '🧠 Reviewed my
+        flashcards' lead measure on the 🏆 Scoreboard — the Sprint 2
+        lead-measure wiring. Creates the measure once IF a slot is free
+        (never evicts the user's own measures)."""
+        try:
+            today = date.today().isoformat()
+            now = datetime.now().isoformat()
+            rows = self._db_query(
+                "SELECT id FROM lead_measures WHERE text=? AND active=1",
+                (self._SRS_LEAD_MEASURE,))
+            if rows:
+                mid = rows[0][0]
+            else:
+                n_active = self._db_query(
+                    "SELECT COUNT(*) FROM lead_measures WHERE active=1"
+                )[0][0]
+                if n_active >= 3:
+                    return          # scoreboard full — user's choices win
+                mid = self._db_exec(
+                    "INSERT INTO lead_measures "
+                    "(text, sort_order, active, created_at, updated_at) "
+                    "VALUES (?, 9, 1, ?, ?)",
+                    (self._SRS_LEAD_MEASURE, now, now))
+            if not self._db_query(
+                    "SELECT 1 FROM lead_measure_marks "
+                    "WHERE measure_id=? AND day=?", (mid, today)):
+                self._db_exec(
+                    "INSERT INTO lead_measure_marks "
+                    "(measure_id, day, done, created_at) VALUES (?,?,1,?)",
+                    (mid, today, now))
+                try:
+                    self._refresh_scoreboard()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def open_srs_review(self) -> None:
+        """🧠 The flashcard review window: front → 👁 show answer →
+        rate 1-4 → next. Keyboard: Space shows, 1/2/3/4 rate."""
+        svc = self._srs_service()
+        if svc is None:
+            messagebox.showinfo(
+                "Memory review unavailable",
+                "The spaced-repetition engine needs the py-fsrs package.\n\n"
+                "Install it with:   pip install fsrs\n\n"
+                f"(Detail: {getattr(self, '_srs_err', 'unknown')})")
+            return
+        existing = getattr(self, "_srs_review_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift()
+                    existing.focus_force()
+                    return
+            except tk.TclError:
+                pass
+
+        # Keep the card pool current: every Glossary term becomes a card.
+        # Idempotent — terms that already have cards are skipped.
+        try:
+            rows = self._db_query(
+                "SELECT term, definition FROM glossary "
+                "ORDER BY term COLLATE NOCASE")
+            sync = svc.sync_from_glossary([(r[0], r[1]) for r in rows])
+        except Exception:
+            sync = {"added": 0}
+
+        win = tk.Toplevel(self.root)
+        self._srs_review_win = win
+        win.title("🧠 Memory Review — spaced repetition")
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        w, h = min(780, sw - 80), min(560, sh - 140)
+        win.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}"
+                     f"+{max(0, (sh - h) // 2 - 20)}")
+        win.configure(bg=BG_DARK)
+
+        header = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        header.pack(fill=tk.X)
+        tk.Label(header, text="🧠 Memory Review", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT)
+        stats_var = tk.StringVar()
+        tk.Label(header, textvariable=stats_var, bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.RIGHT)
+
+        progress_var = tk.StringVar()
+        tk.Label(win, textvariable=progress_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10, "bold")).pack(pady=(8, 0))
+        deck_var = tk.StringVar()
+        tk.Label(win, textvariable=deck_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9)).pack(pady=(2, 0))
+
+        # Card faces use the user's chosen reading font (dyslexia-first).
+        fam = self.font_family or "Segoe UI"
+        fsz = max(16, int(self.font_size or 14))
+        front_lbl = tk.Label(win, text="", bg=BG_DARK, fg=FG_TEXT,
+                             font=(fam, fsz, "bold"), wraplength=w - 60,
+                             justify=tk.LEFT)
+        front_lbl.pack(pady=(12, 4), padx=24)
+        back_lbl = tk.Label(win, text="", bg=BG_DARK, fg="#5eead4",
+                            font=(fam, fsz), wraplength=w - 60,
+                            justify=tk.LEFT)
+        back_lbl.pack(pady=(4, 6), padx=24)
+        feedback_var = tk.StringVar()
+        tk.Label(win, textvariable=feedback_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack()
+
+        btnrow = tk.Frame(win, bg=BG_DARK)
+        btnrow.pack(side=tk.BOTTOM, fill=tk.X, padx=16, pady=14)
+
+        state = {"queue": [], "current": None, "shown": False, "done": 0}
+
+        def _refresh_stats():
+            try:
+                s = svc.stats()
+                stats_var.set(f"📅 {s.due_today} due today · "
+                              f"✅ {s.reviewed_today} reviewed · "
+                              f"🔥 {s.current_streak_days}-day streak")
+            except Exception:
+                stats_var.set("")
+
+        def _show_buttons(answer_visible):
+            show_btn.pack_forget()
+            for b in rate_btns:
+                b.pack_forget()
+            if state["current"] is None:
+                return
+            if answer_visible:
+                for b in rate_btns:
+                    b.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=4)
+            else:
+                show_btn.pack(fill=tk.X, ipady=6)
+
+        def _next_card():
+            if not state["queue"]:
+                try:
+                    state["queue"] = svc.get_due_cards(limit=20)
+                except Exception:
+                    state["queue"] = []
+            if not state["queue"]:
+                state["current"] = None
+                deck_var.set("")
+                front_lbl.configure(text="🎉 All caught up!")
+                back_lbl.configure(
+                    text="Nothing is due right now. Cards come back when "
+                         "the schedule says it's the best time to remember "
+                         "them.")
+                progress_var.set(f"{state['done']} reviewed this sitting")
+                feedback_var.set("")
+                _show_buttons(False)
+                return
+            card = state["queue"].pop(0)
+            state["current"] = card
+            state["shown"] = False
+            deck_var.set(f"{card.deck_name}   ·   {card.state}")
+            front_lbl.configure(text=card.front)
+            back_lbl.configure(text="")
+            feedback_var.set("")
+            remaining = len(state["queue"]) + 1
+            progress_var.set(f"{remaining} to go · {state['done']} done")
+            _show_buttons(False)
+
+        def _show_answer(_e=None):
+            if state["current"] is None or state["shown"]:
+                return
+            state["shown"] = True
+            back_lbl.configure(text=state["current"].back)
+            _show_buttons(True)
+
+        def _rate(rating):
+            card = state["current"]
+            if card is None or not state["shown"]:
+                return
+            try:
+                out = svc.review_card(card.card_id, rating)
+            except Exception as e:
+                feedback_var.set(f"Could not save the review: {e}")
+                return
+            state["done"] += 1
+            days = out.interval_days
+            when = ("again in a few minutes" if days < 0.02
+                    else f"in about {days * 24:.0f} hours" if days < 1
+                    else f"in {days:.0f} day{'s' if days >= 1.5 else ''}")
+            feedback_var.set(f"Got it — this card comes back {when}.")
+            self._srs_mark_scoreboard()
+            _refresh_stats()
+            self._srs_update_review_badge()
+            _next_card()
+
+        show_btn = tk.Button(
+            btnrow, text="👁  Show answer   (Space)", command=_show_answer,
+            font=("Segoe UI", 12, "bold"), bg=ACCENT_SLATE, fg="white",
+            activebackground=ACCENT_SLATE, relief=tk.FLAT, cursor="hand2",
+            borderwidth=0)
+        rate_btns = []
+        for r_val, r_txt, r_col in ((1, "1  Again", ACCENT_RED),
+                                    (2, "2  Hard", ACCENT_AMBER),
+                                    (3, "3  Good", ACCENT_GREEN),
+                                    (4, "4  Easy", ACCENT_CYAN)):
+            rate_btns.append(tk.Button(
+                btnrow, text=r_txt, command=lambda r=r_val: _rate(r),
+                font=("Segoe UI", 11, "bold"), bg=r_col, fg="white",
+                activebackground=r_col, relief=tk.FLAT, pady=8,
+                cursor="hand2", borderwidth=0))
+
+        win.bind("<space>", _show_answer)
+        for r_key in (1, 2, 3, 4):
+            win.bind(str(r_key), lambda _e, rr=r_key: _rate(rr))
+
+        def _close():
+            self._srs_review_win = None
+            self._srs_update_review_badge()
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        if sync.get("added"):
+            self.set_status(f"🧠 {sync['added']} new glossary "
+                            f"card{'s' if sync['added'] != 1 else ''} "
+                            "joined the review deck.")
+        _refresh_stats()
+        _next_card()
+
     def _build_tab_glossary(self, parent: tk.Frame) -> None:
         scroll_host = tk.Frame(parent, bg=BG_DARK)
         scroll_host.pack(fill=tk.BOTH, expand=True)
