@@ -1269,9 +1269,10 @@ class BookReader:
              "Changing it mid-read takes effect from the next sentence."),
             (add_btn, "➕ Add",
              "Adds an item to whatever you're working in. In the Prompt "
-             "Library it creates a new entry, ready for a title. In the "
-             "📚 Library it opens the add-books picker. Also works on "
-             "the Planner, Matrix, Journal, and more."),
+             "Library it RECORDS the entry — Title, Prompt, and Response "
+             "must all be filled in first, so every saved prompt is "
+             "complete. In the 📚 Library it opens the add-books picker. "
+             "Also works on the Planner, Matrix, Journal, and more."),
             (rem_btn, "➖ Remove",
              "Removes what's selected. In the Prompt Library it deletes "
              "the selected entry; in the 📚 Library it sends the "
@@ -15235,6 +15236,7 @@ class BookReader:
                       ).pack(side=tk.LEFT, padx=(0, 6))
 
         # (Prompts library 💾 Save removed — Save widgets were taken out.)
+        _mk("➕ Add",            self._prompt_lib_record_entry,  ACCENT_GREEN)
         _mk("+ New",             self._prompt_lib_new,           ACCENT_CYAN)
         _mk("📋 Paste → Response", self._prompt_lib_paste_response, ACCENT_AMBER)
         # (🗑 Delete (Prompts) removed — Delete/Remove widgets were taken out.)
@@ -15347,17 +15349,67 @@ class BookReader:
             self._prompt_lib_refresh(select_id=self._prompt_lib_current_id)
 
     def _prompt_lib_new(self) -> None:
-        self._prompt_lib_save_current(silent=True)
+        """+ New: clear the form so a fresh entry can be typed. NOTHING is
+        stored until ➕ Add records it — so the list never fills up with
+        empty 'New entry' rows again."""
+        self._prompt_lib_save_current(silent=True)   # keep edits to the old one
+        self._prompt_lib_current_id = None
+        try:
+            if self._prompt_lib_listbox is not None:
+                self._prompt_lib_listbox.selection_clear(0, tk.END)
+        except tk.TclError:
+            pass
+        self._prompt_lib_clear_detail()
+        if self._prompt_lib_prompt_txt is not None:
+            self._prompt_lib_prompt_txt.focus_set()
+        self.set_status("🗒 Fill in Title, Prompt, and Response — then "
+                        "press ➕ Add to record it.")
+
+    def _prompt_lib_record_entry(self) -> None:
+        """➕ Add (toolbar and window button): record Title + Prompt +
+        Response as a new library entry — and REFUSE until all three
+        boxes are filled, so every recorded prompt is complete. This is
+        how every prompt and every response gets captured."""
+        win = self._prompt_lib_win
+        title = (self._prompt_lib_title_var.get() or "").strip() \
+            if self._prompt_lib_title_var is not None else ""
+        prompt = (self._prompt_lib_prompt_txt.get("1.0", tk.END).strip()
+                  if self._prompt_lib_prompt_txt is not None else "")
+        response = (self._prompt_lib_response_txt.get("1.0", tk.END).strip()
+                    if self._prompt_lib_response_txt is not None else "")
+        checks = (("Title", title),
+                  ("Prompt  (your message)", prompt),
+                  ("Response  (the reply)", response))
+        if not all(v for _n, v in checks):
+            lines = "\n".join(f"   {'✓' if v else '✗  MISSING'}   {n}"
+                              for n, v in checks)
+            messagebox.showinfo(
+                "Not recorded yet",
+                "All three boxes must be filled out before ➕ Add will "
+                f"record the entry:\n\n{lines}",
+                parent=win if win is not None else self.root)
+            return
+        # Same content as the selected entry? Already recorded — don't
+        # create a duplicate.
+        if self._prompt_lib_current_id is not None:
+            rows = self._db_query(
+                "SELECT title, prompt, response FROM prompt_library "
+                "WHERE id=?", (self._prompt_lib_current_id,))
+            if rows and ((rows[0][0] or "").strip(),
+                         (rows[0][1] or "").strip(),
+                         (rows[0][2] or "").strip()) == (title, prompt,
+                                                         response):
+                self.set_status("🗒 This entry is already recorded.")
+                return
         now = datetime.now().isoformat(timespec="seconds")
         new_id = self._db_exec(
             "INSERT INTO prompt_library "
             "(title, prompt, response, source, created_at, updated_at) "
             "VALUES (?,?,?,?,?,?)",
-            ("New entry", "", "", "", now, now))
+            (title, prompt, response, "", now, now))
         self._prompt_lib_current_id = new_id
         self._prompt_lib_refresh(select_id=new_id)
-        if self._prompt_lib_prompt_txt is not None:
-            self._prompt_lib_prompt_txt.focus_set()
+        self.set_status(f"🗒 Recorded: {title}")
 
     def _prompt_lib_delete_current(self) -> None:
         if self._prompt_lib_current_id is None:
@@ -15379,8 +15431,9 @@ class BookReader:
     def _prompt_lib_add_from_toolbar(self) -> bool:
         if not self._prompt_lib_toolbar_should_act():
             return False
-        self._prompt_lib_new()
-        self.set_status("🗒 New Prompt Library entry — give it a title.")
+        # Validated record: Title + Prompt + Response must ALL be filled;
+        # _prompt_lib_record_entry shows exactly what's missing otherwise.
+        self._prompt_lib_record_entry()
         return True
 
     def _prompt_lib_remove_from_toolbar(self) -> bool:
