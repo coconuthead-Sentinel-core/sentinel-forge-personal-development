@@ -412,6 +412,15 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 ## Roadmap / what's open
 
 - ✅ Single-distributable `.exe` via the existing PyInstaller spec — `scripts\build_exe.ps1`
+- ✅ 🧠 Spaced-repetition memory training (FSRS) — Glossary terms become
+  scheduled flashcards with a review window, streaks, and an append-only
+  review log (`lyceum/srs.py`, see `docs/SRS_MODULE.md`)
+- ✅ AI Chat context sources — 🌐 web search (DuckDuckGo, no key),
+  ☁ OneDrive file retrieval, 📎 attachments incl. Excel/CSV, and
+  📄 drafting real Word/Excel documents with live formulas
+- ✅ 🐢/🐇 reading-speed control wired through every voice path
+- ✅ Library 🗃 archive workflow — removals move files to `Books Archive`,
+  never the Recycle Bin
 - 🔲 Voice-note recording (browser MediaRecorder; or `pyaudio` in Tk)
 - 🔲 Tagging UI for the `tags: []` field (schema already supports it)
 - 🔲 Two-way sync with the [Sentinel Forge platform](https://github.com/coconuthead-Sentinel-core/Sentinel-of-sentinel-s-Forge)
