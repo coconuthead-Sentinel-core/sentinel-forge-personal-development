@@ -36,9 +36,11 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-34 unit tests cover the progress kernels, database atomicity (commit + rollback),
-the speech normalizer, and the hands-free dictation-command parser — all logic
-kept free of Tkinter so it is testable without launching the GUI.
+172 automated tests cover the progress kernels, database atomicity
+(commit + rollback), the speech normalizer, the hands-free
+dictation-command parser, local retrieval (RAG), the document writer,
+the cached file indexer, and the FSRS spaced-repetition core — all
+logic kept free of Tkinter so it is testable without launching the GUI.
 
 ---
 
@@ -308,6 +310,8 @@ powershell -ExecutionPolicy Bypass -File scripts\install_book_reader_shortcut.ps
 | `beautifulsoup4` | parse `.html` |
 | `send2trash` | recoverable deletes from the Library |
 | `tkinterdnd2` | drop-files-on-the-Library-window support (optional) |
+| `openpyxl` | read/write `.xlsx` for the assistant (read Excel context, draft real spreadsheets) |
+| `fsrs` | py-fsrs — MIT-licensed FSRS scheduler behind the 🧠 Memory Review flashcards |
 
 All listed in [`requirements.txt`](requirements.txt). Each parser is
 imported with `try/except ImportError` and the app degrades gracefully —

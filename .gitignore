@@ -44,3 +44,10 @@ Sentinel-Forge/
 # coverage.py
 .coverage
 htmlcov/
+
+# Personal / machine-local files — live on the laptop, not in the repo
+*.lnk
+test_dpi.py
+test_sd.py
+Sentinel Personal Development.txt
+Sentinel-Forge_Next_Session_Note.md
