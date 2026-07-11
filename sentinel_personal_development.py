@@ -12350,23 +12350,17 @@ class BookReader:
         #  was taken out of the project.)
         lbtn(btn_row, "+  Add files…",  self._library_add_files,
              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
-        # 🗃 Bulk archive: MOVES every book out of the Library into
-        # 'Books Archive' on the Desktop — nothing deleted, files stay on
-        # the laptop + OneDrive. One click instead of 300 hand-deletes
-        # (per-file Recycle-Bin removal froze the UI on OneDrive files).
-        lbtn(btn_row, "🗃 Archive all", self._library_archive_all,
-             ACCENT_GREEN).pack(side=tk.LEFT, padx=6)
-        # (🗑 Remove (Library) removed — Delete/Remove widgets were taken out.)
-        lbtn(btn_row, "📂  Open folder", self._library_open_folder,
-             ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
-        lbtn(btn_row, "🔄  Refresh",     self._refresh_library_list,
-             ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
-        lbtn(btn_row, "✨  Ask Library", self._library_ask_platform,
-             ACCENT_PURPLE).pack(side=tk.LEFT, padx=(12, 6))
-        lbtn(btn_row, "Open in reader", self._open_selected_library_book,
-             ACCENT_CYAN).pack(side=tk.RIGHT, padx=(6, 0))
-        lbtn(btn_row, "Close", _on_close,
-             ACCENT_SLATE).pack(side=tk.RIGHT, padx=6)
+        # (Library bottom-row buttons removed at Shannon's request
+        #  2026-07-11 — study-day declutter; screenshot-confirmed list.
+        #  Every capability keeps a path without its button:
+        #  · 🗃 Archive all — _library_archive_all kept; ➖ Remove archives
+        #    per-file, and bulk archive can be re-buttoned any time
+        #  · 📂 Open folder — the folder path is shown in the header;
+        #    reachable via Explorer
+        #  · 🔄 Refresh — the list refreshes on open/add/remove
+        #  · ✨ Ask Library — needs the optional localhost platform
+        #  · Open in reader — double-click a book does this
+        #  · Close — the window's native ✕ does this)
 
         # Two-pane list, e-Sword style: Book Name on the left, Chapter on
         # the right. Click a book → chapters populate. Double-click a
