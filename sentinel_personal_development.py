@@ -13362,6 +13362,11 @@ class BookReader:
         threading.Thread(target=work, daemon=True).start()
 
     def _library_remove_selected(self) -> None:
+        """Remove = ARCHIVE. Shannon's rule: files NEVER leave the laptop.
+        The selected book (and its sidecar) is MOVED to 'Books Archive'
+        on the Desktop — no Recycle Bin, no deletion — and the move runs
+        off the UI thread (Recycle-Bin calls on OneDrive files froze the
+        window; a same-drive move is instant)."""
         if self._library_tree is None:
             return
         sel = self._library_tree.selection()
@@ -13373,38 +13378,52 @@ class BookReader:
         if idx >= len(self._library_items):
             return
         rel, full, _size, _mtime = self._library_items[idx]
-        if HAS_SEND2TRASH:
-            confirm_msg = (f"Send this file to the Recycle Bin?\n\n{rel}\n\n"
-                            "You can restore it from the Recycle Bin if needed.")
-        else:
-            confirm_msg = (f"Permanently delete this file from disk?\n\n{rel}\n\n"
-                            "This cannot be undone. "
-                            "(Install send2trash to get Recycle Bin support: "
-                            "pip install send2trash)")
-        if not messagebox.askyesno("Remove from library?", confirm_msg):
+        archive_dir = os.path.join(
+            os.path.dirname(LIBRARY_DIR.rstrip("\\/")), "Books Archive")
+        if not messagebox.askyesno(
+                "Remove from library?",
+                f"Move this file out of the Library into Books Archive?\n\n"
+                f"{rel}\n\nNothing is deleted — it stays on your laptop "
+                "(and OneDrive) and can come back any time with "
+                "'+ Add files…'.",
+                parent=self._library_win or self.root):
             return
-        try:
-            if HAS_SEND2TRASH:
-                # send2trash needs forward-slashes-resistant absolute paths
-                # on Windows; normpath fixes mixed separators in case the
-                # path was rebuilt from a saved sidecar.
-                send2trash(os.path.normpath(full))
-            else:
-                os.unlink(full)
-        except Exception as e:
-            messagebox.showerror("Could not remove", str(e))
-            return
-        # Sweep the sidecar too — Recycle Bin or unlink, same path.
-        meta_p = self._meta_path_for(full)
-        if os.path.exists(meta_p):
+
+        def work():
+            err = ""
             try:
-                if HAS_SEND2TRASH:
-                    send2trash(os.path.normpath(meta_p))
+                dest = os.path.join(archive_dir, rel)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                base, ext = os.path.splitext(dest)
+                n = 1
+                while os.path.exists(dest):        # never overwrite
+                    dest = f"{base} ({n}){ext}"
+                    n += 1
+                shutil.move(full, dest)
+                meta_p = self._meta_path_for(full)
+                if os.path.exists(meta_p):
+                    try:
+                        shutil.move(meta_p, dest + META_SUFFIX)
+                    except Exception:
+                        pass
+            except Exception as e:
+                err = str(e)
+
+            def done():
+                if err:
+                    messagebox.showerror("Could not remove", err)
                 else:
-                    os.unlink(meta_p)
-            except (OSError, Exception):
+                    self.set_status(f"🗃 Moved to Books Archive: {rel}")
+                try:
+                    self._refresh_library_list()
+                except Exception:
+                    pass
+            try:
+                self.root.after(0, done)
+            except Exception:
                 pass
-        self._refresh_library_list()
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _open_selected_library_book(self) -> None:
         if self._library_tree is None:
