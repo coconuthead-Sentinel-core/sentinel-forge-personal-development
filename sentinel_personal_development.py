@@ -12350,6 +12350,12 @@ class BookReader:
         #  was taken out of the project.)
         lbtn(btn_row, "+  Add files…",  self._library_add_files,
              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
+        # 🗃 Bulk archive: MOVES every book out of the Library into
+        # 'Books Archive' on the Desktop — nothing deleted, files stay on
+        # the laptop + OneDrive. One click instead of 300 hand-deletes
+        # (per-file Recycle-Bin removal froze the UI on OneDrive files).
+        lbtn(btn_row, "🗃 Archive all", self._library_archive_all,
+             ACCENT_GREEN).pack(side=tk.LEFT, padx=6)
         # (🗑 Remove (Library) removed — Delete/Remove widgets were taken out.)
         lbtn(btn_row, "📂  Open folder", self._library_open_folder,
              ACCENT_SLATE).pack(side=tk.LEFT, padx=6)
@@ -13263,6 +13269,97 @@ class BookReader:
             if len(skipped) > 12:
                 msg += f"\n  • …and {len(skipped) - 12} more"
         messagebox.showinfo("Library updated", msg)
+
+    def _library_archive_all(self) -> None:
+        """🗃 Move EVERY book (and its sidecar) out of the Library into
+        'Books Archive' next to the Books folder. Files STAY on the
+        laptop and in OneDrive — nothing is deleted. Runs in a
+        background worker with live progress so the UI never freezes,
+        unlike per-file Recycle-Bin removal on OneDrive files."""
+        try:
+            items = list(self._scan_library())
+        except Exception as e:
+            messagebox.showerror("Archive failed",
+                                 f"Could not scan the Library: {e}",
+                                 parent=self._library_win or self.root)
+            return
+        if not items:
+            messagebox.showinfo("Nothing to archive",
+                                "The Library is already empty.",
+                                parent=self._library_win or self.root)
+            return
+        archive_dir = os.path.join(
+            os.path.dirname(LIBRARY_DIR.rstrip("\\/")), "Books Archive")
+        if not messagebox.askyesno(
+                "Archive the whole Library?",
+                f"Move all {len(items)} entries (and their sidecars) out "
+                f"of the Library into:\n\n{archive_dir}\n\nNOTHING is "
+                "deleted — they stay on your laptop and in OneDrive, and "
+                "any of them can come back later with '+ Add files…'.",
+                parent=self._library_win or self.root):
+            return
+        self.set_status("🗃 Archiving the Library in the background…")
+
+        def work():
+            moved = errors = 0
+            try:
+                os.makedirs(archive_dir, exist_ok=True)
+            except OSError as e:
+                self.root.after(0, lambda: messagebox.showerror(
+                    "Archive failed", f"Could not create {archive_dir}:\n{e}"))
+                return
+            total = len(items)
+            for i, (rel, full, _size, _mtime) in enumerate(items, start=1):
+                try:
+                    dest = os.path.join(archive_dir, rel)
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    base, ext = os.path.splitext(dest)
+                    n = 1
+                    while os.path.exists(dest):     # never overwrite
+                        dest = f"{base} ({n}){ext}"
+                        n += 1
+                    shutil.move(full, dest)
+                    meta = self._meta_path_for(full)
+                    if os.path.exists(meta):
+                        try:
+                            shutil.move(meta, dest + META_SUFFIX)
+                        except Exception:
+                            pass
+                    moved += 1
+                except Exception:
+                    errors += 1
+                if i % 20 == 0 or i == total:
+                    msg = f"🗃 Archiving… {i} of {total}"
+                    try:
+                        self.root.after(0, lambda m=msg: self.set_status(m))
+                    except Exception:
+                        pass
+
+            def done():
+                self.set_status(
+                    f"🗃 Archived {moved} entries to Books Archive"
+                    + (f" — ⚠ {errors} failed" if errors else ""))
+                try:
+                    self._refresh_library_list()
+                except Exception:
+                    pass
+                parent = self._library_win \
+                    if (self._library_win is not None
+                        and self._library_win.winfo_exists()) else self.root
+                messagebox.showinfo(
+                    "Archive complete",
+                    f"Moved {moved} entries into:\n{archive_dir}\n\n"
+                    "They're still on your laptop (and OneDrive). The "
+                    "Library is clear and ready for your Coursera material."
+                    + (f"\n\n⚠ {errors} file(s) couldn't be moved and are "
+                       "still in the Library." if errors else ""),
+                    parent=parent)
+            try:
+                self.root.after(0, done)
+            except Exception:
+                pass
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _library_remove_selected(self) -> None:
         if self._library_tree is None:
