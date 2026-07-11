@@ -12350,6 +12350,23 @@ class BookReader:
         #  was taken out of the project.)
         lbtn(btn_row, "+  Add files…",  self._library_add_files,
              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
+        # Study-tool buttons (Shannon 2026-07-11): the Study workspace
+        # TABS, mirrored here as buttons so the Library is the one study
+        # hub — each jumps straight to its tool.
+        for _sk, _sl in (("study_notes", "📝 Study Notes"),
+                         ("ai_chat", "🤖 AI Chat"),
+                         ("topics", "📌 Topics"),
+                         ("glossary", "📒 Glossary"),
+                         ("commentary", "📑 Commentary"),
+                         ("journal", "📅 Journal"),
+                         ("matrix", "🎯 Matrix"),
+                         ("planner", "🗓 Planner")):
+            tk.Button(btn_row, text=_sl,
+                      command=lambda k=_sk: self._library_open_study_tab(k),
+                      font=("Segoe UI", 9, "bold"), bg=BG_INPUT, fg=FG_TEXT,
+                      activebackground=ACCENT_SLATE, activeforeground="white",
+                      relief=tk.FLAT, padx=6, pady=5, cursor="hand2",
+                      borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
         # (Library bottom-row buttons removed at Shannon's request
         #  2026-07-11 — study-day declutter; screenshot-confirmed list.
         #  Every capability keeps a path without its button:
@@ -16376,6 +16393,18 @@ class BookReader:
     # reader-side trigger method needed here.
 
     # ---- Study workspace (tabbed window) -------------------------------
+    def _library_open_study_tab(self, key: str) -> None:
+        """Library study-tool button → open/raise the Study workspace and
+        land directly on that tab."""
+        try:
+            self.open_study_workspace()
+        except Exception:
+            pass
+        try:
+            self._show_study_tab(key)
+        except Exception:
+            pass
+
     def open_study_workspace(self) -> None:
         """Open (or focus) the Study workspace. Acts as 'restore' too —
         if the window is iconified, this brings it back."""
