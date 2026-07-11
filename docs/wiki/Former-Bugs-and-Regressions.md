@@ -125,3 +125,32 @@ When you fix a bug, append an entry with: **symptom → named CS concept →
 fix & guard → commit link**. If the bug was a logic error in the functional
 core, add a **failing-then-passing unit test** and cite it here — that is what
 turns "fixed" into "can't regress." See [Testing & QA](Testing-and-QA.md).
+
+
+## July 2026 — the "silent sweep" regression batch
+
+Three regression families traced to the post-v0.9 refactor commits
+(`2f08bfb`..`8e70f8e`), all sharing one root pattern: **failures hidden
+inside bare `except: pass`.**
+
+1. **Save-widget sweep orphans.** A cleanup removed Save/Delete buttons
+   project-wide but left the save functions with nothing calling them —
+   7 dialogs (Scoreboard editor, V2MOM, Daily 10 Goals, Session-End
+   handoff, Glossary editor, Goals worksheet, block dialogs) accepted
+   typing and silently kept nothing. Fix: buttons restored; Daily 10
+   also gained an in-window ✓ confirmation + auto-close (a save the
+   user can't SEE reads as broken).
+2. **Read-aloud silence.** Piper playback was swapped from stdlib
+   `winsound` to `pyaudio` inside `except: pass`; PortAudio raises
+   OSError -9999 on this hardware, so every read highlighted in
+   silence. Fix: winsound restored (the stop paths still expected its
+   `SND_PURGE`); playback errors now surface as error events.
+3. **Constructor-tuple pady crashes.** Seven `tk.Label(..., pady=(12, 2))`
+   constructor tuples (glossary editor, folder + time-block dialogs)
+   raised `bad screen distance` and aborted those windows half-built —
+   the codebase's oldest recurring trap, now swept project-wide.
+
+**Standing lesson:** when the user says "X doesn't work," grep for a
+swallowed exception near X first, and check `voice_debug.log` for
+anything voice-related. And after any large pulled refactor, verify the
+audio/UI paths **on the real hardware** before trusting them.

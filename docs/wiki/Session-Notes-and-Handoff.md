@@ -6,7 +6,7 @@ what's next. Reviewed 2026-06-27 against `aea48c8`.*
 
 ---
 
-## ⏱ Current state at a glance (as of 2026-06-27)
+## ⏱ Current state at a glance (as of 2026-06-27 — superseded; see July 2026 block at the end)
 
 - **Branch:** `main` · **HEAD:** `aea48c8` · clean, laptop = OneDrive = GitHub.
 - **Version:** v0.9 (release-candidate track). **Tests:** 34/34 passing.
@@ -110,3 +110,22 @@ what's next. Reviewed 2026-06-27 against `aea48c8`.*
 - "Scratch that" / voice editing; NATO-alphabet spelling mode.
 - macOS / Linux ports (Tk is portable; Piper has Linux builds).
 - Migrate remaining app-level delete cascades to declared FK `ON DELETE CASCADE`.
+
+
+## ⏱ Current state at a glance (as of 2026-07-11)
+
+- **v1.0 close-out in progress** ("stay the course" decision on record:
+  finish the working product; the 2.0 Tauri re-platform is parked as
+  `docs/ROADMAP_2.0_GAMIFICATION.md`).
+- Shipped this track: FSRS memory training (Sprints 1+2 per
+  RELAY-SRS-001), AI-chat context sources (🌐 web / ☁ OneDrive / 📎
+  attachments incl. Excel), 📄 document drafting, 🐢/🐇 read speed,
+  Library archive-not-delete workflow, Library as study hub (tab
+  buttons), validated Prompt-Library ➕ Add.
+- **Remaining for v1.0:** tagging UI for `tags: []`, README v1.0 polish
+  + version bump + demo GIF, declared descopes (macOS port, platform
+  two-way sync), then a bug-shakeout period of daily use.
+- Suite: **172 green.** Three-way mirror: laptop ⇄ OneDrive ⇄ GitHub,
+  single `main` branch per repo.
+- See also `Working-With-The-Architect.md` — collaboration and
+  accessibility notes for this project's primary user and owner.

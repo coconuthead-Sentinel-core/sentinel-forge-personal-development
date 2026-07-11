@@ -118,3 +118,18 @@ module is pure (no Tk), defensive (never raises on bad input), and unit-tested:
 | `dictation_commands.py` | `apply_dictation_commands` |
 | `db/study_db.py` | `init_study_db`, `connect`, `db_query`, `db_exec`, `transaction` |
 | `reminders.py` / `reminder_flash.py` | Windows per-user scheduled reminders + alert UI |
+
+
+## July 2026 additions
+
+| Module | Responsibility |
+| --- | --- |
+| `lyceum/srs.py` | FSRS spaced-repetition service (py-fsrs, MIT): decks/cards/review log over three additive tables; injectable clocks; all writes in `transaction()` |
+| `lyceum/doc_writer.py` | assistant document generation: model text → real `.docx` letters and `.xlsx` tables with live `=SUM()` formulas |
+| `lyceum/doc_index.py` (extended) | `build_index_over()` — cached, read-only indexing of a whole folder tree (☁ OneDrive) with repo-dir pruning; Excel/CSV extraction |
+| Shell (`sentinel_personal_development.py`) | 🧠 Memory Review window, 📄 Draft-document flow, AI-chat 🌐/☁/📎 context sources, 🐢/🐇 read speed, Library archive workflow, floating-toolbar dock targets + ❓ tour |
+
+The standalone copies of doc_index/retrieval/web_search/doc_writer in
+the **Imprint** and **strata-console** repos are deliberate ports, not
+imports — each repo stays self-contained (one assistant design, three
+shipped dashboards).

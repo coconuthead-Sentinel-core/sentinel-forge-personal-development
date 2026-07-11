@@ -15,7 +15,7 @@ database** (the transaction tests use a throwaway temp DB). That is the entire
 payoff of the [functional-core / imperative-shell](Architecture.md) split — the
 decision logic can be verified without a display or audio device.
 
-## Current state: 34 unit tests, all passing
+## Current state: 172 automated tests, all passing (July 2026)
 
 > The README states 24; the [SDLC status doc](SDLC-and-Process.md) and the latest
 > dictation work bring it to **34** (24 + 10 dictation-command tests). Treat
@@ -81,3 +81,20 @@ decision logic can be verified without a display or audio device.
 The guiding rule going forward: **`py_compile` is the floor; a green
 `unittest` run is the ceiling — and any logic-bug fix in `lyceum/` ships with a
 failing-then-passing test.**
+
+
+## July 2026 update — 172 tests
+
+The suite grew from 34 to **172** across the July feature track. New
+test files, all still headless (no Tkinter, throwaway temp DBs):
+
+| File | Covers |
+| --- | --- |
+| `test_srs.py` | FSRS spaced-repetition core: schema idempotency, card round-trip, **proven review atomicity** (forced failure between card UPDATE and log INSERT rolls back both), deterministic scheduling (fuzzing disabled), idempotent glossary sync, resync repair |
+| `test_doc_writer.py` | model text → real .docx/.xlsx: tolerant table parsing, live =SUM() formulas, illegal sheet-title sanitizing (a `Budget: July` tab name aborted the write — caught end-to-end), refusal detection, safe filenames |
+| `test_doc_index.py` (extended) | broad-folder indexer: repo-dir exclusion (.git, node_modules…), relative-path labels, mtime cache reuse, Excel/CSV extraction |
+| plus | integration tests, GUI harness, finance kernel, voice modules (from the earlier hardening track) |
+
+Verification practice for UI work: **headless smoke scripts** driving
+the real app under a genuine `mainloop()` (worker threads deliver via
+`after()`, which silently fails without one — a lesson learned twice).
