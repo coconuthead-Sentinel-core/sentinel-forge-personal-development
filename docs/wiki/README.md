@@ -35,6 +35,7 @@ work; it tells you exactly where things stand and what to touch next.
 | [Development Workflow](Development-Workflow.md) | The laptop→GitHub sync rule, branching policy, build & release |
 | [Glossary of CS Concepts](Glossary-of-CS-Concepts.md) | Plain-language definitions of every concept this codebase uses |
 | [Working With The Architect](Working-With-The-Architect.md) | Accessibility-first collaboration guide: how to build for and work with the project owner |
+| [Whitepaper Notes](Whitepaper-Notes.md) | Append-only raw material for the portfolio case-study white paper (1-3 sentences per docs update) |
 | [Session Notes & Handoff](Session-Notes-and-Handoff.md) | Running log for future sessions; current state and next actions |
 
 ## Thirty-second orientation
