@@ -4,7 +4,7 @@
 > Designing, Testing, and Shipping a Local-First Personal-Development
 > Workstation with AI-Assisted Development."**
 > Practice: every README/docs update leaves 1–3 sentences here. When
-> enough accumulates, this page becomes the white paper's outline.
+> enough accumulates, notes feed the skeleton in [Whitepaper-Outline](Whitepaper-Outline.md), which becomes the white paper's outline.
 > Framing rules (owner's decision, July 2026): lead with engineering;
 > public disclosure stays at the README's existing line
 > (ADHD/dyslexia/dysgraphia); one paper anchored here, citing Imprint
