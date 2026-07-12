@@ -38,6 +38,7 @@ work; it tells you exactly where things stand and what to touch next.
 | [Assistant Notes](Assistant-Notes.md) | Assistant-maintained project state, V&V status, TODO, and instruction queue — checked on every README review |
 | [Working With The Architect](Working-With-The-Architect.md) | Accessibility-first collaboration guide: how to build for and work with the project owner |
 | [Whitepaper Notes](Whitepaper-Notes.md) | Append-only raw material for the portfolio case-study white paper (1-3 sentences per docs update) |
+| [Review — Power Automate](Review-PowerAutomate.md) | Clinical CS review of the Power Automate books → what integrates (an ECA rule engine) with proven pseudocode |
 | [Review — Copilot At Work](Review-CopilotAtWork.md) | Clinical CS review of the M365 Copilot book → what integrates (a prompt-quality analyzer) with proven pseudocode |
 | [Review — Word 2010 book](Review-Word2010Book.md) | Clinical CS review of the Word textbook → what integrates (readability analysis) with proven pseudocode |
 | [Review — Excel 365 Bible](Review-Excel365Bible.md) | Clinical CS review of the Excel Bible → what integrates (a formula engine) with proven pseudocode |

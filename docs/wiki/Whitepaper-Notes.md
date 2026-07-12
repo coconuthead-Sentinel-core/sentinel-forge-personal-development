@@ -137,3 +137,14 @@
   prompt-engineering canon; proven in pseudocode (15 checks) then two
   gated sprints (22 tests). Fourth textbook reviewed → fourth pure-logic
   lyceum kernel, all additive.
+
+- **2026-07-12 — Review #4: Power Automate as an ECA engine.** The
+  Power Automate books (~749K chars) reviewed top-down: cloud connectors
+  and the flow designer ruled OUT; the one canonical-CS fit — the
+  trigger→condition→action model IS the Event-Condition-Action rule
+  engine (active-database triggers, production rule systems, workflow
+  architecture — recognized on every campus worldwide). A pure decision
+  engine (no side effects; the shell executes, human-in-the-loop) proven
+  in pseudocode (3 proofs / 22 checks incl. malformed-rule safety)
+  before any code. The through-line of the whole review series: name the
+  textbook construct, implement it purely, prove it, keep it additive.
