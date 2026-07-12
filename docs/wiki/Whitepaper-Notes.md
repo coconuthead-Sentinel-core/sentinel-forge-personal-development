@@ -60,3 +60,12 @@
   dyscalculic, spatially-thinking owner, a grid the eye can walk
   through communicates architecture better than prose — accessibility
   applied to the documentation itself.
+
+- **2026-07-12 — The harvest loop closes read→remember.** The Knowledge
+  Harvester mines term/definition pairs from any Library book into the
+  FSRS deck, with a checkbox preview keeping the human in the loop. It
+  shipped in two gated sprints: a pure-logic core practiced against a
+  real 1.9M-character corpus until junk hits reached zero, then a thin
+  UI. Method note for the paper: the mockup-first protocol (three
+  verifiable no-harm proofs before a single project line changed) is
+  the AI-era version of a design review.

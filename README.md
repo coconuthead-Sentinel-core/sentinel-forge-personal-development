@@ -421,6 +421,9 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 - ✅ 🐢/🐇 reading-speed control wired through every voice path
 - ✅ Library 🗃 archive workflow — removals move files to `Books Archive`,
   never the Recycle Bin
+- ✅ 🧠 Knowledge Harvester — mine any Library book for term/definition
+  pairs (checkbox preview, human-approved) straight into the Glossary,
+  where the FSRS review deck picks them up: read → harvest → remember
 - 🔲 Voice-note recording (browser MediaRecorder; or `pyaudio` in Tk)
 - 🔲 Tagging UI for the `tags: []` field (schema already supports it)
 - 🔲 Two-way sync with the [Sentinel Forge platform](https://github.com/coconuthead-Sentinel-core/Sentinel-of-sentinel-s-Forge)

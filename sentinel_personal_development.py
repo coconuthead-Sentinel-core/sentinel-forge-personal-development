@@ -12350,6 +12350,12 @@ class BookReader:
         #  was taken out of the project.)
         lbtn(btn_row, "+  Add files…",  self._library_add_files,
              ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 6))
+        # 🧠 Knowledge Harvester (approved from the 2026-07-11 mockup):
+        # mine the selected book for term/definition pairs -> preview
+        # with checkboxes -> Glossary -> the FSRS review deck picks them
+        # up. Read → harvest → remember.
+        lbtn(btn_row, "🧠 Harvest terms", self._library_harvest_selected,
+             ACCENT_INDIGO).pack(side=tk.LEFT, padx=(0, 6))
         # Study-tool buttons (Shannon 2026-07-11): the Study workspace
         # TABS, mirrored here as buttons so the Library is the one study
         # hub — each jumps straight to its tool.
@@ -13280,6 +13286,171 @@ class BookReader:
             if len(skipped) > 12:
                 msg += f"\n  • …and {len(skipped) - 12} more"
         messagebox.showinfo("Library updated", msg)
+
+    # ---- 🧠 Knowledge Harvester (Sprint 2 UI over lyceum/harvest.py) ----
+    def _library_harvest_selected(self) -> None:
+        """Mine the selected book for glossary-grade term/definition
+        pairs. Extraction + mining run off the UI thread; results come
+        back as a preview window where Shannon approves each card."""
+        if self._library_tree is None:
+            return
+        sel = self._library_tree.selection()
+        if not sel:
+            messagebox.showinfo(
+                "Pick a book first",
+                "Click a book in the list, then press 🧠 Harvest terms.",
+                parent=self._library_win or self.root)
+            return
+        idx = int(sel[0])
+        if idx >= len(self._library_items):
+            return
+        rel, full, _size, _mtime = self._library_items[idx]
+        self.set_status(f"🧠 Harvesting terms from {rel}…")
+
+        def work():
+            try:
+                try:
+                    text = self._extract_text(full) or ""
+                except Exception:
+                    text = ""
+                if not text.strip():
+                    from lyceum.doc_index import extract_text as _dx
+                    text = _dx(full) or ""
+                from lyceum.harvest import harvest
+                cards = harvest(text, max_terms=40)
+                err = ""
+            except Exception as e:
+                cards, err = [], str(e)
+
+            def deliver():
+                self.set_status(self._library_stats_var.get()
+                                if self._library_stats_var else "")
+                if err:
+                    messagebox.showerror("Harvest failed", err,
+                                         parent=self._library_win or self.root)
+                    return
+                if not cards:
+                    messagebox.showinfo(
+                        "Nothing to harvest",
+                        f"No clean term/definition pairs found in {rel}. "
+                        "Books written as tutorials or transcripts often "
+                        "define terms in ways the miner can't safely "
+                        "extract — quality over volume.",
+                        parent=self._library_win or self.root)
+                    return
+                self._harvest_preview(rel, cards)
+            try:
+                self.root.after(0, deliver)
+            except Exception:
+                pass
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _harvest_preview(self, book_name: str, cards) -> None:
+        """Checkbox preview: Shannon approves which harvested cards
+        become Glossary entries (human-in-the-loop, always)."""
+        win = tk.Toplevel(self.root)
+        win.title("🧠 Harvested terms — approve to add")
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        w, h = min(760, sw - 80), min(560, sh - 140)
+        win.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}"
+                     f"+{max(0, (sh - h) // 2 - 20)}")
+        win.configure(bg=BG_DARK)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
+        head.pack(fill=tk.X)
+        tk.Label(head, text=f"🧠 {len(cards)} terms harvested from "
+                            f"{book_name}",
+                 bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+        tk.Label(win, text="Uncheck anything you don't want. Approved "
+                           "terms go to the 📒 Glossary — the 🧠 Review "
+                           "deck picks them up automatically.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9),
+                 wraplength=w - 40, justify=tk.LEFT).pack(
+                     anchor=tk.W, padx=14, pady=(6, 2))
+
+        # bottom buttons FIRST (window-fit law: never clipped)
+        brow = tk.Frame(win, bg=BG_DARK)
+        brow.pack(side=tk.BOTTOM, fill=tk.X, padx=14, pady=12)
+
+        outer = tk.Frame(win, bg=BG_DARK)
+        outer.pack(fill=tk.BOTH, expand=True, padx=14, pady=4)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=canvas.yview, width=16)
+        inner = tk.Frame(canvas, bg=BG_DARK)
+        inner.bind("<Configure>", lambda _e: canvas.configure(
+            scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw",
+                             width=w - 56)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        canvas.bind("<MouseWheel>", lambda e: (canvas.yview_scroll(
+            int(-1 * (e.delta / 120)), "units"), "break")[1])
+
+        checks = []
+        for term, defn, _score in cards:
+            var = tk.BooleanVar(value=True)
+            row = tk.Frame(inner, bg=BG_DARK)
+            row.pack(fill=tk.X, pady=2)
+            tk.Checkbutton(row, variable=var, bg=BG_DARK,
+                           activebackground=BG_DARK,
+                           selectcolor=BG_INPUT).pack(side=tk.LEFT)
+            tk.Label(row, text=term, bg=BG_DARK, fg=FG_TEXT,
+                     font=("Segoe UI", 10, "bold"), anchor=tk.W
+                     ).pack(side=tk.LEFT, padx=(2, 8))
+            tk.Label(row, text=defn[:110] + ("…" if len(defn) > 110
+                                             else ""),
+                     bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9),
+                     anchor=tk.W, wraplength=w - 260,
+                     justify=tk.LEFT).pack(side=tk.LEFT, fill=tk.X,
+                                           expand=True)
+            checks.append((var, term, defn))
+
+        def _add_approved():
+            now = datetime.now().isoformat(timespec="seconds")
+            added = skipped = 0
+            for var, term, defn in checks:
+                if not var.get():
+                    continue
+                exists = self._db_query(
+                    "SELECT 1 FROM glossary WHERE term=? COLLATE NOCASE",
+                    (term,))
+                if exists:
+                    skipped += 1
+                    continue
+                self._db_exec(
+                    "INSERT INTO glossary (term, definition, source, "
+                    "created_at, updated_at) VALUES (?,?,?,?,?)",
+                    (term, defn, f"🧠 Harvested from {book_name}",
+                     now, now))
+                added += 1
+            try:
+                self._refresh_tab_glossary()
+            except Exception:
+                pass
+            self._srs_update_review_badge()
+            self.set_status(
+                f"🧠 Glossary: {added} added"
+                + (f", {skipped} already known" if skipped else "")
+                + " — open 🧠 Review to start learning them.")
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+
+        tk.Button(brow, text="➕ Add checked terms to Glossary",
+                  command=_add_approved, font=("Segoe UI", 11, "bold"),
+                  bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT,
+                  padx=16, pady=6, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+        tk.Button(brow, text="Cancel", command=win.destroy,
+                  font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT,
+                  padx=14, pady=6, cursor="hand2",
+                  borderwidth=0).pack(side=tk.LEFT)
 
     def _library_archive_all(self) -> None:
         """🗃 Move EVERY book (and its sidecar) out of the Library into
