@@ -3604,6 +3604,51 @@ class BookReader:
             except Exception:
                 pass
 
+    # ---- ✨ Prompt Coach (lyceum/prompt_coach.py) ----------------------
+    def _ai_update_coach(self) -> None:
+        """Live prompt-quality feedback under the AI Chat input: a score
+        band + the single biggest improvement. Read-only; never blocks."""
+        var = getattr(self, "_ai_coach_var", None)
+        inp = getattr(self, "_ai_chat_input", None)
+        if var is None or inp is None:
+            return
+        try:
+            text = inp.get("1.0", tk.END).strip()
+        except tk.TclError:
+            return
+        if not text:
+            var.set("")
+            return
+        try:
+            from lyceum.prompt_coach import analyze
+            r = analyze(text)
+        except Exception:
+            var.set("")
+            return
+        var.set(f"✨ Prompt quality: {r['score']}/100 · {r['band']} — "
+                f"{r['tips'][0]}")
+
+    def _ai_improve_prompt(self) -> None:
+        """Replace the draft with a stronger version (missing rubric
+        parts grafted on as a template), then re-score it. A starting
+        point Shannon edits — it never sends."""
+        inp = getattr(self, "_ai_chat_input", None)
+        if inp is None:
+            return
+        try:
+            text = inp.get("1.0", tk.END).strip()
+            from lyceum.prompt_coach import improve
+            better = improve(text)
+            inp.delete("1.0", tk.END)
+            inp.insert("1.0", better)
+        except Exception:
+            return
+        self._ai_update_coach()
+        try:
+            inp.focus_set()
+        except tk.TclError:
+            pass
+
     def _ai_chat_attach_file(self) -> None:
         """📎 Attach a file to the chat: extract its text and hand it to the
         assistant as context with the next message. Documents go through the
@@ -4010,6 +4055,24 @@ class BookReader:
         self._ai_chat_input = chat_input
         self._ai_chat_input.bind("<FocusIn>", lambda _e: self._set_mic_target(self._ai_chat_input), add="+")
         self._attach_clipboard_menu(chat_input, clear_cmd=lambda: self._clear_input(chat_input), clear_label="Clear", track_for_mic=False)
+
+        # ✨ Prompt Coach — a live, teaching prompt-quality score under the
+        # input (from the Copilot-book prompt-engineering review). Scores
+        # the draft against the role/task/context/format/specific rubric
+        # and shows the single biggest improvement — turning the chat into
+        # a tool that teaches Shannon to prompt well as he types.
+        coach_bar = tk.Frame(parent, bg=BG_DARK)
+        coach_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=12, pady=(0, 2))
+        self._ai_coach_var = tk.StringVar(value="")
+        tk.Label(coach_bar, textvariable=self._ai_coach_var, bg=BG_DARK,
+                 fg=FG_MUTED, font=("Segoe UI", 9), anchor=tk.W,
+                 justify=tk.LEFT).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(coach_bar, text="✨ Improve", command=self._ai_improve_prompt,
+                  bg=ACCENT_PURPLE, fg="white", activebackground=ACCENT_PURPLE,
+                  font=("Segoe UI", 8, "bold"), relief=tk.FLAT, padx=8, pady=1,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        chat_input.bind("<KeyRelease>", lambda _e: self._ai_update_coach(),
+                        add="+")
         
         btn_send = tk.Button(input_frame, text="Send", bg=ACCENT_CYAN, fg=BG_DARK,
                              font=("Segoe UI", 10, "bold"), relief=tk.FLAT)

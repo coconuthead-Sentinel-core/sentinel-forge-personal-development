@@ -127,3 +127,13 @@
   is original heuristic code over public canon, professor-approvable,
   and turns the AI Chat into a teaching tool for a user LEARNING to work
   with AI. Proven in pseudocode (3 proofs / 15 checks) before any code.
+
+- **2026-07-12 — Prompt Coach shipped (Copilot book → teaching tool).**
+  A rubric analyzer (role/task/context/format/specificity) now scores
+  the AI-Chat draft live and teaches the biggest fix as the user types,
+  with an ✨ Improve button that grafts the missing parts. Chosen for the
+  learner: it turns the assistant into a tutor for the very skill —
+  prompting — the owner is studying. Original heuristic code over public
+  prompt-engineering canon; proven in pseudocode (15 checks) then two
+  gated sprints (22 tests). Fourth textbook reviewed → fourth pure-logic
+  lyceum kernel, all additive.

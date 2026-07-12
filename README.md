@@ -36,7 +36,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-230 automated tests cover the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+248 automated tests cover the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, and the FSRS spaced-repetition core — all
@@ -421,6 +421,10 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 - ✅ 🐢/🐇 reading-speed control wired through every voice path
 - ✅ Library 🗃 archive workflow — removals move files to `Books Archive`,
   never the Recycle Bin
+- ✅ ✨ Prompt Coach (`lyceum/prompt_coach.py`) — a live prompt-quality
+  analyzer that scores your AI-Chat draft against the prompt-engineering
+  rubric (role/task/context/format/specificity) and teaches the biggest
+  fix as you type, with a ✨ Improve button
 - ✅ 📖 Readability analysis (`lyceum/readability.py`) — Flesch-Kincaid grade
   level + Reading Ease over a syllable-counting kernel; saved excerpts get an
   objective difficulty badge ("📖 Grade 8 · Plain") beside the cognitive-load
