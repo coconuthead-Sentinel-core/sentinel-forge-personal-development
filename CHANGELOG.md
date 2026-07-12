@@ -54,6 +54,13 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   even for entering text.
 
 ### Changed
+- **A− / A+ are real Buttons again (they were dead "empty plugs").** The
+  road-marker **Canvas** version did not receive real clicks in the flow-layout
+  toolbar — while the traffic-light **Buttons** in the same bar always did. A−/A+
+  are now `tk.Button`s (styled as white/black sign plates), so clicking them
+  reliably resizes the Study reading panes; the black/white toggle is preserved.
+  A one-line breadcrumb log (`%LOCALAPPDATA%\SentinelForge\fontsize_debug.log`)
+  records each click for on-machine verification.
 - **README** corrected: test count `24 → 34`; entry-point and launcher names
   updated from the historical `book_reader.py` / `run_book_reader.bat` to the
   current `sentinel_personal_development.py` / `run_sentinel.bat`.
