@@ -44,3 +44,11 @@
   written after an earlier project WAS lost. Estimated replacement
   cost drops from months to 8-12 sessions. Documentation as disaster
   insurance is a paper-worthy practice for solo developers.
+
+- **2026-07-11 (late) — Template library discipline.** The owner
+  maintains a blank-template source library (the Codex) with a written
+  policy: templates stay blank; projects copy and fill their own
+  copies. The rebuild pack (docs/rebuild-pack/, 8 filled inventories
+  from the engineering template pack) demonstrates the discipline —
+  reusable process assets, per-project instances. That separation is
+  itself an SDLC maturity marker worth a paragraph in the paper.
