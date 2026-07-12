@@ -168,3 +168,14 @@
   attacker-favorable minimum), private by design (no storage/network),
   proven exact against closed-form values (20 checks) before any code.
   Fifth textbook, fifth canonical pure-logic kernel — the method holds.
+
+- **2026-07-12 — Shannon entropy shipped (M365 cert → strength meter).**
+  A password-strength estimator built on Shannon entropy (the most
+  universally-taught algorithm in CS) — search-space + distribution
+  entropy, attacker-favorable minimum, private by design (pure function,
+  no storage/network/logging). This closes a FIVE-textbook arc: Excel
+  Bible → formula engine, Word 2010 → readability, Copilot → prompt
+  coach, Power Automate → ECA engine, M365 cert → entropy. Five canonical
+  CS kernels, each proven in pseudocode first, each additive and pure.
+  The repeatable method — review, extract the textbook construct, prove,
+  build safely — is the portfolio thesis made concrete.

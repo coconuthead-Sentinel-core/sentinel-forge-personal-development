@@ -4317,6 +4317,102 @@ class BookReader:
         
         btn_send.config(command=_send)
 
+    def open_password_strength(self) -> None:
+        """🔒 Local, private password-strength estimator (Shannon entropy,
+        lyceum/password_strength.py). PRIVACY: it analyzes what you type
+        in this box locally and NEVER stores, sends, or logs it — the box
+        clears when the window closes. Live bits + band + one tip as you
+        type; optional 👁 reveal."""
+        existing = getattr(self, "_pw_strength_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+        win = tk.Toplevel(self.root)
+        self._pw_strength_win = win
+        win.title("🔒 Password Strength")
+        win.configure(bg=BG_DARK)
+        self._fit_dialog(win, 560, 340)
+
+        tk.Label(win, text="🔒 Password Strength", bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 14, "bold"), padx=16
+                 ).pack(anchor=tk.W, pady=(12, 2))
+        tk.Label(win, text="Type a candidate password to measure its "
+                 "information entropy (bits). 100% local & private — nothing "
+                 "is stored, sent, or logged; it clears when you close.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9),
+                 wraplength=520, justify=tk.LEFT, padx=16
+                 ).pack(anchor=tk.W)
+
+        row = tk.Frame(win, bg=BG_DARK, padx=16)
+        row.pack(fill=tk.X, pady=(10, 4))
+        pw_var = tk.StringVar()
+        show_var = tk.BooleanVar(value=False)
+        entry = tk.Entry(row, textvariable=pw_var, show="•", bg=BG_INPUT,
+                         fg=FG_TEXT, insertbackground=FG_TEXT,
+                         font=("Consolas", 13), relief=tk.FLAT, bd=0)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=6)
+        entry.focus_set()
+
+        def _toggle_show():
+            entry.configure(show="" if show_var.get() else "•")
+        tk.Checkbutton(row, text="👁", variable=show_var, command=_toggle_show,
+                       bg=BG_DARK, fg=FG_TEXT, selectcolor=BG_INPUT,
+                       activebackground=BG_DARK, font=("Segoe UI", 11)
+                       ).pack(side=tk.LEFT, padx=(8, 0))
+
+        # a simple strength meter bar
+        bar_bg = tk.Frame(win, bg=BG_INPUT, height=10)
+        bar_bg.pack(fill=tk.X, padx=16, pady=(6, 2))
+        bar = tk.Frame(bar_bg, bg=ACCENT_GREEN, height=10, width=0)
+        bar.place(x=0, y=0, relheight=1.0)
+        result_var = tk.StringVar(value="")
+        tk.Label(win, textvariable=result_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11, "bold"), padx=16, anchor=tk.W
+                 ).pack(fill=tk.X, pady=(4, 0))
+        tip_var = tk.StringVar(value="")
+        tk.Label(win, textvariable=tip_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10), wraplength=520, justify=tk.LEFT,
+                 padx=16, anchor=tk.W).pack(fill=tk.X)
+
+        _BAND_COLOR = {"Very weak": ACCENT_RED, "Weak": ACCENT_RED,
+                       "Reasonable": ACCENT_AMBER, "Strong": ACCENT_GREEN,
+                       "Very strong": ACCENT_GREEN}
+
+        def _update(*_a):
+            from lyceum.password_strength import strength
+            r = strength(pw_var.get())
+            if r["length"] == 0:
+                result_var.set(""); tip_var.set(""); bar.configure(width=0)
+                return
+            result_var.set(f"{r['bits']:g} bits · {r['band']} · "
+                           f"cracks in {r['crack_time']}")
+            tip_var.set("💡 " + r["tips"][0])
+            frac = max(0.04, min(1.0, r["bits"] / 128.0))
+            try:
+                bar_bg.update_idletasks()
+                bar.configure(width=int(bar_bg.winfo_width() * frac),
+                              bg=_BAND_COLOR.get(r["band"], ACCENT_SLATE))
+            except tk.TclError:
+                pass
+        pw_var.trace_add("write", _update)
+
+        def _close():
+            pw_var.set("")                 # never leave it in memory longer
+            self._pw_strength_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+        tk.Button(win, text="Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=14,
+                  pady=6, cursor="hand2", borderwidth=0
+                  ).pack(side=tk.BOTTOM, pady=12)
+
     def open_time_log(self) -> None:
         """The Winner's Time Log: toggle the recurring check-in, log the
         current hour by hand, and see a weekly pie of where minutes went."""
@@ -11675,6 +11771,8 @@ class BookReader:
              "4DX lead vs lag measures"),
             ("📅 Streaks", self.open_streak_tracker, ACCENT_GREEN,
              "Never-miss-twice tracker"),
+            ("🔒 Password Strength", self.open_password_strength, ACCENT_SLATE,
+             "Shannon-entropy strength check (local, private)"),
         ]
 
         grid = tk.Frame(win, bg=BG_DARK, padx=12, pady=4)

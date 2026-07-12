@@ -36,7 +36,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-265 automated tests cover the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+280 automated tests cover the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, and the FSRS spaced-repetition core — all
@@ -421,6 +421,9 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 - ✅ 🐢/🐇 reading-speed control wired through every voice path
 - ✅ Library 🗃 archive workflow — removals move files to `Books Archive`,
   never the Recycle Bin
+- ✅ 🔒 Password-strength estimator (`lyceum/password_strength.py`) — a
+  Shannon-entropy strength meter (bits + band + crack-time) surfaced as a
+  local, private 🔒 utility; nothing is stored, sent, or logged
 - ✅ 🤖 Automation engine (`lyceum/automation.py`) — an Event-Condition-Action
   (ECA) rule engine: WHEN an app event fires AND conditions pass, THEN it
   suggests actions (e.g. after a 25-min focus block, prompt to mark the
