@@ -24,6 +24,29 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 - **README** corrected: test count `24 → 34`; entry-point and launcher names
   updated from the historical `book_reader.py` / `run_book_reader.bat` to the
   current `sentinel_personal_development.py` / `run_sentinel.bat`.
+- **Study panels unified (Topics · Glossary · Commentary → Journal layout).**
+  All three now follow the clean Journal anatomy — header → `[list | content]`
+  → a single primary `+ Add/New` button. The multi-button rows and the
+  paste-and-save boxes were removed; **Add / Remove route through the floating
+  toolbar** (context-dispatched, with new `_glossary_remove_from_toolbar` /
+  `_commentary_remove_from_toolbar` handlers), and secondary actions
+  (Edit / Rename / Delete / Read / Import) moved to a **right-click menu** on
+  the list. Reduces on-screen button count for a neurodivergent-first workflow.
+- **Reading sliders.** Each Study read surface (Topics entries list, Glossary
+  definition, Commentary pane) gained a **horizontal scrollbar** along the
+  bottom so long lines can be slid into view and reviewed instead of clipping.
+
+### Fixed
+- **Study navigation lists no longer blow up with A− / A+.** The text-size
+  control (`_apply_study_legibility`) was scaling the Topics/Glossary/Commentary
+  index *lists* together with the reading text, so sizing up enlarged and
+  **clipped the lists off-screen**. Scaling now applies only to the reading
+  panes; the lists stay fixed and legible (matching the Journal list, which was
+  already exempt — the reason it never exhibited the bug).
+- **Delete-topic confirmation can no longer balloon off-screen.** When a topic
+  title was a large pasted block (e.g. a whole AI reply), the confirm dialog
+  grew until its Yes/No buttons left the visible area. It now shows a
+  60-character single-line preview of the title.
 
 ## [0.9.0-rc1] — 2026-06-27
 

@@ -129,3 +129,18 @@ what's next. Reviewed 2026-06-27 against `aea48c8`.*
   single `main` branch per repo.
 - See also `Working-With-The-Architect.md` — collaboration and
   accessibility notes for this project's primary user and owner.
+
+### 2026-07-12 — Study-panel uniformity + reading sliders
+- Re-cut **Topics / Glossary / Commentary** to the Journal layout; removed
+  in-panel button rows + paste boxes; Add/Remove now via the floating
+  toolbar (added `_glossary_remove_from_toolbar` /
+  `_commentary_remove_from_toolbar`), secondary actions via right-click menu.
+- Fixed two display bugs: A−/A+ was scaling the nav lists (clipped the
+  Topics index off-screen); the Delete-topic confirm dialog ballooned when
+  a title was a huge pasted block (now a 60-char preview).
+- Added a **horizontal reading slider** to all three Study read surfaces so
+  long lines can be slid into view and reviewed.
+- Suite: **312 green** (14 skipped). Clean `py_compile`. Live `study.db`
+  verified byte-identical after the test run (isolation holds).
+- Three-way mirror refreshed: laptop `Desktop\Sentinel-Forge` → GitHub
+  `main` → OneDrive `Sentinel personal development` clone.

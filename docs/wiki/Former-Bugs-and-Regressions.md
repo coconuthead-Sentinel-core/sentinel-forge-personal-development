@@ -154,3 +154,27 @@ inside bare `except: pass`.**
 swallowed exception near X first, and check `voice_debug.log` for
 anything voice-related. And after any large pulled refactor, verify the
 audio/UI paths **on the real hardware** before trusting them.
+
+---
+
+### 2026-07-12 — Study-panel UI sweep (two display bugs)
+
+4. **A−/A+ scaled the navigation lists, not just the reading text.**
+   `_apply_study_legibility` pushed the reading font size onto the
+   Topics/Glossary/Commentary index **listboxes** as well as the read
+   panes, so sizing text up enlarged the lists until their rows clipped
+   off-screen and became unreadable — while the **Journal list never
+   showed the bug because it was already exempt** from that loop. Fix:
+   scale only the reading panes (`_glossary_definition_widget`,
+   `commentary_area`); leave the four nav lists at a fixed, compact size.
+5. **Delete-topic confirm dialog ballooned off-screen.** A topic whose
+   *title* was a whole pasted AI reply was interpolated verbatim into
+   `messagebox.askyesno("Delete topic?", …)`, so the modal grew tall
+   enough to push its Yes/No buttons past the screen edge — leaving it
+   "stuck open." Fix: collapse the title to a 60-char single-line preview
+   before formatting the message.
+
+**Standing lesson (added):** any user-supplied string interpolated into a
+messagebox or a fixed-height widget must be length-capped — a title/name
+field can hold an entire pasted document. And accessibility font-scaling
+must target reading surfaces only, never navigation indexes.

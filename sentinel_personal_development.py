@@ -1888,6 +1888,10 @@ class BookReader:
             return
         if self._topics_remove_from_toolbar():
             return
+        if self._glossary_remove_from_toolbar():
+            return
+        if self._commentary_remove_from_toolbar():
+            return
         if self._ftb_invoke_context_button(("remove", "delete", "clear", "🗑")):
             return
         if self._ftb_generate_bound_event("<Delete>"):
@@ -2965,23 +2969,17 @@ class BookReader:
         spec = self._study_legibility_spec()
         self._study_font_spec = spec
         font = (spec["family"], spec["size"])
-        # Text panes get font + line-leading (spacing1/spacing3) + wrap.
-        for attr in ("_glossary_definition_widget", "commentary_area",
-                     "_glossary_paste", "_commentary_paste", "_topic_paste"):
+        # Only the READING panes scale with A+/A− (the Glossary definition and
+        # the Commentary read surface). The navigation LISTS are deliberately
+        # left out — kept fixed and compact like the Journal list. Scaling the
+        # indexes is exactly what blew the Topics/Glossary/Commentary lists up
+        # until their text clipped off-screen. Index stays legible; content scales.
+        for attr in ("_glossary_definition_widget", "commentary_area"):
             w = getattr(self, attr, None)
             if w is not None:
                 try:
                     w.configure(font=font, spacing1=spec["spacing1"],
                                 spacing3=spec["spacing3"], wrap=tk.WORD)
-                except Exception:
-                    pass
-        # Listboxes take the font only (no spacing/wrap options).
-        for attr in ("_topic_entries_listbox", "_glossary_listbox",
-                     "_commentary_listbox", "_topics_listbox"):
-            w = getattr(self, attr, None)
-            if w is not None:
-                try:
-                    w.configure(font=font)
                 except Exception:
                     pass
 
@@ -18269,32 +18267,50 @@ class BookReader:
                                 bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
         paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
-        # Left — topic list
+        # Left — topic list (clean: one "+ New" button, like the Journal tab).
         left = tk.Frame(paned, bg=BG_DARK)
         tk.Label(left, text="Topics", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 11, "bold"), anchor=tk.W
                  ).pack(fill=tk.X, padx=2, pady=(0, 4))
-        # Buttons reserved at the BOTTOM so Delete is never clipped off-screen.
         ltbtn = tk.Frame(left, bg=BG_DARK, pady=6)
         ltbtn.pack(side=tk.BOTTOM, fill=tk.X)
-        def lb_btn(text, cmd, color):
-            return tk.Button(ltbtn, text=text, command=cmd,
-                             font=("Segoe UI", 10, "bold"),
-                             bg=color, fg="white", activebackground=color,
-                             relief=tk.FLAT, padx=8, pady=4,
-                             cursor="hand2", borderwidth=0)
-        lb_btn("+ New",  self._create_new_topic,      ACCENT_GREEN).pack(side=tk.LEFT, padx=(0,4))
-        lb_btn("Rename", self._rename_selected_topic, ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
-        # (🗑 Delete (Topics) removed — Delete/Remove widgets were taken out.)
+        tk.Button(ltbtn, text="+ New", command=self._create_new_topic,
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 4))
+        list_frame = tk.Frame(left, bg=BG_DARK)
+        list_frame.pack(fill=tk.BOTH, expand=True)
         self._topics_listbox = tk.Listbox(
-            left, bg=BG_INPUT, fg=FG_TEXT,
+            list_frame, bg=BG_INPUT, fg=FG_TEXT,
             selectbackground=ACCENT_CYAN, selectforeground="white",
             font=("Segoe UI", 11), relief=tk.FLAT, bd=0,
             highlightthickness=0, activestyle="none",
         )
-        self._topics_listbox.pack(fill=tk.BOTH, expand=True)
+        tsb = tk.Scrollbar(list_frame, command=self._topics_listbox.yview)
+        self._topics_listbox.configure(yscrollcommand=tsb.set)
+        tsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._topics_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._topics_listbox.bind("<<ListboxSelect>>",
             lambda _e: self._show_topic_entries())
+        # Secondary actions live on a right-click menu — home base is the
+        # floating toolbar (Add / Remove), so the panel stays uncluttered.
+        topic_menu = tk.Menu(self._topics_listbox, tearoff=0, bg=BG_PANEL,
+                             fg=FG_TEXT, activebackground=ACCENT_SLATE,
+                             activeforeground="white")
+        topic_menu.add_command(label="✏  Rename topic",
+                               command=self._rename_selected_topic)
+        topic_menu.add_command(label="🗑  Delete topic",
+                               command=self._delete_selected_topic)
+        def _topic_menu_popup(event):
+            try:
+                self._topics_listbox.selection_clear(0, tk.END)
+                self._topics_listbox.selection_set(
+                    self._topics_listbox.nearest(event.y))
+                self._show_topic_entries()
+            except tk.TclError:
+                pass
+            topic_menu.tk_popup(event.x_root, event.y_root)
+        self._topics_listbox.bind("<Button-3>", _topic_menu_popup)
 
         # Right — entries in selected topic
         right = tk.Frame(paned, bg=BG_DARK)
@@ -18302,19 +18318,6 @@ class BookReader:
         tk.Label(right, textvariable=self._topic_entries_label_var,
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 11, "bold"),
                  anchor=tk.W).pack(fill=tk.X, padx=2, pady=(0,4))
-        # Buttons reserved at the BOTTOM so Delete entry is never clipped.
-        rtbtn = tk.Frame(right, bg=BG_DARK, pady=6)
-        rtbtn.pack(side=tk.BOTTOM, fill=tk.X)
-        def rb(text, cmd, color):
-            return tk.Button(rtbtn, text=text, command=cmd,
-                             font=("Segoe UI", 10, "bold"),
-                             bg=color, fg="white", activebackground=color,
-                             relief=tk.FLAT, padx=8, pady=4,
-                             cursor="hand2", borderwidth=0)
-        rb("View / Jump", self._view_or_jump_topic_entry, ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, 4))
-        rb("🔊 Read", self._read_topic_entry,        ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
-        rb("Copy",   self._copy_topic_entry_text,    ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
-        # (🗑 Delete entry (Topics) removed — Delete/Remove widgets were taken out.)
         entry_frame = tk.Frame(right, bg=BG_DARK)
         entry_frame.pack(fill=tk.BOTH, expand=True)
         self._topic_entries_listbox = tk.Listbox(
@@ -18324,45 +18327,47 @@ class BookReader:
             highlightthickness=0, activestyle="none",
         )
         sb = tk.Scrollbar(entry_frame, command=self._topic_entries_listbox.yview)
-        self._topic_entries_listbox.configure(yscrollcommand=sb.set)
+        # Horizontal "slider" along the bottom: a topic entry can be a long
+        # AI-generated line that runs off the right edge; this lets the user
+        # slide it back into view and review it instead of it being clipped.
+        hsb = tk.Scrollbar(entry_frame, orient=tk.HORIZONTAL,
+                           command=self._topic_entries_listbox.xview)
+        self._topic_entries_listbox.configure(yscrollcommand=sb.set,
+                                              xscrollcommand=hsb.set)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self._topic_entries_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._topic_entries_listbox.bind("<Double-Button-1>",
             lambda _e: self._view_or_jump_topic_entry())
         self._topic_entries_listbox.bind("<Return>",
             lambda _e: self._view_or_jump_topic_entry())
+        # Right-click an entry: view/jump, read, copy, delete.
+        entry_menu = tk.Menu(self._topic_entries_listbox, tearoff=0,
+                            bg=BG_PANEL, fg=FG_TEXT,
+                            activebackground=ACCENT_SLATE, activeforeground="white")
+        entry_menu.add_command(label="↪  View / Jump",
+                               command=self._view_or_jump_topic_entry)
+        entry_menu.add_command(label="🔊  Read",
+                               command=self._read_topic_entry)
+        entry_menu.add_command(label="⧉  Copy text",
+                               command=self._copy_topic_entry_text)
+        entry_menu.add_separator()
+        entry_menu.add_command(label="🗑  Delete entry",
+                               command=self._delete_topic_entry)
+        def _entry_menu_popup(event):
+            try:
+                self._topic_entries_listbox.selection_clear(0, tk.END)
+                self._topic_entries_listbox.selection_set(
+                    self._topic_entries_listbox.nearest(event.y))
+            except tk.TclError:
+                pass
+            entry_menu.tk_popup(event.x_root, event.y_root)
+        self._topic_entries_listbox.bind("<Button-3>", _entry_menu_popup)
 
         paned.add(left,  minsize=240, stretch="always")
         paned.add(right, minsize=300, stretch="always")
 
-        # ── Paste-and-save: select a topic on the left, paste notes here
-        # (blank line between separate entries) and click 💾 Save. ───────
-        paste = tk.LabelFrame(
-            panel, text="  Paste into the selected topic (blank line = new entry) → 💾 Save  ",
-            bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10, "bold"),
-            padx=10, pady=8, relief=tk.GROOVE, bd=1)
-        paste.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self._topic_paste = scrolledtext.ScrolledText(
-            paste, wrap=tk.WORD, font=("Segoe UI", 11), height=4,
-            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=10, pady=8, relief=tk.FLAT, undo=True)
-        self._topic_paste.pack(fill=tk.X, expand=False)
-        self._topic_paste.bind(
-            "<FocusIn>", lambda _e: self._set_mic_target(self._topic_paste))
-        prow = tk.Frame(paste, bg=BG_DARK)
-        prow.pack(fill=tk.X, pady=(6, 0))
-        tk.Button(prow, text="💾 Save entry", command=self._save_topic_paste,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(prow, text="Clear",
-                  command=lambda: self._topic_paste.delete("1.0", tk.END),
-                  font=("Segoe UI", 11), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
-
-        # Give the left pane a comfortable width once the tab is shown, so
-        # the +New / Rename / 🗑 Delete buttons are never cut off.
+        # Give the left pane a comfortable width once the tab is shown.
         self._topics_sash_done = False
         def _topics_sash(_e=None):
             if getattr(self, "_topics_sash_done", False):
@@ -18455,6 +18460,54 @@ class BookReader:
         self.set_status("📌 Select a topic or topic entry, then Remove.")
         return True
 
+    def _glossary_context_active(self) -> bool:
+        lb = getattr(self, "_glossary_listbox", None)
+        if getattr(self, "_study_active_tab", None) == "glossary":
+            return True
+        if hasattr(self, "_ftb_action_targets"):
+            for target in self._ftb_action_targets():
+                if target is lb:
+                    return True
+        return False
+
+    def _glossary_remove_from_toolbar(self) -> bool:
+        if not self._glossary_context_active():
+            return False
+        lb = getattr(self, "_glossary_listbox", None)
+        if lb is not None:
+            try:
+                if lb.curselection():
+                    self._delete_glossary_selected()
+                    return True
+            except tk.TclError:
+                pass
+        self.set_status("📒 Select a glossary entry, then Remove.")
+        return True
+
+    def _commentary_context_active(self) -> bool:
+        lb = getattr(self, "_commentary_listbox", None)
+        if getattr(self, "_study_active_tab", None) == "commentary":
+            return True
+        if hasattr(self, "_ftb_action_targets"):
+            for target in self._ftb_action_targets():
+                if target is lb:
+                    return True
+        return False
+
+    def _commentary_remove_from_toolbar(self) -> bool:
+        if not self._commentary_context_active():
+            return False
+        lb = getattr(self, "_commentary_listbox", None)
+        if lb is not None:
+            try:
+                if lb.curselection():
+                    self._delete_commentary_selected()
+                    return True
+            except tk.TclError:
+                pass
+        self.set_status("📑 Select a commentary entry, then Remove.")
+        return True
+
     def _create_new_topic(self) -> None:
         name = self._prompt_for_text("New topic", "Topic name:")
         if not name:
@@ -18496,9 +18549,15 @@ class BookReader:
         if not sel:
             return
         tid, title, n = self._topics_records[sel[0]]
+        # A topic title can be a huge pasted block (e.g. a whole AI reply).
+        # Collapse it to a short single-line preview so the confirm dialog
+        # can't balloon and push its Yes/No buttons off the screen.
+        preview = " ".join(str(title).split())
+        if len(preview) > 60:
+            preview = preview[:60] + "…"
         if not messagebox.askyesno(
             "Delete topic?",
-            f"Permanently delete '{title}' and its {n} entries?",
+            f"Permanently delete '{preview}' and its {n} entries?",
         ):
             return
         self._db_exec("DELETE FROM topics WHERE id=?", (tid,))
@@ -19093,6 +19152,13 @@ class BookReader:
         paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
         left = tk.Frame(paned, bg=BG_DARK)
+        ltbtn = tk.Frame(left, bg=BG_DARK, pady=6)
+        ltbtn.pack(side=tk.BOTTOM, fill=tk.X)
+        tk.Button(ltbtn, text="+ Add",
+                  command=lambda: self._edit_glossary_entry(),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 4))
         list_frame = tk.Frame(left, bg=BG_DARK)
         list_frame.pack(fill=tk.BOTH, expand=True)
         self._glossary_listbox = tk.Listbox(
@@ -19107,61 +19173,53 @@ class BookReader:
         self._glossary_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._glossary_listbox.bind("<<ListboxSelect>>",
             lambda _e: self._show_glossary_selected())
+        # Secondary actions on right-click — home base is the floating toolbar.
+        gmenu = tk.Menu(self._glossary_listbox, tearoff=0, bg=BG_PANEL,
+                        fg=FG_TEXT, activebackground=ACCENT_SLATE,
+                        activeforeground="white")
+        gmenu.add_command(label="✏  Edit entry",
+                          command=self._edit_glossary_selected)
+        gmenu.add_command(label="🔊  Read", command=lambda:
+                          self._study_read_pane(self._glossary_definition_widget))
+        gmenu.add_separator()
+        gmenu.add_command(label="🗑  Delete entry",
+                          command=self._delete_glossary_selected)
+        def _gmenu_popup(event):
+            try:
+                self._glossary_listbox.selection_clear(0, tk.END)
+                self._glossary_listbox.selection_set(
+                    self._glossary_listbox.nearest(event.y))
+                self._show_glossary_selected()
+            except tk.TclError:
+                pass
+            gmenu.tk_popup(event.x_root, event.y_root)
+        self._glossary_listbox.bind("<Button-3>", _gmenu_popup)
 
         right = tk.Frame(paned, bg=BG_DARK)
         self._glossary_term_var = tk.StringVar(value="")
         tk.Label(right, textvariable=self._glossary_term_var,
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 14, "bold"),
                  anchor=tk.W).pack(fill=tk.X, padx=2)
-        self._glossary_definition_widget = scrolledtext.ScrolledText(
-            right, wrap=tk.WORD, font=("Segoe UI", 11),
+        def_frame = tk.Frame(right, bg=BG_DARK)
+        def_frame.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self._glossary_definition_widget = tk.Text(
+            def_frame, wrap=tk.WORD, font=("Segoe UI", 11),
             bg=BG_INPUT, fg=FG_TEXT, padx=12, pady=10, relief=tk.FLAT,
+            highlightthickness=0, bd=0,
         )
-        self._glossary_definition_widget.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        gvsb = tk.Scrollbar(def_frame,
+                            command=self._glossary_definition_widget.yview)
+        ghsb = tk.Scrollbar(def_frame, orient=tk.HORIZONTAL,
+                            command=self._glossary_definition_widget.xview)
+        self._glossary_definition_widget.configure(yscrollcommand=gvsb.set,
+                                                   xscrollcommand=ghsb.set)
+        ghsb.pack(side=tk.BOTTOM, fill=tk.X)
+        gvsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._glossary_definition_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._glossary_definition_widget.configure(state=tk.DISABLED)
 
         paned.add(left,  minsize=200, stretch="always")
         paned.add(right, minsize=320, stretch="always")
-
-        row = tk.Frame(panel, bg=BG_DARK, padx=12, pady=8)
-        row.pack(fill=tk.X)
-        def b(text, cmd, color):
-            return tk.Button(row, text=text, command=cmd,
-                             font=("Segoe UI", 11, "bold"),
-                             bg=color, fg="white", activebackground=color,
-                             relief=tk.FLAT, padx=12, pady=6,
-                             cursor="hand2", borderwidth=0)
-        b("+ Add entry", lambda: self._edit_glossary_entry(),  ACCENT_GREEN).pack(side=tk.LEFT, padx=(0,4))
-        b("Edit",        self._edit_glossary_selected,         ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
-        b("Delete",      self._delete_glossary_selected,       ACCENT_RED).pack(side=tk.LEFT, padx=4)
-        b("🔊 Read",     lambda: self._study_read_pane(self._glossary_definition_widget),
-          ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
-
-        # ── Paste-and-save: drop many "Term: definition" lines in, click
-        # 💾 Save terms, and each pair becomes a searchable entry. ───────
-        paste = tk.LabelFrame(
-            panel, text="  Paste terms (one “Term: definition” per line) → 💾 Save  ",
-            bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10, "bold"),
-            padx=10, pady=8, relief=tk.GROOVE, bd=1)
-        paste.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self._glossary_paste = scrolledtext.ScrolledText(
-            paste, wrap=tk.WORD, font=("Segoe UI", 11), height=4,
-            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=10, pady=8, relief=tk.FLAT, undo=True)
-        self._glossary_paste.pack(fill=tk.X, expand=False)
-        self._glossary_paste.bind(
-            "<FocusIn>", lambda _e: self._set_mic_target(self._glossary_paste))
-        prow = tk.Frame(paste, bg=BG_DARK)
-        prow.pack(fill=tk.X, pady=(6, 0))
-        tk.Button(prow, text="💾 Save terms", command=self._save_glossary_paste,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(prow, text="Clear",
-                  command=lambda: self._glossary_paste.delete("1.0", tk.END),
-                  font=("Segoe UI", 11), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
 
     def _refresh_tab_glossary(self) -> None:
         if not hasattr(self, "_glossary_listbox"):
@@ -20592,6 +20650,13 @@ class BookReader:
         paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
         left = tk.Frame(paned, bg=BG_DARK)
+        ltbtn = tk.Frame(left, bg=BG_DARK, pady=6)
+        ltbtn.pack(side=tk.BOTTOM, fill=tk.X)
+        tk.Button(ltbtn, text="+ Add",
+                  command=lambda: self._edit_commentary_entry(),
+                  font=("Segoe UI", 10, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=8, pady=4,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 4))
         list_frame = tk.Frame(left, bg=BG_DARK)
         list_frame.pack(fill=tk.BOTH, expand=True)
         self._commentary_listbox = tk.Listbox(
@@ -20605,6 +20670,29 @@ class BookReader:
         self._commentary_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._commentary_listbox.bind(
             "<<ListboxSelect>>", lambda _e: self._show_commentary_selected())
+        # Secondary actions on right-click — home base is the floating toolbar.
+        cmenu = tk.Menu(self._commentary_listbox, tearoff=0, bg=BG_PANEL,
+                        fg=FG_TEXT, activebackground=ACCENT_SLATE,
+                        activeforeground="white")
+        cmenu.add_command(label="✏  Edit entry",
+                          command=self._edit_commentary_selected)
+        cmenu.add_command(label="🔊  Read", command=lambda:
+                          self._study_read_pane(self.commentary_area))
+        cmenu.add_command(label="📂  Import file…",
+                          command=self._commentary_import_file)
+        cmenu.add_separator()
+        cmenu.add_command(label="🗑  Delete entry",
+                          command=self._delete_commentary_selected)
+        def _cmenu_popup(event):
+            try:
+                self._commentary_listbox.selection_clear(0, tk.END)
+                self._commentary_listbox.selection_set(
+                    self._commentary_listbox.nearest(event.y))
+                self._show_commentary_selected()
+            except tk.TclError:
+                pass
+            cmenu.tk_popup(event.x_root, event.y_root)
+        self._commentary_listbox.bind("<Button-3>", _cmenu_popup)
 
         right = tk.Frame(paned, bg=BG_DARK)
         tk.Label(right, textvariable=self.commentary_title_var,
@@ -20612,59 +20700,25 @@ class BookReader:
                  anchor=tk.W).pack(fill=tk.X, padx=2)
         # commentary_area is the read pane — the existing file loader and
         # _clear_commentary still target it, so nothing else breaks.
-        self.commentary_area = scrolledtext.ScrolledText(
-            right, wrap=tk.WORD, font=(self.font_family, 12),
+        carea_frame = tk.Frame(right, bg=BG_DARK)
+        carea_frame.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self.commentary_area = tk.Text(
+            carea_frame, wrap=tk.WORD, font=(self.font_family, 12),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=14, pady=10, relief=tk.FLAT,
+            padx=14, pady=10, relief=tk.FLAT, highlightthickness=0, bd=0,
             selectbackground="#1d4ed8", selectforeground="white")
-        self.commentary_area.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        cvsb = tk.Scrollbar(carea_frame, command=self.commentary_area.yview)
+        chsb = tk.Scrollbar(carea_frame, orient=tk.HORIZONTAL,
+                            command=self.commentary_area.xview)
+        self.commentary_area.configure(yscrollcommand=cvsb.set,
+                                       xscrollcommand=chsb.set)
+        chsb.pack(side=tk.BOTTOM, fill=tk.X)
+        cvsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.commentary_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.commentary_area.configure(state=tk.DISABLED)
 
         paned.add(left,  minsize=200, stretch="always")
         paned.add(right, minsize=320, stretch="always")
-
-        row = tk.Frame(panel, bg=BG_DARK, padx=12, pady=8)
-        row.pack(fill=tk.X)
-        def cb(text, cmd, color):
-            return tk.Button(row, text=text, command=cmd,
-                             font=("Segoe UI", 11, "bold"),
-                             bg=color, fg="white", activebackground=color,
-                             relief=tk.FLAT, padx=12, pady=6,
-                             cursor="hand2", borderwidth=0)
-        cb("+ Add entry", lambda: self._edit_commentary_entry(), ACCENT_GREEN
-           ).pack(side=tk.LEFT, padx=(0, 4))
-        cb("Edit",   self._edit_commentary_selected,   ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
-        cb("Delete", self._delete_commentary_selected, ACCENT_RED).pack(side=tk.LEFT, padx=4)
-        cb("🔊 Read", lambda: self._study_read_pane(self.commentary_area),
-           ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
-        cb("📂 Import file…", self._commentary_import_file, ACCENT_SLATE
-           ).pack(side=tk.LEFT, padx=4)
-
-        # ── Paste-and-save: first line becomes the title, the rest the
-        # body; click 💾 Save and it joins the list. ────────────────────
-        paste = tk.LabelFrame(
-            panel, text="  Paste an entry (first line = title) → 💾 Save  ",
-            bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10, "bold"),
-            padx=10, pady=8, relief=tk.GROOVE, bd=1)
-        paste.pack(fill=tk.X, padx=12, pady=(0, 10))
-        self._commentary_paste = scrolledtext.ScrolledText(
-            paste, wrap=tk.WORD, font=("Segoe UI", 11), height=4,
-            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=10, pady=8, relief=tk.FLAT, undo=True)
-        self._commentary_paste.pack(fill=tk.X, expand=False)
-        self._commentary_paste.bind(
-            "<FocusIn>", lambda _e: self._set_mic_target(self._commentary_paste))
-        prow = tk.Frame(paste, bg=BG_DARK)
-        prow.pack(fill=tk.X, pady=(6, 0))
-        tk.Button(prow, text="💾 Save entry", command=self._save_commentary_paste,
-                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
-                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
-        tk.Button(prow, text="Clear",
-                  command=lambda: self._commentary_paste.delete("1.0", tk.END),
-                  font=("Segoe UI", 11), bg=ACCENT_SLATE, fg="white",
-                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
         self._refresh_tab_commentary()
 
     # ---- Commentary store CRUD (mirrors the Glossary tab; proven in

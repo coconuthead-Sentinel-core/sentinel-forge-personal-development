@@ -214,3 +214,16 @@
   cognitive load for a neurodivergent user more than any single feature;
   (2) reusing one proven output path (speech) instead of duplicating it is
   both cheaper and safer than re-implementing per surface.
+- **Uniform panels + consolidated controls (2026-07-12).** The Topics,
+  Glossary and Commentary tabs were re-cut to the Journal panel's exact
+  shape — header → `list | content` → one primary button — with their
+  button rows and paste boxes removed and the actions consolidated onto
+  the floating toolbar (the app's fixed "home base") plus a right-click
+  menu. The design thesis: for an ADHD/dyslexia-first tool a *single
+  consistent interaction grammar with a stable command locus* beats
+  per-panel affordances — fewer, predictable controls lower cognitive
+  load more than richer ones. Two display bugs surfaced and were fixed in
+  the same pass — accessibility font-scaling must target reading surfaces
+  only (never navigation indexes), and any user string placed in a modal
+  must be length-capped — reinforcing that accessibility features carry
+  their own failure modes worth documenting.
