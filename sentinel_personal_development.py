@@ -1921,6 +1921,10 @@ class BookReader:
         Study Notes directly, and elsewhere it clicks the panel/dialog's own
         '💾 Save' button (e.g. the Topics / Glossary / Commentary Add/Edit
         dialogs) or fires a Ctrl+S binding."""
+        inline = getattr(self, "_ftb_inline_input", None)
+        if inline is not None:
+            inline()
+            return
         if self._journal_save_from_toolbar():
             return
         if self._study_notes_save_from_toolbar():
@@ -16901,13 +16905,17 @@ class BookReader:
             term = widget.get(tk.SEL_FIRST, tk.SEL_LAST).strip()
         except tk.TclError:
             term = ""
+        if term:
+            self._glossary_lookup_term(term)
+        else:
+            # Toolbar-driven input: type/paste a term, Enter or yellow Save.
+            self._prompt_inline("Look up term", "Enter a term:",
+                                self._glossary_lookup_term)
+
+    def _glossary_lookup_term(self, term: str) -> None:
+        term = term.strip()
         if not term:
-            entered = self._prompt_for_text("Look up term", "Enter a term:")
-            if not entered:
-                return
-            term = entered.strip()
-            if not term:
-                return
+            return
         rows = self._db_query(
             "SELECT term, definition, source FROM glossary "
             "WHERE term = ? COLLATE NOCASE", (term,),
@@ -17003,6 +17011,58 @@ class BookReader:
         dlg.bind("<Escape>", lambda _e: dlg.destroy())
         dlg.wait_window()
         return out["v"]
+
+    def _prompt_inline(self, title: str, prompt: str, on_commit) -> None:
+        """Toolbar-driven text input (the non-modal replacement for the modal
+        _prompt_for_text). NO OK/Cancel buttons: the field carries the
+        right-click clipboard menu (Cut/Copy/Paste/Clear/Select-all), ENTER or
+        the floating toolbar's yellow 💾 Save commits it, and ESC / ✕ cancels.
+        `on_commit(text)` runs with the entered value. Non-modal on purpose —
+        so the floating toolbar stays clickable while the box is open (the
+        toolbar is the command locus)."""
+        win = tk.Toplevel(self.root)
+        win.title(title)
+        win.configure(bg=BG_DARK)
+        self._fit_dialog(win, 460, 180)     # screen-relative, centered, resizable
+        # No grab_set() — non-modal, so the toolbar's Save can reach it.
+
+        tk.Label(win, text=prompt, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11), padx=14, anchor=tk.W
+                 ).pack(fill=tk.X, pady=(16, 4))
+        var = tk.StringVar()
+        entry = tk.Entry(win, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                         insertbackground=FG_TEXT, font=("Segoe UI", 12),
+                         relief=tk.FLAT, bd=0)
+        entry.pack(fill=tk.X, padx=14, ipady=6)
+        # The same right-click menu the rest of the app's fields have.
+        self._attach_clipboard_menu(
+            entry, clear_cmd=lambda: var.set(""), clear_label="🧹  Clear")
+        entry.focus_set()
+
+        done = {"closed": False}
+
+        def _close():
+            if done["closed"]:
+                return
+            done["closed"] = True
+            if getattr(self, "_ftb_inline_input", None) is _commit:
+                self._ftb_inline_input = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+
+        def _commit():
+            v = var.get().strip()
+            _close()
+            if v:
+                on_commit(v)
+
+        entry.bind("<Return>", lambda _e: _commit())
+        win.bind("<Escape>", lambda _e: _close())
+        win.protocol("WM_DELETE_WINDOW", _close)
+        # Register this box as the floating toolbar's current Save target.
+        self._ftb_inline_input = _commit
 
     def _show_glossary_entry(self, term: str, definition: str, source: str) -> None:
         """Read-only popup showing a single glossary entry."""
@@ -18610,9 +18670,12 @@ class BookReader:
         return True
 
     def _create_new_topic(self) -> None:
-        name = self._prompt_for_text("New topic", "Topic name:")
-        if not name:
-            return
+        # PILOT: toolbar-driven, non-modal input (Add opens it, right-click to
+        # paste, yellow Save or Enter commits). Commit logic split out so the
+        # callback can run when the box is confirmed.
+        self._prompt_inline("New topic", "Topic name:", self._insert_new_topic)
+
+    def _insert_new_topic(self, name: str) -> None:
         name = name.strip()
         if not name:
             return
@@ -18631,19 +18694,19 @@ class BookReader:
         if not sel:
             return
         tid, title, _n = self._topics_records[sel[0]]
-        new = self._prompt_for_text("Rename topic",
-                                      f"New name (current: {title}):")
-        if not new:
-            return
-        new = new.strip()
-        if not new or new == title:
-            return
-        try:
-            self._db_exec("UPDATE topics SET title=? WHERE id=?", (new, tid))
-        except sqlite3.IntegrityError:
-            messagebox.showinfo("Name in use",
-                                  f"A topic named '{new}' already exists.")
-        self._refresh_tab_topics()
+
+        def _do_rename(new):
+            new = new.strip()
+            if not new or new == title:
+                return
+            try:
+                self._db_exec("UPDATE topics SET title=? WHERE id=?", (new, tid))
+            except sqlite3.IntegrityError:
+                messagebox.showinfo("Name in use",
+                                      f"A topic named '{new}' already exists.")
+            self._refresh_tab_topics()
+        self._prompt_inline("Rename topic",
+                            f"New name (current: {title}):", _do_rename)
 
     def _delete_selected_topic(self) -> None:
         sel = self._topics_listbox.curselection()
@@ -18872,15 +18935,15 @@ class BookReader:
         if not sel:
             return
         bid, _book, _pos, label, _ts = self._bookmarks_records[sel[0]]
-        new = self._prompt_for_text("Rename bookmark",
-                                      f"New label (current: {label}):")
-        if not new:
-            return
-        new = new.strip()
-        if not new:
-            return
-        self._db_exec("UPDATE bookmarks SET label=? WHERE id=?", (new, bid))
-        self._refresh_tab_bookmarks()
+
+        def _do_rename(new):
+            new = new.strip()
+            if not new:
+                return
+            self._db_exec("UPDATE bookmarks SET label=? WHERE id=?", (new, bid))
+            self._refresh_tab_bookmarks()
+        self._prompt_inline("Rename bookmark",
+                            f"New label (current: {label}):", _do_rename)
 
     def _delete_selected_bookmark(self) -> None:
         sel = self._bookmarks_listbox.curselection()

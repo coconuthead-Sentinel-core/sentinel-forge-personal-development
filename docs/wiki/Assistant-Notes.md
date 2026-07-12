@@ -152,6 +152,14 @@ dashboards.
   ⚠️ Appearance NOT visually verified (app runs under Python, which is on the
   Computer-Use deny list, so no screenshot) — Shannon to eyeball and request
   tweaks (shape/size/shade). *(done)*
+- ✅ 2026-07-12 — Toolbar-driven inputs rolled out (Shannon verified the pilot,
+  said "roll it out"). New `_prompt_inline` (non-modal; right-click
+  Cut/Copy/Paste/Clear/Select-all; Enter or yellow Save commits; Esc/✕ cancels)
+  replaces modal `_prompt_for_text` at ALL call sites — New topic, Rename topic,
+  Rename bookmark, Glossary Look-up. `_ftb_action_save` commits an open inline
+  box first (`_ftb_inline_input`). README bumped **280→326** + toolbar / panel
+  / guardrails features + roadmap ticks. Local scratch (`test_dpi.py`,
+  `test_sd.py`) cleared. Suite 326. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
