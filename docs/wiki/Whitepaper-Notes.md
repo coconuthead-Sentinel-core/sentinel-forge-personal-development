@@ -118,3 +118,12 @@
   2 bugs), then 2 gated sprints (15 tests + runtime proof). The clearest
   example in the codebase of turning a textbook feature into a
   disability-specific guardrail.
+
+- **2026-07-12 — Review #3: prompt engineering as a rubric analyzer.** A
+  Microsoft 365 Copilot book (~594K chars) reviewed top-down: nearly all
+  ruled OUT (enterprise deployment, security, licensing — not CS). The
+  one teachable-CS fit — a prompt-quality analyzer scoring against the
+  prompt-engineering rubric (persona/task/context/format/specificity) —
+  is original heuristic code over public canon, professor-approvable,
+  and turns the AI Chat into a teaching tool for a user LEARNING to work
+  with AI. Proven in pseudocode (3 proofs / 15 checks) before any code.
