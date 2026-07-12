@@ -2755,6 +2755,25 @@ class BookReader:
         dictates into whichever section the user was working in."""
         self._mic_target = widget
 
+    def _study_set_read_target(self, widget) -> None:
+        """Point the 🔊 Read toolbar at a Study read-pane and park the
+        cursor at the top, so a read with no selection speaks the whole
+        entry from the first word (not from wherever the insert mark
+        landed after the text was loaded). Works on DISABLED panes —
+        ``mark_set`` does not require an editable widget."""
+        self._mic_target = widget
+        try:
+            widget.mark_set(tk.INSERT, "1.0")
+        except Exception:
+            pass
+
+    def _study_read_pane(self, widget) -> None:
+        """🔊 Read button handler shared by the Topics / Commentary /
+        Glossary read-panes: aim the reader at this pane, then toggle the
+        same highlight-and-speak path the floating toolbar uses."""
+        self._study_set_read_target(widget)
+        self._ftb_read_toggle()
+
     def _show_notes_to_study_menu(self) -> None:
         """Drop a picker under the Notes header's '📓 → Study' button.
         Lists every non-Matrix Study destination the current Notes
@@ -18039,6 +18058,7 @@ class BookReader:
                              relief=tk.FLAT, padx=8, pady=4,
                              cursor="hand2", borderwidth=0)
         rb("View / Jump", self._view_or_jump_topic_entry, ACCENT_CYAN).pack(side=tk.LEFT, padx=(0, 4))
+        rb("🔊 Read", self._read_topic_entry,        ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
         rb("Copy",   self._copy_topic_entry_text,    ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
         # (🗑 Delete entry (Topics) removed — Delete/Remove widgets were taken out.)
         entry_frame = tk.Frame(right, bg=BG_DARK)
@@ -18060,6 +18080,32 @@ class BookReader:
 
         paned.add(left,  minsize=240, stretch="always")
         paned.add(right, minsize=300, stretch="always")
+
+        # ── Paste-and-save: select a topic on the left, paste notes here
+        # (blank line between separate entries) and click 💾 Save. ───────
+        paste = tk.LabelFrame(
+            panel, text="  Paste into the selected topic (blank line = new entry) → 💾 Save  ",
+            bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10, "bold"),
+            padx=10, pady=8, relief=tk.GROOVE, bd=1)
+        paste.pack(fill=tk.X, padx=12, pady=(0, 10))
+        self._topic_paste = scrolledtext.ScrolledText(
+            paste, wrap=tk.WORD, font=("Segoe UI", 11), height=4,
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            padx=10, pady=8, relief=tk.FLAT, undo=True)
+        self._topic_paste.pack(fill=tk.X, expand=False)
+        self._topic_paste.bind(
+            "<FocusIn>", lambda _e: self._set_mic_target(self._topic_paste))
+        prow = tk.Frame(paste, bg=BG_DARK)
+        prow.pack(fill=tk.X, pady=(6, 0))
+        tk.Button(prow, text="💾 Save entry", command=self._save_topic_paste,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(prow, text="Clear",
+                  command=lambda: self._topic_paste.delete("1.0", tk.END),
+                  font=("Segoe UI", 11), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
 
         # Give the left pane a comfortable width once the tab is shown, so
         # the +New / Rename / 🗑 Delete buttons are never cut off.
@@ -18216,7 +18262,8 @@ class BookReader:
             return
         self._show_text_popup("Topic entry", text)
 
-    def _show_text_popup(self, title: str, body_text: str) -> None:
+    def _show_text_popup(self, title: str, body_text: str,
+                         readable: bool = False) -> None:
         dlg = tk.Toplevel(self.root)
         dlg.title(title)
         dlg.configure(bg=BG_DARK)
@@ -18228,11 +18275,77 @@ class BookReader:
         body.pack(fill=tk.BOTH, expand=True, padx=14, pady=14)
         body.insert("1.0", body_text)
         body.configure(state=tk.DISABLED)
-        tk.Button(dlg, text="Close", command=dlg.destroy,
+        btns = tk.Frame(dlg, bg=BG_DARK)
+        btns.pack(pady=(0, 12))
+        if readable:
+            # 🔊 Read highlights and speaks this entry, same engine as the
+            # Glossary/Commentary panes and the floating toolbar.
+            tk.Button(btns, text="🔊 Read",
+                      command=lambda: self._study_read_pane(body),
+                      font=("Segoe UI", 11, "bold"),
+                      bg=ACCENT_CYAN, fg="white", activebackground=ACCENT_CYAN,
+                      relief=tk.FLAT, padx=14, pady=6, cursor="hand2",
+                      borderwidth=0).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Button(btns, text="Close", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"),
                   bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
                   relief=tk.FLAT, padx=14, pady=6, cursor="hand2",
-                  borderwidth=0).pack(pady=(0, 12))
+                  borderwidth=0).pack(side=tk.LEFT)
+
+    def _read_topic_entry(self) -> None:
+        """🔊 Read the selected topic entry: open it in a readable popup
+        so the highlight-and-speak path has a text pane to work on."""
+        sel = self._topic_entries_listbox.curselection()
+        if not sel:
+            self.set_status("📌 Select a topic entry first, then 🔊 Read.")
+            return
+        _eid, text, _book, _off, _ts = self._topic_entries_records[sel[0]]
+        self._show_text_popup("Topic entry", text, readable=True)
+
+    def _save_topic_paste(self) -> None:
+        """Save the paste box into the selected topic. Blank lines split
+        the paste into separate entries (each stored as its own row)."""
+        sel = self._topics_listbox.curselection()
+        if not sel:
+            messagebox.showinfo(
+                "Pick a topic",
+                "Select a topic on the left first, then Save.")
+            return
+        topic_id, title, _n = self._topics_records[sel[0]]
+        raw = self._topic_paste.get("1.0", tk.END).strip()
+        if not raw:
+            messagebox.showinfo("Nothing to save",
+                                 "Paste some notes, then Save.")
+            return
+        # Blank-line-separated blocks → one entry each; a single block is
+        # one entry. Preserve line breaks inside a block.
+        blocks = [b.strip() for b in re.split(r"\n\s*\n", raw) if b.strip()]
+        if not blocks:
+            blocks = [raw]
+        now = datetime.now().isoformat()
+        try:
+            for block in blocks:
+                self._db_exec(
+                    "INSERT INTO topic_entries "
+                    "(topic_id, text, source_book, source_offset, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (topic_id, block, None, None, now))
+        except Exception as e:
+            messagebox.showerror("Could not save", str(e))
+            return
+        self._topic_paste.delete("1.0", tk.END)
+        self._refresh_tab_topics()
+        # Re-select the topic so its new entries show immediately.
+        try:
+            self._topics_listbox.selection_clear(0, tk.END)
+            self._topics_listbox.selection_set(sel[0])
+            self._show_topic_entries()
+        except Exception:
+            pass
+        n = len(blocks)
+        self.set_status(
+            f"📌 Saved {n} entr{'ies' if n != 1 else 'y'} to “{title}” "
+            "— select one, then 🔊 Read.")
 
     def _copy_topic_entry_text(self) -> None:
         sel = self._topic_entries_listbox.curselection()
@@ -18758,6 +18871,34 @@ class BookReader:
         b("+ Add entry", lambda: self._edit_glossary_entry(),  ACCENT_GREEN).pack(side=tk.LEFT, padx=(0,4))
         b("Edit",        self._edit_glossary_selected,         ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
         b("Delete",      self._delete_glossary_selected,       ACCENT_RED).pack(side=tk.LEFT, padx=4)
+        b("🔊 Read",     lambda: self._study_read_pane(self._glossary_definition_widget),
+          ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
+
+        # ── Paste-and-save: drop many "Term: definition" lines in, click
+        # 💾 Save terms, and each pair becomes a searchable entry. ───────
+        paste = tk.LabelFrame(
+            panel, text="  Paste terms (one “Term: definition” per line) → 💾 Save  ",
+            bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10, "bold"),
+            padx=10, pady=8, relief=tk.GROOVE, bd=1)
+        paste.pack(fill=tk.X, padx=12, pady=(0, 10))
+        self._glossary_paste = scrolledtext.ScrolledText(
+            paste, wrap=tk.WORD, font=("Segoe UI", 11), height=4,
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            padx=10, pady=8, relief=tk.FLAT, undo=True)
+        self._glossary_paste.pack(fill=tk.X, expand=False)
+        self._glossary_paste.bind(
+            "<FocusIn>", lambda _e: self._set_mic_target(self._glossary_paste))
+        prow = tk.Frame(paste, bg=BG_DARK)
+        prow.pack(fill=tk.X, pady=(6, 0))
+        tk.Button(prow, text="💾 Save terms", command=self._save_glossary_paste,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(prow, text="Clear",
+                  command=lambda: self._glossary_paste.delete("1.0", tk.END),
+                  font=("Segoe UI", 11), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
 
     def _refresh_tab_glossary(self) -> None:
         if not hasattr(self, "_glossary_listbox"):
@@ -18799,6 +18940,49 @@ class BookReader:
         w.delete("1.0", tk.END)
         w.insert("1.0", definition)
         w.configure(state=tk.DISABLED)
+        # Aim 🔊 Read (this pane's button and the floating toolbar) at the
+        # definition just shown, cursor at the top so it reads in full.
+        self._study_set_read_target(w)
+
+    def _save_glossary_paste(self) -> None:
+        """Parse the paste box into Term/definition pairs and store each
+        (updating any that already exist), then refresh and clear."""
+        from lyceum.entry_parse import parse_glossary
+        raw = self._glossary_paste.get("1.0", tk.END)
+        pairs = parse_glossary(raw)
+        if not pairs:
+            messagebox.showinfo(
+                "Nothing to save",
+                "Paste one “Term: definition” per line, then Save terms.")
+            return
+        now = datetime.now().isoformat()
+        added = updated = 0
+        try:
+            for term, definition in pairs:
+                rows = self._db_query(
+                    "SELECT id FROM glossary WHERE term=? COLLATE NOCASE",
+                    (term,))
+                if rows:
+                    self._db_exec(
+                        "UPDATE glossary SET definition=?, updated_at=? "
+                        "WHERE id=?", (definition, now, rows[0][0]))
+                    updated += 1
+                else:
+                    self._db_exec(
+                        "INSERT INTO glossary "
+                        "(term, definition, source, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (term, definition, "pasted", now, now))
+                    added += 1
+        except Exception as e:
+            messagebox.showerror("Could not save", str(e))
+            return
+        self._glossary_paste.delete("1.0", tk.END)
+        self._refresh_tab_glossary()
+        self.set_status(
+            f"📒 Saved {added} new term{'s' if added != 1 else ''}"
+            + (f", updated {updated}" if updated else "")
+            + " — click a term, then 🔊 Read.")
 
     def _edit_glossary_selected(self) -> None:
         sel = self._glossary_listbox.curselection()
@@ -20188,8 +20372,36 @@ class BookReader:
            ).pack(side=tk.LEFT, padx=(0, 4))
         cb("Edit",   self._edit_commentary_selected,   ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
         cb("Delete", self._delete_commentary_selected, ACCENT_RED).pack(side=tk.LEFT, padx=4)
+        cb("🔊 Read", lambda: self._study_read_pane(self.commentary_area),
+           ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
         cb("📂 Import file…", self._commentary_import_file, ACCENT_SLATE
            ).pack(side=tk.LEFT, padx=4)
+
+        # ── Paste-and-save: first line becomes the title, the rest the
+        # body; click 💾 Save and it joins the list. ────────────────────
+        paste = tk.LabelFrame(
+            panel, text="  Paste an entry (first line = title) → 💾 Save  ",
+            bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 10, "bold"),
+            padx=10, pady=8, relief=tk.GROOVE, bd=1)
+        paste.pack(fill=tk.X, padx=12, pady=(0, 10))
+        self._commentary_paste = scrolledtext.ScrolledText(
+            paste, wrap=tk.WORD, font=("Segoe UI", 11), height=4,
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            padx=10, pady=8, relief=tk.FLAT, undo=True)
+        self._commentary_paste.pack(fill=tk.X, expand=False)
+        self._commentary_paste.bind(
+            "<FocusIn>", lambda _e: self._set_mic_target(self._commentary_paste))
+        prow = tk.Frame(paste, bg=BG_DARK)
+        prow.pack(fill=tk.X, pady=(6, 0))
+        tk.Button(prow, text="💾 Save entry", command=self._save_commentary_paste,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(prow, text="Clear",
+                  command=lambda: self._commentary_paste.delete("1.0", tk.END),
+                  font=("Segoe UI", 11), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=12, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=6)
         self._refresh_tab_commentary()
 
     # ---- Commentary store CRUD (mirrors the Glossary tab; proven in
@@ -20232,6 +20444,43 @@ class BookReader:
         w.delete("1.0", tk.END)
         w.insert("1.0", body)
         w.configure(state=tk.DISABLED)
+        # Aim 🔊 Read (button + floating toolbar) at this entry, top-first.
+        self._study_set_read_target(w)
+
+    def _save_commentary_paste(self) -> None:
+        """Turn the paste box into one commentary entry — first line the
+        title, the rest the body — store it, refresh, and clear."""
+        from lyceum.entry_parse import split_title_body
+        raw = self._commentary_paste.get("1.0", tk.END)
+        title, body = split_title_body(raw)
+        if not title:
+            messagebox.showinfo(
+                "Nothing to save",
+                "Paste some text (first line becomes the title), then Save.")
+            return
+        now = datetime.now().isoformat()
+        try:
+            rows = self._db_query(
+                "SELECT id FROM commentaries WHERE title=? COLLATE NOCASE",
+                (title,))
+            if rows:
+                self._db_exec(
+                    "UPDATE commentaries SET body=?, updated_at=? WHERE id=?",
+                    (body, now, rows[0][0]))
+                verb = "Updated"
+            else:
+                self._db_exec(
+                    "INSERT INTO commentaries (title, body, source, "
+                    "created_at, updated_at) VALUES (?,?,?,?,?)",
+                    (title, body, "pasted", now, now))
+                verb = "Saved"
+        except Exception as e:
+            messagebox.showerror("Could not save", str(e))
+            return
+        self._commentary_paste.delete("1.0", tk.END)
+        self._refresh_tab_commentary()
+        self.set_status(
+            f"📑 {verb} commentary: {title} — click it, then 🔊 Read.")
 
     def _edit_commentary_selected(self) -> None:
         sel = self._commentary_listbox.curselection()
