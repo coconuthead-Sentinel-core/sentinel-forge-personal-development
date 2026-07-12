@@ -5476,7 +5476,8 @@ class BookReader:
         non-negative float, or None if cancelled."""
         dlg = tk.Toplevel(self.root)
         dlg.title(title); dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
+        # No transient(): it strips min/max on Windows; the dialog centers
+        # itself below, so it never clips off-screen.
         try:
             sw = dlg.winfo_screenwidth(); sh = dlg.winfo_screenheight()
         except tk.TclError:
@@ -5814,7 +5815,7 @@ class BookReader:
     def _ask_text(self, title, prompt, initial=""):
         """Modal text prompt used for short but important user-entered labels."""
         dlg = tk.Toplevel(self.root)
-        dlg.title(title); dlg.configure(bg=BG_DARK); dlg.transient(self.root)
+        dlg.title(title); dlg.configure(bg=BG_DARK)  # no transient(): keep min/max
         try:
             sw = dlg.winfo_screenwidth(); sh = dlg.winfo_screenheight()
         except tk.TclError:
@@ -12705,10 +12706,8 @@ class BookReader:
         parent = self._library_win or self.root
         rw = tk.Toplevel(parent)
         rw.title(f"✨ Ask Library — {question[:60]}")
-        rw.geometry("780x600")
-        rw.minsize(520, 360)
         rw.configure(bg=BG_DARK)
-        rw.transient(parent)
+        self._fit_dialog(rw, 780, 600)
 
         # Header
         hdr = tk.Frame(rw, bg=BG_PANEL, padx=14, pady=10)
@@ -13679,10 +13678,8 @@ class BookReader:
 
         dlg = tk.Toplevel(self.root)
         dlg.title("📑 Commentaries")
-        dlg.geometry("680x500")
-        dlg.minsize(440, 320)
         dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
+        self._fit_dialog(dlg, 680, 500)   # centered, on-screen, min/max
         dlg.grab_set()
 
         header = tk.Frame(dlg, bg=BG_PANEL, padx=14, pady=12)
@@ -16222,7 +16219,7 @@ class BookReader:
         dlg = tk.Toplevel(self.root)
         dlg.title("Add to topic")
         dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
+        self._fit_dialog(dlg, 460, 420)
         dlg.grab_set()
         dlg.geometry("420x440")
 
@@ -16392,6 +16389,28 @@ class BookReader:
                     source=self._book_key(self.current_file) or "",
                 )
 
+    def _fit_dialog(self, dlg, want_w: int, want_h: int) -> None:
+        """Size a content dialog to fit the screen, CENTER it, give it a
+        minsize, and make it resizable — so it always opens fully
+        on-screen with real —/▢/✕ controls and never clips a button off
+        an edge. Deliberately does NOT call transient(): transient()
+        strips the minimize/maximize buttons on Windows (the recurring
+        trap). Proven in scratchpad/prove_dialog_fit.py before use."""
+        try:
+            sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(want_w, sw - 80)
+        h = min(want_h, sh - 80)
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2 - 30)
+        dlg.geometry(f"{w}x{h}+{x}+{y}")
+        dlg.minsize(min(360, w), min(240, h))
+        try:
+            dlg.resizable(True, True)
+        except tk.TclError:
+            pass
+
     def _prompt_for_text(self, title: str, prompt: str) -> str | None:
         """Themed text-input dialog. Returns text or None on cancel.
 
@@ -16454,8 +16473,7 @@ class BookReader:
         dlg = tk.Toplevel(self.root)
         dlg.title(f"📒 {term}")
         dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
-        dlg.geometry("520x380")
+        self._fit_dialog(dlg, 520, 380)
         tk.Label(dlg, text=term, bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 16, "bold"), padx=16, pady=12,
                  anchor=tk.W).pack(fill=tk.X)
@@ -16496,9 +16514,8 @@ class BookReader:
         dlg = tk.Toplevel(self.root)
         dlg.title("📒 Glossary entry")
         dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
         dlg.grab_set()
-        dlg.geometry("560x460")
+        self._fit_dialog(dlg, 560, 460)
 
         tk.Label(dlg, text="Term:", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 10), padx=14).pack(anchor=tk.W, pady=(12, 2))
@@ -18025,8 +18042,7 @@ class BookReader:
         dlg = tk.Toplevel(self.root)
         dlg.title(title)
         dlg.configure(bg=BG_DARK)
-        dlg.geometry("520x360")
-        dlg.transient(self.root)
+        self._fit_dialog(dlg, 520, 360)
         body = scrolledtext.ScrolledText(
             dlg, wrap=tk.WORD, font=("Segoe UI", 11),
             bg=BG_INPUT, fg=FG_TEXT, padx=14, pady=12, relief=tk.FLAT,
@@ -19279,8 +19295,7 @@ class BookReader:
         dlg = tk.Toplevel(self.root)
         dlg.title("Edit workflow folder" if existing else "New workflow folder")
         dlg.configure(bg=BG_DARK)
-        dlg.geometry("460x380")
-        dlg.transient(self.root)
+        self._fit_dialog(dlg, 460, 380)
         dlg.grab_set()
 
         name_var  = tk.StringVar(value=existing["name"]       if existing else "")
@@ -22054,7 +22069,7 @@ class BookReader:
             d = tk.Toplevel(win)
             d.title("🎯 New appointment / intention")
             d.configure(bg=BG_DARK)
-            d.transient(win)
+            self._fit_dialog(d, 470, 430)
             try:
                 sw = d.winfo_screenwidth(); sh = d.winfo_screenheight()
             except tk.TclError:
@@ -24286,8 +24301,7 @@ class BookReader:
         dlg = tk.Toplevel(self.root)
         dlg.title("Edit block" if existing else "New block")
         dlg.configure(bg=BG_DARK)
-        dlg.geometry("440x420")
-        dlg.transient(self.root)
+        self._fit_dialog(dlg, 440, 420)
         dlg.grab_set()
 
         tk.Label(dlg, text="Title:", bg=BG_DARK, fg=FG_MUTED,
