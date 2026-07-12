@@ -170,6 +170,12 @@ dashboards.
   readable and re-Save can't duplicate. New: `_on_topic_selected`,
   `_load_topic_entry_into_pane`, `_topic_compose_clear`,
   `_select_topic_entry_by_id`. Suite 326. *(done)*
+- ✅ 2026-07-12 — Topics read/write pane: two fixes Shannon reported. (1) The
+  pane is now the canonical scrollable Text (Text + vertical + **horizontal**
+  scrollbars, `wrap=NONE`) so the **bottom bar slides long lines into view**;
+  given the larger split share. (2) `_apply_study_legibility` was missing
+  `_topic_compose`, so **A−/A+ never resized it** — added (font+spacing, wrap
+  kept NONE). Textbook scrollable-text pattern. Suite 326. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

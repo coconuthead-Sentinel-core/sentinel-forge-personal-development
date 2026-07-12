@@ -86,6 +86,13 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   right-click to **paste** new content, and the **yellow toolbar Save** keeps it
   (blank lines split a paste into several entries; editing a loaded entry
   updates it in place, no duplicates).
+- **Topics read/write pane: horizontal slider + working A−/A+.** The pane is now
+  the canonical scrollable-Text widget (Text + vertical **and** horizontal
+  scrollbars, `wrap=NONE`), so the **bottom bar slides a long line into view**.
+  And `_apply_study_legibility` now includes this pane, so **A− / A+ actually
+  resize it** (it had been left out of the resize list — the reason it appeared
+  to "do nothing"). The pane also gets the larger share of the split for
+  comfortable reading.
 - **4 hardcoded window sizes removed** (Explain, Session End, Prompt Library,
   Add-to-topic) — routed through the screen-relative `_fit_dialog` helper. The
   Session-End dialog's `620x680` exceeded the owner's ~617 px effective height
