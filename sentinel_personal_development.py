@@ -1929,6 +1929,8 @@ class BookReader:
             return
         if self._study_notes_save_from_toolbar():
             return
+        if self._topics_save_from_toolbar():
+            return
         if self._ftb_invoke_context_button(("save", "💾")):
             return
         if self._ftb_generate_bound_event("<Control-s>"):
@@ -18452,7 +18454,7 @@ class BookReader:
         tsb.pack(side=tk.RIGHT, fill=tk.Y)
         self._topics_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._topics_listbox.bind("<<ListboxSelect>>",
-            lambda _e: self._show_topic_entries())
+            lambda _e: self._on_topic_selected())
         # Secondary actions live on a right-click menu — home base is the
         # floating toolbar (Add / Remove), so the panel stays uncluttered.
         topic_menu = tk.Menu(self._topics_listbox, tearoff=0, bg=BG_PANEL,
@@ -18467,20 +18469,26 @@ class BookReader:
                 self._topics_listbox.selection_clear(0, tk.END)
                 self._topics_listbox.selection_set(
                     self._topics_listbox.nearest(event.y))
-                self._show_topic_entries()
+                self._on_topic_selected()
             except tk.TclError:
                 pass
             topic_menu.tk_popup(event.x_root, event.y_root)
         self._topics_listbox.bind("<Button-3>", _topic_menu_popup)
 
-        # Right — entries in selected topic
+        # Right — a picker of entries ABOVE a read/write pane. Click an entry
+        # to READ it in the pane below; right-click the pane to paste, then the
+        # yellow Save on the toolbar keeps it. Restores the add-entry + inline
+        # reading the earlier uniformity pass had dropped.
         right = tk.Frame(paned, bg=BG_DARK)
         self._topic_entries_label_var = tk.StringVar(value="Entries")
         tk.Label(right, textvariable=self._topic_entries_label_var,
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 11, "bold"),
-                 anchor=tk.W).pack(fill=tk.X, padx=2, pady=(0,4))
-        entry_frame = tk.Frame(right, bg=BG_DARK)
-        entry_frame.pack(fill=tk.BOTH, expand=True)
+                 anchor=tk.W).pack(fill=tk.X, padx=2, pady=(0, 4))
+        rsplit = tk.PanedWindow(right, orient=tk.VERTICAL, sashwidth=6,
+                                bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
+        rsplit.pack(fill=tk.BOTH, expand=True)
+
+        entry_frame = tk.Frame(rsplit, bg=BG_DARK)
         self._topic_entries_listbox = tk.Listbox(
             entry_frame, bg=BG_INPUT, fg=FG_TEXT,
             selectbackground=ACCENT_CYAN, selectforeground="white",
@@ -18488,28 +18496,21 @@ class BookReader:
             highlightthickness=0, activestyle="none",
         )
         sb = tk.Scrollbar(entry_frame, command=self._topic_entries_listbox.yview)
-        # Horizontal "slider" along the bottom: a topic entry can be a long
-        # AI-generated line that runs off the right edge; this lets the user
-        # slide it back into view and review it instead of it being clipped.
-        hsb = tk.Scrollbar(entry_frame, orient=tk.HORIZONTAL,
-                           command=self._topic_entries_listbox.xview)
-        self._topic_entries_listbox.configure(yscrollcommand=sb.set,
-                                              xscrollcommand=hsb.set)
-        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        self._topic_entries_listbox.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self._topic_entries_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self._topic_entries_listbox.bind("<Double-Button-1>",
-            lambda _e: self._view_or_jump_topic_entry())
+        # Click / Enter loads the entry's full text into the pane to READ.
+        self._topic_entries_listbox.bind("<<ListboxSelect>>",
+            lambda _e: self._load_topic_entry_into_pane())
         self._topic_entries_listbox.bind("<Return>",
-            lambda _e: self._view_or_jump_topic_entry())
-        # Right-click an entry: view/jump, read, copy, delete.
+            lambda _e: self._load_topic_entry_into_pane())
         entry_menu = tk.Menu(self._topic_entries_listbox, tearoff=0,
                             bg=BG_PANEL, fg=FG_TEXT,
                             activebackground=ACCENT_SLATE, activeforeground="white")
-        entry_menu.add_command(label="↪  View / Jump",
-                               command=self._view_or_jump_topic_entry)
-        entry_menu.add_command(label="🔊  Read",
+        entry_menu.add_command(label="🔊  Read aloud",
                                command=self._read_topic_entry)
+        entry_menu.add_command(label="↪  Jump to source",
+                               command=self._view_or_jump_topic_entry)
         entry_menu.add_command(label="⧉  Copy text",
                                command=self._copy_topic_entry_text)
         entry_menu.add_separator()
@@ -18520,10 +18521,32 @@ class BookReader:
                 self._topic_entries_listbox.selection_clear(0, tk.END)
                 self._topic_entries_listbox.selection_set(
                     self._topic_entries_listbox.nearest(event.y))
+                self._load_topic_entry_into_pane()
             except tk.TclError:
                 pass
             entry_menu.tk_popup(event.x_root, event.y_root)
         self._topic_entries_listbox.bind("<Button-3>", _entry_menu_popup)
+
+        # Read / write pane — click here, right-click to Paste, then the
+        # yellow Save keeps it. Loading an entry and Saving UPDATES it; the
+        # 🧹 Clear on the right-click menu starts a fresh (new) entry.
+        compose = tk.Frame(rsplit, bg=BG_DARK)
+        tk.Label(compose,
+                 text="Read / write below · right-click to paste · Save (toolbar) keeps it",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9),
+                 anchor=tk.W).pack(fill=tk.X, padx=2, pady=(0, 2))
+        self._topic_compose = scrolledtext.ScrolledText(
+            compose, wrap=tk.WORD, font=("Segoe UI", 12),
+            bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+            padx=12, pady=10, relief=tk.FLAT, undo=True)
+        self._topic_compose.pack(fill=tk.BOTH, expand=True)
+        self._attach_clipboard_menu(
+            self._topic_compose, clear_cmd=self._topic_compose_clear,
+            clear_label="🧹  Clear (start a new entry)")
+        self._topic_current_entry_id = None
+
+        rsplit.add(entry_frame, minsize=90, stretch="always")
+        rsplit.add(compose,     minsize=150, stretch="always")
 
         paned.add(left,  minsize=240, stretch="always")
         paned.add(right, minsize=300, stretch="always")
@@ -18575,6 +18598,121 @@ class BookReader:
             src = f"  ({self._book_short_label(book)})" if book else ""
             self._topic_entries_listbox.insert(tk.END, f" {snippet}{src}")
         self._topic_entries_label_var.set(f"Entries in '{title}'")
+
+    def _on_topic_selected(self) -> None:
+        """A topic was picked: show its entries and ready a BLANK read/write
+        pane (mode = new entry)."""
+        self._show_topic_entries()
+        self._topic_current_entry_id = None
+        try:
+            self._topic_compose.delete("1.0", tk.END)
+        except (tk.TclError, AttributeError):
+            pass
+
+    def _load_topic_entry_into_pane(self) -> None:
+        """Load the selected entry's FULL text into the read/write pane so it
+        can be read (and edited). A later Save then UPDATES this entry."""
+        sel = self._topic_entries_listbox.curselection()
+        if not sel:
+            return
+        try:
+            eid, text, _book, _off, _ts = self._topic_entries_records[sel[0]]
+        except (IndexError, ValueError):
+            return
+        self._topic_current_entry_id = eid
+        try:
+            self._topic_compose.delete("1.0", tk.END)
+            self._topic_compose.insert("1.0", text or "")
+            self._topic_compose.edit_reset()
+        except tk.TclError:
+            return
+        spec = getattr(self, "_study_font_spec", None)
+        if spec:
+            try:
+                self._topic_compose.configure(
+                    font=(spec["family"], spec["size"]),
+                    spacing1=spec["spacing1"], spacing3=spec["spacing3"])
+            except Exception:
+                pass
+
+    def _topic_compose_clear(self) -> None:
+        """🧹 Clear the pane and switch to NEW-entry mode."""
+        try:
+            self._topic_compose.delete("1.0", tk.END)
+        except (tk.TclError, AttributeError):
+            pass
+        self._topic_current_entry_id = None
+        self.set_status("📌 Cleared — paste or type a new entry, then Save.")
+
+    def _select_topic_entry_by_id(self, eid) -> None:
+        for i, rec in enumerate(getattr(self, "_topic_entries_records", []) or []):
+            if rec[0] == eid:
+                try:
+                    self._topic_entries_listbox.selection_clear(0, tk.END)
+                    self._topic_entries_listbox.selection_set(i)
+                    self._topic_entries_listbox.see(i)
+                    self._load_topic_entry_into_pane()
+                except tk.TclError:
+                    pass
+                return
+
+    def _topics_save_from_toolbar(self) -> bool:
+        """Yellow Save on the Topics tab: keep the read/write pane's text as an
+        entry under the selected topic. Editing a loaded entry updates it; new
+        text is inserted (blank lines split it into several entries)."""
+        if not self._topics_context_active():
+            return False
+        pane = getattr(self, "_topic_compose", None)
+        if pane is None:
+            return False
+        try:
+            content = pane.get("1.0", tk.END).strip()
+        except tk.TclError:
+            return False
+        tsel = self._topics_listbox.curselection()
+        if not tsel:
+            self.set_status("📌 Select a topic on the left first, then Save.")
+            return True
+        if not content:
+            self.set_status("📌 Type or paste something below the topic, then Save.")
+            return True
+        topic_id, title, _n = self._topics_records[tsel[0]]
+        now = datetime.now().isoformat()
+        try:
+            if self._topic_current_entry_id is not None:
+                self._db_exec("UPDATE topic_entries SET text=? WHERE id=?",
+                              (content, self._topic_current_entry_id))
+                msg = f"📌 ✓ Updated entry in “{title}”."
+            else:
+                blocks = [b.strip() for b in re.split(r"\n\s*\n", content)
+                          if b.strip()] or [content]
+                for block in blocks:
+                    self._db_exec(
+                        "INSERT INTO topic_entries "
+                        "(topic_id, text, source_book, source_offset, created_at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (topic_id, block, None, None, now))
+                msg = (f"📌 ✓ Saved {len(blocks)} "
+                       f"entr{'ies' if len(blocks) != 1 else 'y'} to “{title}”.")
+        except Exception as e:
+            messagebox.showerror("Could not save", str(e))
+            return True
+        self._refresh_tab_topics()
+        # Keep the topic selected + refreshed; re-load the saved text into the
+        # pane so it stays READABLE and a second Save updates it (no dupes).
+        try:
+            self._topics_listbox.selection_clear(0, tk.END)
+            self._topics_listbox.selection_set(tsel[0])
+            self._show_topic_entries()
+            if self._topic_current_entry_id is not None:
+                self._select_topic_entry_by_id(self._topic_current_entry_id)
+            elif self._topic_entries_records:
+                self._topic_entries_listbox.selection_set(0)
+                self._load_topic_entry_into_pane()
+        except Exception:
+            pass
+        self.set_status(msg)
+        return True
 
     def _topics_context_active(self) -> bool:
         topics = getattr(self, "_topics_listbox", None)
