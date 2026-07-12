@@ -2873,7 +2873,7 @@ class BookReader:
         win = tk.Toplevel(self.root)
         win.title("🤖 Explain — Sentinel Forge AI")
         win.configure(bg=BG_PANEL)
-        win.geometry("540x360")
+        self._fit_dialog(win, 540, 360)
         tk.Label(win, text="🤖 Explaining your selection (100% local)",
                  bg=BG_PANEL, fg=ACCENT_PURPLE,
                  font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=14, pady=(12, 6))
@@ -12486,8 +12486,7 @@ class BookReader:
         win = tk.Toplevel(self.root)
         self._session_end_win = win
         win.title("⏹  Session End")
-        win.geometry("620x680")
-        win.minsize(520, 560)
+        self._fit_dialog(win, 620, 680)
         win.configure(bg=BG_DARK)
         # win.transient(self.root)  # disabled: hides Min/Max buttons on Windows
         try:
@@ -15853,8 +15852,7 @@ class BookReader:
         win = tk.Toplevel(self.root)
         self._prompt_lib_win = win
         win.title("🗒 Prompt Library")
-        win.geometry("960x620")
-        win.minsize(700, 460)
+        self._fit_dialog(win, 960, 620)
         win.configure(bg=BG_DARK)
 
         header = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10)
@@ -16656,7 +16654,6 @@ class BookReader:
         dlg.configure(bg=BG_DARK)
         self._fit_dialog(dlg, 460, 420)
         dlg.grab_set()
-        dlg.geometry("420x440")
 
         tk.Label(dlg, text="Pick an existing topic, or type a new one:",
                  bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold"),

@@ -130,6 +130,12 @@ dashboards.
   (lines ~2876, 12489, 15856, 16659). `620x680` exceeds the owner's ~617px
   effective height → likely clipped. NEXT: size these 4 dialogs from
   `winfo_screenwidth/height`, then promote Rule B to a hard gate.
+- ✅ 2026-07-12 — Acted on the linter's finding: all 4 hardcoded
+  `.geometry("WxH")` calls (Explain, Session End, Prompt Library, Add-to-topic)
+  now route through `_fit_dialog` (screen-relative, centered, clamped). The
+  Session-End `620x680` was clipping the owner's ~617px height. **Rule B
+  promoted to a hard test gate** (linter now enforces zero A and zero B).
+  Suite 326. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
