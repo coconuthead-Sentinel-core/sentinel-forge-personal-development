@@ -8,7 +8,7 @@
 > assistant FOR the assistant; Shannon may drop instructions into §5
 > at any time.
 
-_Last updated: 2026-07-12 (Accessibility toolbar: A-/A+/Format presets + wrapping tab bar/toolbar) · updated by: Claude (Opus 4.8)_
+_Last updated: 2026-07-12 (Study-panel uniformity + reading sliders; then DB-isolation guard, design-law linter, /sentinel-sprint skill) · updated by: Claude (Opus 4.8)_
 
 ---
 
@@ -112,6 +112,24 @@ dashboards.
   session scratchpad). Smoke scripts now monkeypatch STUDY_DB to a temp
   path. LESSON: always redirect BOTH DB_PATH and study_db.STUDY_DB in
   headless tests.
+- ✅ 2026-07-12 — Study-panel uniformity + reading sliders. Re-cut
+  Topics/Glossary/Commentary to the Journal layout (header → `list | content`
+  → one primary button); removed in-panel button rows + paste boxes; Add/Remove
+  via the floating toolbar (added `_glossary/_commentary_remove_from_toolbar`);
+  secondary actions on a right-click menu; horizontal reading slider on all
+  three read surfaces. Fixed two display bugs — A−/A+ was scaling the nav lists
+  (Topics index clipped off-screen); delete-topic confirm ballooned on a huge
+  pasted title (now a 60-char preview). Suite 312. *(done)*
+- ✅ 2026-07-12 — Tooling sprint: (1) **live-DB pollution guard**
+  (`db_location.assert_not_live_db`/`is_live_db` + `study_db.temp_study_db()`)
+  makes the twice-seen live-DB leak a loud failure; (2) **design-law linter**
+  (`lyceum/lint_designlaws.py`, AST) — Rule A (constructor tuple pad) gated at
+  zero, Rule B (hardcoded geometry) advisory; (3) **/sentinel-sprint** skill
+  formalizes the build pipeline. +13 tests (325 total). *(done)*
+- ⚠️ 2026-07-12 — Linter's first catch: **4 hardcoded `.geometry("WxH")`**
+  (lines ~2876, 12489, 15856, 16659). `620x680` exceeds the owner's ~617px
+  effective height → likely clipped. NEXT: size these 4 dialogs from
+  `winfo_screenwidth/height`, then promote Rule B to a hard gate.
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

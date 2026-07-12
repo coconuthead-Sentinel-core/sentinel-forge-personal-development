@@ -5,6 +5,7 @@ import contextlib
 import os
 import sqlite3
 import sys
+import tempfile
 
 from lyceum.db import db_location
 
@@ -17,6 +18,32 @@ STUDY_DIR = os.path.expanduser(r"~\OneDrive\Documents\BookReader")
 # Older installs kept it at STUDY_DIR/study.db; that file is migrated once.
 _LEGACY_DB = os.path.join(STUDY_DIR, "study.db")
 STUDY_DB = db_location.live_db_path()
+
+
+@contextlib.contextmanager
+def temp_study_db():
+    """Blessed DB isolation for headless tests and smoke scripts.
+
+    Points ``STUDY_DB`` at a fresh temp file for the duration, asserts it is
+    NOT the live database, and restores + deletes it on exit. Use this
+    instead of hand-rolling the redirect — forgetting to patch ``STUDY_DB``
+    (while only setting a legacy ``DB_PATH``) is exactly what leaked test
+    rows into the real study.db twice; see Former-Bugs-and-Regressions.
+    """
+    global STUDY_DB
+    fd, tmp = tempfile.mkstemp(suffix=".study.db")
+    os.close(fd)
+    prev = STUDY_DB
+    STUDY_DB = tmp
+    db_location.assert_not_live_db(STUDY_DB)   # loud failure if it's live
+    try:
+        yield tmp
+    finally:
+        STUDY_DB = prev
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 STUDY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS highlights (

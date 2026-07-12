@@ -38,6 +38,32 @@ def live_db_path() -> str:
     return os.path.join(live_db_dir(), "study.db")
 
 
+def is_live_db(path: str | None) -> bool:
+    """True if `path` resolves to the real, live user database."""
+    try:
+        if not path:
+            return False
+        return os.path.abspath(path) == os.path.abspath(live_db_path())
+    except OSError:
+        return False
+
+
+def assert_not_live_db(path: str | None) -> None:
+    """Raise if `path` is the LIVE database.
+
+    Call this at the top of any headless test / smoke-script setup, right
+    after redirecting the DB to a temp file. It turns the (twice-seen)
+    "headless run polluted the live study.db" bug into a loud, immediate
+    failure instead of silent corruption of the user's real data. See
+    ``docs/wiki/Former-Bugs-and-Regressions.md`` (July 2026).
+    """
+    if is_live_db(path):
+        raise RuntimeError(
+            f"Refusing to use the LIVE study.db ({path}) in a headless "
+            f"context. Redirect lyceum.db.study_db.STUDY_DB (and any legacy "
+            f"DB_PATH alias) to a temp file before touching the database.")
+
+
 def backup_dir(study_dir: str) -> str:
     """Where frozen snapshots are written — inside the synced folder (safe:
     a closed, point-in-time copy, never the live file)."""
