@@ -108,3 +108,13 @@
   reviewer-noticing move is framing, not features: not "I copied a Word
   metric" but "I turned a readability algorithm into an accessibility
   guardrail." Proven in pseudocode (3 proofs) before any code.
+
+- **2026-07-12 — Readability engine shipped (Word 2010 → accessibility).**
+  A Flesch-Kincaid analyzer (syllable-counting NLP kernel + two published
+  formulas) now stamps every saved excerpt with an objective difficulty
+  badge ("📖 Grade 8 · Plain") beside the subjective cognitive-load zone.
+  The design was chosen for the thesis, not the novelty: a difficulty
+  WARNING for a dyslexic reader. Proven in pseudocode (3 proofs, caught
+  2 bugs), then 2 gated sprints (15 tests + runtime proof). The clearest
+  example in the codebase of turning a textbook feature into a
+  disability-specific guardrail.

@@ -24951,6 +24951,18 @@ class BookReader:
         ts_machine_local = now.strftime("%Y-%m-%dT%H-%M-%S")
         filename_stem = f"BOOKREADER-EXCERPT-{slug}_{ts_machine_local}_v001"
 
+        # Objective reading difficulty (Flesch-Kincaid) — an ADDITIVE
+        # accessibility signal beside the subjective cognitive_load/zone:
+        # a dyslexia-first reader benefits from knowing a passage's grade
+        # level up front. Never fails the save if analysis errors.
+        try:
+            from lyceum.readability import analyze as _read_analyze
+            _r = _read_analyze(text)
+            read_grade = _r["grade_level"]
+            read_label = _r["label"]
+        except Exception:
+            read_grade, read_label = 0.0, "—"
+
         # YAML front-matter — schema mirrors the sidecar JSON so the .md
         # is self-describing even if someone reads it outside the app.
         front_matter = (
@@ -24962,6 +24974,8 @@ class BookReader:
             f"timestamp: {now.isoformat(timespec='seconds')}\n"
             f"selection: {'true' if is_selection else 'false'}\n"
             f"word_count: {len(text.split())}\n"
+            f"reading_grade: {read_grade}\n"
+            f"reading_label: {json.dumps(read_label)}\n"
             "tags: []\n"
             "---\n\n"
         )
@@ -25026,16 +25040,21 @@ class BookReader:
         library_path = saved[0][1]
         emoji = LIBRARY_ZONE_EMOJI.get(zone, "")
         summary = "\n\n".join(f"{lbl}:\n   {p}" for lbl, p in saved)
+        read_line = (f"\n\nReading level: 📖 Grade {read_grade:g} — "
+                     f"{read_label}." if read_label != "—" else "")
         messagebox.showinfo(
             "Saved",
             f"Saved to your Library in the {emoji} {zone} zone "
-            f"(cognitive load {load}).\n\n"
+            f"(cognitive load {load}).{read_line}\n\n"
             f"Filename:\n   {os.path.basename(library_path)}\n\n"
             "It'll show up under 📚 Library — click the "
             f"{emoji} {zone} filter button or All to see it.\n\n{summary}",
         )
+        read_badge = (f" · 📖 Grade {read_grade:g} {read_label}"
+                      if read_label != "—" else "")
         self.set_status(
-            f"💾 Saved → {emoji} {zone}: {os.path.basename(library_path)}")
+            f"💾 Saved → {emoji} {zone}: "
+            f"{os.path.basename(library_path)}{read_badge}")
 
 
 def main() -> None:
