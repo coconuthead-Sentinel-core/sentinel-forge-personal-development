@@ -36,7 +36,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-188 automated tests cover the knowledge harvester, the Commentary store,, the progress kernels, database atomicity
+188 automated tests cover the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, and the FSRS spaced-repetition core — all

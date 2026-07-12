@@ -82,3 +82,11 @@
   Proving the store against a temp DB before touching the UI made the
   build near-bugless. Consistency is not just UX polish; a reused,
   already-proven pattern is the cheapest reliable code a solo dev writes.
+
+- **2026-07-12 — Review-gated integration.** A full Excel 365 Bible
+  (~2.87M chars) was reviewed top-down before any code: most of it
+  (Excel UI, VBA, Power Query) correctly ruled OUT of a local study
+  app; the one real-CS fit — a spreadsheet formula engine (tokenizer →
+  recursive-descent parser → evaluator) — was prototyped and proven
+  (20/20 checks) in pseudocode BEFORE a line of feature code. Disciplined
+  scoping (what NOT to build) is itself the senior-engineering signal.
