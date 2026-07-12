@@ -844,6 +844,10 @@ class BookReader:
         # handles here so the load/clear helpers can guard when it isn't open.
         self.commentary_title_var = tk.StringVar(value="📑  Commentary")
         self.commentary_area = None
+        # Commentary is now a structured store (like the Glossary tab):
+        # a searchable list of saved commentary entries in study.db.
+        self._commentary_listbox = None
+        self._commentary_records: list = []
 
         # ---- Bottom hint line (stays on the main dashboard) ------------
         hint = tk.Label(
@@ -19907,44 +19911,244 @@ class BookReader:
         canvas.bind("<Leave>", lambda _e: canvas.bind_all(
             "<MouseWheel>", getattr(self, "_dash_mousewheel", lambda _ev: None)))
 
+        # Structured store, laid out exactly like the Glossary tab:
+        # header + search, then a listbox (left) beside a read pane
+        # (right), then Add / Edit / Delete / Import-file buttons.
         head = tk.Frame(panel, bg=BG_PANEL, padx=12, pady=8)
         head.pack(fill=tk.X)
-        tk.Label(head, textvariable=self.commentary_title_var,
-                 bg=BG_PANEL, fg=FG_TEXT, font=("Segoe UI", 13, "bold"),
-                 anchor=tk.W).pack(side=tk.LEFT)
-        tk.Button(
-            head, text="📂 Open commentary…", command=self.open_commentary_picker,
-            font=("Segoe UI", 10), bg=ACCENT_CYAN, fg="white",
-            activebackground=ACCENT_CYAN, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=4)
-        tk.Button(
-            head, text="Clear", command=self._clear_commentary,
-            font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
-            activebackground=ACCENT_SLATE, relief=tk.FLAT,
-            padx=10, pady=4, cursor="hand2", borderwidth=0,
-        ).pack(side=tk.RIGHT, padx=4)
+        tk.Label(head, text="📑 Commentary", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
+        self._commentary_stats_var = tk.StringVar(value="")
+        tk.Label(head, textvariable=self._commentary_stats_var,
+                 bg=BG_PANEL, fg=FG_MUTED, font=("Segoe UI", 10)
+                 ).pack(side=tk.RIGHT)
 
-        body_frame = tk.Frame(panel, bg=BG_DARK, padx=8, pady=8)
-        body_frame.pack(fill=tk.BOTH, expand=True)
+        search_row = tk.Frame(panel, bg=BG_DARK, padx=12, pady=6)
+        search_row.pack(fill=tk.X)
+        tk.Label(search_row, text="Search:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 11)).pack(side=tk.LEFT, padx=(0, 6))
+        self._commentary_search_var = tk.StringVar()
+        se = tk.Entry(search_row, textvariable=self._commentary_search_var,
+                      bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                      font=("Segoe UI", 11), relief=tk.FLAT, bd=0)
+        se.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=4)
+        self._commentary_search_var.trace_add(
+            "write", lambda *_: self._refresh_tab_commentary())
+
+        paned = tk.PanedWindow(panel, orient=tk.HORIZONTAL, sashwidth=6,
+                                bg=BG_DARK, bd=0, sashrelief=tk.FLAT)
+        paned.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        left = tk.Frame(paned, bg=BG_DARK)
+        list_frame = tk.Frame(left, bg=BG_DARK)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+        self._commentary_listbox = tk.Listbox(
+            list_frame, bg=BG_INPUT, fg=FG_TEXT,
+            selectbackground=ACCENT_CYAN, selectforeground="white",
+            font=("Segoe UI", 11), relief=tk.FLAT, bd=0,
+            highlightthickness=0, activestyle="none")
+        csb = tk.Scrollbar(list_frame, command=self._commentary_listbox.yview)
+        self._commentary_listbox.configure(yscrollcommand=csb.set)
+        csb.pack(side=tk.RIGHT, fill=tk.Y)
+        self._commentary_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._commentary_listbox.bind(
+            "<<ListboxSelect>>", lambda _e: self._show_commentary_selected())
+
+        right = tk.Frame(paned, bg=BG_DARK)
+        tk.Label(right, textvariable=self.commentary_title_var,
+                 bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 14, "bold"),
+                 anchor=tk.W).pack(fill=tk.X, padx=2)
+        # commentary_area is the read pane — the existing file loader and
+        # _clear_commentary still target it, so nothing else breaks.
         self.commentary_area = scrolledtext.ScrolledText(
-            body_frame, wrap=tk.WORD,
-            font=(self.font_family, 12),
+            right, wrap=tk.WORD, font=(self.font_family, 12),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
             padx=14, pady=10, relief=tk.FLAT,
-            selectbackground="#1d4ed8", selectforeground="white",
-        )
-        self.commentary_area.pack(fill=tk.BOTH, expand=True)
-        # Re-display whatever was loaded before (if the Study window was
-        # closed and reopened), then lock it read-only — selection + Ctrl+C
-        # still work so excerpts can be copied into Notes.
-        if self._commentary_file:
+            selectbackground="#1d4ed8", selectforeground="white")
+        self.commentary_area.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+        self.commentary_area.configure(state=tk.DISABLED)
+
+        paned.add(left,  minsize=200, stretch="always")
+        paned.add(right, minsize=320, stretch="always")
+
+        row = tk.Frame(panel, bg=BG_DARK, padx=12, pady=8)
+        row.pack(fill=tk.X)
+        def cb(text, cmd, color):
+            return tk.Button(row, text=text, command=cmd,
+                             font=("Segoe UI", 11, "bold"),
+                             bg=color, fg="white", activebackground=color,
+                             relief=tk.FLAT, padx=12, pady=6,
+                             cursor="hand2", borderwidth=0)
+        cb("+ Add entry", lambda: self._edit_commentary_entry(), ACCENT_GREEN
+           ).pack(side=tk.LEFT, padx=(0, 4))
+        cb("Edit",   self._edit_commentary_selected,   ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
+        cb("Delete", self._delete_commentary_selected, ACCENT_RED).pack(side=tk.LEFT, padx=4)
+        cb("📂 Import file…", self._commentary_import_file, ACCENT_SLATE
+           ).pack(side=tk.LEFT, padx=4)
+        self._refresh_tab_commentary()
+
+    # ---- Commentary store CRUD (mirrors the Glossary tab; proven in
+    #      scratchpad/prove_commentary_store.py before coding) ----------
+    def _refresh_tab_commentary(self) -> None:
+        if not getattr(self, "_commentary_listbox", None):
+            return
+        q = (self._commentary_search_var.get()
+             if hasattr(self, "_commentary_search_var") else "").strip().lower()
+        if q:
+            rows = self._db_query(
+                "SELECT id, title, body, source FROM commentaries "
+                "WHERE LOWER(title) LIKE ? OR LOWER(body) LIKE ? "
+                "ORDER BY title COLLATE NOCASE", (f"%{q}%", f"%{q}%"))
+        else:
+            rows = self._db_query(
+                "SELECT id, title, body, source FROM commentaries "
+                "ORDER BY title COLLATE NOCASE")
+        self._commentary_records = rows
+        lb = self._commentary_listbox
+        lb.delete(0, tk.END)
+        for _id, title, _body, _src in rows:
+            lb.insert(tk.END, f" {title}")
+        self._commentary_stats_var.set(
+            f"{len(rows)} entr{'y' if len(rows) == 1 else 'ies'}")
+        self.commentary_title_var.set("📑  Commentary")
+        if self.commentary_area is not None:
+            w = self.commentary_area
+            w.configure(state=tk.NORMAL); w.delete("1.0", tk.END)
+            w.configure(state=tk.DISABLED)
+
+    def _show_commentary_selected(self) -> None:
+        sel = self._commentary_listbox.curselection()
+        if not sel or sel[0] >= len(self._commentary_records):
+            return
+        _id, title, body, _src = self._commentary_records[sel[0]]
+        self.commentary_title_var.set(f"📑  {title}")
+        w = self.commentary_area
+        w.configure(state=tk.NORMAL)
+        w.delete("1.0", tk.END)
+        w.insert("1.0", body)
+        w.configure(state=tk.DISABLED)
+
+    def _edit_commentary_selected(self) -> None:
+        sel = self._commentary_listbox.curselection()
+        if not sel or sel[0] >= len(self._commentary_records):
+            return
+        cid, title, body, source = self._commentary_records[sel[0]]
+        self._edit_commentary_entry(title=title, body=body,
+                                    source=source or "", existing_id=cid)
+
+    def _delete_commentary_selected(self) -> None:
+        sel = self._commentary_listbox.curselection()
+        if not sel or sel[0] >= len(self._commentary_records):
+            return
+        cid, title, _body, _src = self._commentary_records[sel[0]]
+        if not messagebox.askyesno(
+                "Delete entry?",
+                f"Delete commentary entry '{title}'? This can't be undone."):
+            return
+        self._db_exec("DELETE FROM commentaries WHERE id=?", (cid,))
+        self._refresh_tab_commentary()
+
+    def _edit_commentary_entry(self, title: str = "", body: str = "",
+                               source: str = "",
+                               existing_id: int | None = None) -> None:
+        """Add or edit a commentary entry — a titled note with a body.
+        Mirrors _edit_glossary_entry (title box + scrolled body)."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("📑 Commentary entry")
+        dlg.configure(bg=BG_DARK)
+        self._fit_dialog(dlg, 620, 520)
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Title:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10), padx=14).pack(anchor=tk.W, pady=(12, 2))
+        title_var = tk.StringVar(value=title)
+        te = tk.Entry(dlg, textvariable=title_var, bg=BG_INPUT, fg=FG_TEXT,
+                      insertbackground=FG_TEXT, font=("Segoe UI", 12, "bold"),
+                      relief=tk.FLAT, bd=0)
+        te.pack(fill=tk.X, padx=14, ipady=5)
+
+        tk.Label(dlg, text="Commentary:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10), padx=14).pack(anchor=tk.W, pady=(10, 2))
+        body_w = scrolledtext.ScrolledText(
+            dlg, wrap=tk.WORD, font=("Segoe UI", 11), bg=BG_INPUT, fg=FG_TEXT,
+            insertbackground=FG_TEXT, padx=12, pady=10, relief=tk.FLAT, undo=True)
+        body_w.pack(fill=tk.BOTH, expand=True, padx=14, pady=4)
+        if body:
+            body_w.insert("1.0", body)
+
+        def save():
+            t = title_var.get().strip()
+            b = body_w.get("1.0", tk.END).strip()
+            if not t:
+                messagebox.showinfo("Title required",
+                                    "Give the commentary a title first.",
+                                    parent=dlg)
+                return
+            now = datetime.now().isoformat(timespec="seconds")
+            if existing_id is not None:
+                self._db_exec(
+                    "UPDATE commentaries SET title=?, body=?, source=?, "
+                    "updated_at=? WHERE id=?",
+                    (t, b, source, now, existing_id))
+            else:
+                self._db_exec(
+                    "INSERT INTO commentaries (title, body, source, "
+                    "created_at, updated_at) VALUES (?,?,?,?,?)",
+                    (t, b, source, now, now))
+            self.set_status(f"📑 Saved commentary: {t}")
             try:
-                text, _chs = self._extract_text_with_chapters(self._commentary_file)
-                self.commentary_area.insert("1.0", text)
+                self._refresh_tab_commentary()
             except Exception:
                 pass
-        self.commentary_area.configure(state=tk.DISABLED)
+            dlg.destroy()
+
+        row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=10)
+        row.pack(fill=tk.X, side=tk.BOTTOM)
+        tk.Button(row, text="💾 Save", command=save,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT)
+        tk.Button(row, text="Cancel", command=dlg.destroy,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
+                  activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=14, pady=6,
+                  cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+        (body_w if title else te).focus_set()
+
+    def _commentary_import_file(self) -> None:
+        """📂 Import a commentary file (.docx/.pdf/.md/.txt/.html/.xlsx…)
+        as a new entry: title = file name, body = extracted text. The
+        old separate file-viewer picker still exists; this is the
+        structured-store on-ramp."""
+        path = filedialog.askopenfilename(
+            title="Import a commentary file",
+            initialdir=COMMENTARIES_DIR if os.path.isdir(COMMENTARIES_DIR)
+            else os.path.expanduser("~"),
+            filetypes=[("Readable files",
+                        "*.txt *.md *.docx *.pdf *.html *.htm *.rtf "
+                        "*.xlsx *.xlsm *.csv"),
+                       ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            text = self._extract_text(path) or ""
+            if not text.strip():
+                from lyceum.doc_index import extract_text as _dx
+                text = _dx(path) or ""
+        except Exception:
+            text = ""
+        if not text.strip():
+            messagebox.showinfo(
+                "Couldn't read file",
+                f"No readable text found in {os.path.basename(path)}.",
+                parent=self._study_win or self.root)
+            return
+        title = os.path.splitext(os.path.basename(path))[0]
+        now = datetime.now().isoformat(timespec="seconds")
+        self._db_exec(
+            "INSERT INTO commentaries (title, body, source, created_at, "
+            "updated_at) VALUES (?,?,?,?,?)", (title, text, path, now, now))
+        self.set_status(f"📑 Imported commentary: {title}")
+        self._refresh_tab_commentary()
 
     def _build_tab_study_notes(self, parent: tk.Frame) -> None:
         scroll_host = tk.Frame(parent, bg=BG_DARK)

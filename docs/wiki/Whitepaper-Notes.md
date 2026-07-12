@@ -75,3 +75,10 @@
   execute the wiki instruction queue, update the operations page.
   The pasted copy under review was itself one commit stale — caught
   because verification compares hashes, not impressions.
+
+- **2026-07-12 — Pattern reuse as a feature multiplier.** The Commentary
+  tab was rebuilt to match the Glossary tab (structured, searchable
+  SQLite store) — same layout, same CRUD shape, a new additive table.
+  Proving the store against a temp DB before touching the UI made the
+  build near-bugless. Consistency is not just UX polish; a reused,
+  already-proven pattern is the cheapest reliable code a solo dev writes.

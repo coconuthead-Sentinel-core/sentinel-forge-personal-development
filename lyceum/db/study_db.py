@@ -63,6 +63,22 @@ CREATE TABLE IF NOT EXISTS glossary (
     updated_at TEXT NOT NULL
 );
 
+-- Commentary store (2026-07-12): a structured, searchable set of
+-- commentary entries (title + body), modeled on the glossary table so
+-- the Commentary tab works like the Glossary tab. Title is NOT unique
+-- (unlike glossary term) — you may keep several notes with similar
+-- titles. Additive; the file-based commentary viewer still works.
+CREATE TABLE IF NOT EXISTS commentaries (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    source TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_commentaries_title
+    ON commentaries(title COLLATE NOCASE);
+
 CREATE TABLE IF NOT EXISTS journal (
     id INTEGER PRIMARY KEY,
     entry_date TEXT NOT NULL,
