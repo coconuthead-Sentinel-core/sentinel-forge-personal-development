@@ -320,6 +320,105 @@ def _style_optionmenu(om: tk.OptionMenu) -> None:
     )
 
 
+class _FlowFrame(tk.Frame):
+    """A horizontal button strip that WRAPS to new rows instead of
+    clipping when its children are wider than the available width.
+
+    The Study tab bar and the docked floating toolbar were single
+    non-wrapping ``pack`` rows: on a window narrower than the total
+    button width, Tk silently clipped the right-hand controls
+    (Minimize, Undock, the rightmost tabs) so the user could not click
+    them. This container lays each registered child left-to-right with
+    ``place`` and wraps to the next row when one would cross the right
+    edge, then grows its OWN height to fit — so every control is always
+    visible and clickable at any window width.
+
+    Usage: create with a parent, ``add(widget)`` each child (built with
+    this frame as its master, and NOT packed/gridded), and optionally
+    pass ``on_reflow(total_height)`` so a fixed-height dock host can grow
+    to match. Reflow runs on every ``<Configure>`` (width change)."""
+
+    def __init__(self, master, hpad=3, vpad=3, on_reflow=None, **kw):
+        super().__init__(master, **kw)
+        self._flow_items = []
+        self._hpad = hpad
+        self._vpad = vpad
+        self._on_reflow = on_reflow
+        self._last_h = 0
+        self.bind("<Configure>", self._reflow)
+
+    def add(self, widget):
+        """Register an already-created child (master must be this frame)."""
+        self._flow_items.append(widget)
+        return widget
+
+    def finalize(self):
+        """Set a natural ONE-ROW size so a content-sized parent (e.g. a
+        floating toolbar Toplevel) gets a sensible width instead of
+        collapsing to zero — while a width-constrained parent (a docked
+        host packed fill=X, or the fixed-geometry Study window) still
+        makes us wrap. Call once after all children are added."""
+        total_w = self._hpad
+        max_h = 0
+        for w in self._flow_items:
+            try:
+                total_w += w.winfo_reqwidth() + self._hpad
+                max_h = max(max_h, w.winfo_reqheight())
+            except tk.TclError:
+                continue
+        try:
+            self.configure(width=total_w, height=max_h + 2 * self._vpad)
+        except tk.TclError:
+            pass
+        self._reflow()
+
+    def reflow(self):
+        self._reflow()
+
+    def _reflow(self, _event=None):
+        try:
+            width = self.winfo_width()
+        except tk.TclError:
+            return
+        if width <= 1:
+            return
+        x = self._hpad
+        y = self._vpad
+        row_h = 0
+        for w in self._flow_items:
+            try:
+                if not w.winfo_exists():
+                    continue
+                rw = w.winfo_reqwidth()
+                rh = w.winfo_reqheight()
+            except tk.TclError:
+                continue
+            # Wrap to a new row when this child would cross the right edge
+            # (but never wrap the very first child in a row).
+            if x + rw > width - self._hpad and x > self._hpad:
+                x = self._hpad
+                y += row_h + self._vpad
+                row_h = 0
+            try:
+                w.place(x=x, y=y, width=rw, height=rh)
+            except tk.TclError:
+                continue
+            x += rw + self._hpad
+            row_h = max(row_h, rh)
+        total_h = y + row_h + self._vpad
+        if total_h != self._last_h:
+            self._last_h = total_h
+            try:
+                self.configure(height=total_h)
+            except tk.TclError:
+                pass
+            if self._on_reflow is not None:
+                try:
+                    self._on_reflow(total_h)
+                except Exception:
+                    pass
+
+
 def _phonetic_key(word: str) -> str:
     """A pragmatic 'sounds-like' key so phonetic misspellings match real words
     (e.g. 'fone' -> 'phone', 'recieve' -> 'receive', 'definately' ->
@@ -795,6 +894,18 @@ class BookReader:
         # vars/data are defined here so every menu + method stays valid. ------
         self.font_var = tk.StringVar(value=self.font_family)
 
+        # --- Study-panel legibility (Topics / Commentary / Glossary) -------
+        # A shared accessibility state driven by the floating toolbar's
+        # A- / A+ / Format ▾ controls and computed by lyceum.legibility.
+        # Restored from HANDOFF_STATE so the choice survives restarts.
+        from lyceum.legibility import clamp_size as _clamp, preset_names as _pnames
+        _a11y = self._load_handoff_state() or {}
+        self.study_font_size = _clamp(_a11y.get("study_font_size", 16))
+        _saved_preset = _a11y.get("study_preset", "Default")
+        self.study_preset_var = tk.StringVar(
+            value=_saved_preset if _saved_preset in _pnames() else "Default")
+        self._study_font_spec = None   # last-applied spec (for popups)
+
         # Three reading-friendly highlight colors. Indigo is muted so the
         # text underneath stays readable on the dark theme.
         self.HIGHLIGHT_COLORS = {
@@ -1116,6 +1227,18 @@ class BookReader:
         except tk.TclError:
             pass
 
+    def _ftb_grow_host(self, host, body_height: int) -> None:
+        """Grow the toolbar's host to fit a wrapped (multi-row) body, so a
+        second row of controls is never clipped by a fixed-height dock
+        strip. ``host`` is the frame the toolbar was built into (a docked
+        host, or the floating bar's own frame)."""
+        try:
+            needed = max(34, int(body_height) + 6)
+            if int(host.cget("height")) != needed:
+                host.configure(height=needed)
+        except (tk.TclError, ValueError):
+            pass
+
     def _build_floating_toolbar_widgets(self, parent) -> None:
         # Drag grip on the left — drag to move the floating Toplevel.
         grip = tk.Label(parent, text="⋮⋮", bg=BG_PANEL, fg=FG_MUTED,
@@ -1126,23 +1249,27 @@ class BookReader:
         grip.bind("<B1-Motion>", self._floating_toolbar_drag_motion)
         self._ftb_grip = grip
 
-        # Content area inside the toolbar.
-        body = tk.Frame(parent, bg=BG_PANEL)
-        body.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        # Content area inside the toolbar. A wrapping strip: when the bar
+        # is docked into a window narrower than the controls, it flows
+        # onto a second row (and grows the dock host) instead of clipping
+        # A+/Format/Undock off the right edge. When floating it keeps its
+        # natural one-row width (see _FlowFrame.finalize).
+        body = _FlowFrame(parent, bg=BG_PANEL,
+                          on_reflow=lambda h: self._ftb_grow_host(parent, h))
+        body.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
         self._ftb_body = body
 
         # Installed: the Fast / Accurate / Best Whisper-quality picker.
         if self._whisper_quality_var is None:
             self._whisper_quality_var = tk.StringVar(value="Accurate")
-        tk.Label(body, text="Quality:", bg=BG_PANEL, fg=FG_MUTED,
-                 font=("Segoe UI", 9, "bold")
-                 ).pack(side=tk.LEFT, padx=(2, 4))
+        body.add(tk.Label(body, text="Quality:", bg=BG_PANEL, fg=FG_MUTED,
+                 font=("Segoe UI", 9, "bold")))
         _ftb_q = tk.OptionMenu(body, self._whisper_quality_var,
                                "Fast", "Accurate", "Best",
                                command=self._set_mic_quality)
         _style_optionmenu(_ftb_q)
         _ftb_q.configure(width=9, font=("Segoe UI", 9, "bold"))
-        _ftb_q.pack(side=tk.LEFT)
+        body.add(_ftb_q)
 
         # Installed: 🎤 Voice toggle button. Self.mic_btn is reassigned to
         # this widget so _start_mic / _stop_mic can flip its label between
@@ -1152,7 +1279,7 @@ class BookReader:
             font=("Segoe UI", 9, "bold"),
             bg=ACCENT_MIC, fg="white", activebackground=ACCENT_MIC,
             relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0)
-        mic_btn.pack(side=tk.LEFT, padx=(8, 0))
+        body.add(mic_btn)
         self.mic_btn = mic_btn
 
         # Installed: 🔊 Read toggle for proofreading dictated text.
@@ -1165,7 +1292,7 @@ class BookReader:
             font=("Segoe UI", 9, "bold"),
             bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
             relief=tk.FLAT, padx=10, pady=2, cursor="hand2", borderwidth=0)
-        read_btn.pack(side=tk.LEFT, padx=(6, 0))
+        body.add(read_btn)
         self._ftb_read_btn = read_btn
 
         # Scope picker for 🔊 Read.
@@ -1176,7 +1303,7 @@ class BookReader:
             "Entire text", "Sentence", "Word")
         _style_optionmenu(_ftb_rs)
         _ftb_rs.configure(width=10, font=("Segoe UI", 9, "bold"))
-        _ftb_rs.pack(side=tk.LEFT, padx=(4, 0))
+        body.add(_ftb_rs)
 
         # Follow-along highlight picker for 🔊 Read. While the toolbar
         # is reading, the spoken region is painted with this color
@@ -1188,7 +1315,7 @@ class BookReader:
             *list(self.HIGHLIGHT_COLORS.keys()))
         _style_optionmenu(_ftb_rc)
         _ftb_rc.configure(width=7, font=("Segoe UI", 9, "bold"))
-        _ftb_rc.pack(side=tk.LEFT, padx=(4, 0))
+        body.add(_ftb_rc)
 
         # Re-installed: TTS Voice picker (to switch between Piper options and Windows SAPI)
         _ftb_voice = tk.OptionMenu(
@@ -1197,7 +1324,7 @@ class BookReader:
             command=self._on_voice_change)
         _style_optionmenu(_ftb_voice)
         _ftb_voice.configure(width=12, font=("Segoe UI", 9, "bold"))
-        _ftb_voice.pack(side=tk.LEFT, padx=(6, 0))
+        body.add(_ftb_voice)
 
         # 🐢/🐇 Reading speed picker — rushed speech is garbled speech,
         # especially for dyslexia; slower Piper output is also clearer.
@@ -1206,7 +1333,31 @@ class BookReader:
                                 command=self._on_read_speed_change)
         _style_optionmenu(_ftb_sp)
         _ftb_sp.configure(width=9, font=("Segoe UI", 9, "bold"))
-        _ftb_sp.pack(side=tk.LEFT, padx=(4, 0))
+        body.add(_ftb_sp)
+
+        # ── Accessibility: text size (A- / A+) + formatting preset ▾ for
+        # the Study read-panes (Topics / Commentary / Glossary). Sight
+        # impairment → bigger text; ADHD / dyslexia / dysgraphia → a
+        # formatting preset (OpenDyslexic, generous leading). ────────────
+        dec_btn = tk.Button(
+            body, text="A−", command=lambda: self._study_font_step(-1),
+            font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
+            activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
+            cursor="hand2", borderwidth=0)
+        body.add(dec_btn)
+        inc_btn = tk.Button(
+            body, text="A+", command=lambda: self._study_font_step(+1),
+            font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
+            activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
+            cursor="hand2", borderwidth=0)
+        body.add(inc_btn)
+
+        from lyceum.legibility import preset_names as _pnames
+        _ftb_fmt = tk.OptionMenu(body, self.study_preset_var, *_pnames(),
+                                 command=self._on_study_preset_change)
+        _style_optionmenu(_ftb_fmt)
+        _ftb_fmt.configure(width=12, font=("Segoe UI", 9, "bold"))
+        body.add(_ftb_fmt)
 
         # Universal Add/Remove buttons
         add_btn = tk.Button(
@@ -1214,14 +1365,19 @@ class BookReader:
             font=("Segoe UI", 9, "bold"), bg="#3b82f6", fg="white",
             activebackground="#2563eb", relief=tk.FLAT,
             padx=10, pady=2, cursor="hand2", borderwidth=0)
-        add_btn.pack(side=tk.LEFT, padx=(8, 2))
+        body.add(add_btn)
 
         rem_btn = tk.Button(
             body, text="➖ Remove", command=self._ftb_action_remove,
             font=("Segoe UI", 9, "bold"), bg="#ef4444", fg="white",
             activebackground="#dc2626", relief=tk.FLAT,
             padx=10, pady=2, cursor="hand2", borderwidth=0)
-        rem_btn.pack(side=tk.LEFT, padx=(2, 0))
+        body.add(rem_btn)
+        # Lay the strip out now (and it re-flows on every resize).
+        try:
+            body.after(0, body.finalize)
+        except Exception:
+            pass
 
         # (🖍 Highlight + color picker NOT in the toolbar by design —
         #  highlight is on the right-click menu of every text widget
@@ -1271,6 +1427,19 @@ class BookReader:
              "How fast the voice reads. Pick 🐢 Slower or Slowest if the "
              "words sound rushed or garbled — slower is also clearer. "
              "Changing it mid-read takes effect from the next sentence."),
+            (dec_btn, "A−  Smaller text",
+             "Shrinks the text in the Topics, Commentary, and Glossary "
+             "panels one step. For comfort — the reading text, not the "
+             "buttons."),
+            (inc_btn, "A+  Bigger text",
+             "Enlarges the text in the Topics, Commentary, and Glossary "
+             "panels. Press it a few times if the words are hard to see; "
+             "your choice is remembered next time you open the app."),
+            (_ftb_fmt, "🅰 Formatting preset",
+             "Reformats the study panels for how you read best: "
+             "OpenDyslexic and extra line spacing for dyslexia, generous "
+             "spacing for ADHD focus, and larger text for dysgraphia. "
+             "Pick one and all three panels change together."),
             (add_btn, "➕ Add",
              "Adds an item to whatever you're working in. In the Prompt "
              "Library it RECORDS the entry — Title, Prompt, and Response "
@@ -2773,6 +2942,77 @@ class BookReader:
         same highlight-and-speak path the floating toolbar uses."""
         self._study_set_read_target(widget)
         self._ftb_read_toggle()
+
+    # ---- Accessibility: text size + formatting for the Study panels -----
+    # Driven by the floating toolbar's A- / A+ / Format ▾ controls. The
+    # WHAT-to-apply is computed by the pure lyceum.legibility kernel; this
+    # shell only reads the installed fonts and pushes the spec onto the
+    # Topics / Commentary / Glossary read-panes, paste boxes, and lists.
+    def _study_legibility_spec(self) -> dict:
+        from lyceum.legibility import legibility_spec
+        try:
+            installed = set(tkfont.families())
+        except Exception:
+            installed = set(getattr(self, "available_fonts", ["Segoe UI"]))
+        preset = (self.study_preset_var.get()
+                  if hasattr(self, "study_preset_var") else "Default")
+        return legibility_spec(preset, self.study_font_size, installed)
+
+    def _apply_study_legibility(self) -> None:
+        """Push the current legibility spec onto every Study read surface.
+        Guarded per-widget: panes that haven't been built yet are skipped,
+        so this is safe to call before or after the tabs exist."""
+        spec = self._study_legibility_spec()
+        self._study_font_spec = spec
+        font = (spec["family"], spec["size"])
+        # Text panes get font + line-leading (spacing1/spacing3) + wrap.
+        for attr in ("_glossary_definition_widget", "commentary_area",
+                     "_glossary_paste", "_commentary_paste", "_topic_paste"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.configure(font=font, spacing1=spec["spacing1"],
+                                spacing3=spec["spacing3"], wrap=tk.WORD)
+                except Exception:
+                    pass
+        # Listboxes take the font only (no spacing/wrap options).
+        for attr in ("_topic_entries_listbox", "_glossary_listbox",
+                     "_commentary_listbox", "_topics_listbox"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                try:
+                    w.configure(font=font)
+                except Exception:
+                    pass
+
+    def _study_font_step(self, direction: int) -> None:
+        """A- (direction<0) / A+ (direction>0): resize all Study panes."""
+        from lyceum.legibility import step_size
+        self.study_font_size = step_size(self.study_font_size, direction)
+        self._apply_study_legibility()
+        self._persist_study_legibility()
+        try:
+            self.set_status(f"🔡 Study text size: {self.study_font_size}pt")
+        except Exception:
+            pass
+
+    def _on_study_preset_change(self, _value=None) -> None:
+        """Format ▾ dropdown: apply the chosen accessibility preset."""
+        self._apply_study_legibility()
+        self._persist_study_legibility()
+        try:
+            self.set_status(f"🅰 Formatting: {self.study_preset_var.get()}")
+        except Exception:
+            pass
+
+    def _persist_study_legibility(self) -> None:
+        try:
+            st = self._load_handoff_state() or {}
+            st["study_preset"] = self.study_preset_var.get()
+            st["study_font_size"] = int(self.study_font_size)
+            self._save_handoff_state(st)
+        except Exception:
+            pass
 
     def _show_notes_to_study_menu(self) -> None:
         """Drop a picker under the Notes header's '📓 → Study' button.
@@ -16902,7 +17142,9 @@ class BookReader:
                 pass
         win.protocol("WM_DELETE_WINDOW", on_close)
 
-        tabbar = tk.Frame(win, bg=BG_PANEL, padx=10, pady=8)
+        # Wrapping tab bar: on a narrow window the row flows onto a second
+        # line instead of clipping the rightmost tabs / Minimize off-screen.
+        tabbar = _FlowFrame(win, bg=BG_PANEL, height=42)
         tabbar.pack(fill=tk.X)
         content = tk.Frame(win, bg=BG_DARK)
         content.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
@@ -16938,7 +17180,7 @@ class BookReader:
                 activebackground=ACCENT_SLATE, activeforeground="white",
                 relief=tk.FLAT, padx=6, pady=5, cursor="hand2", borderwidth=0,
             )
-            b.pack(side=tk.LEFT, padx=(0, 2))
+            tabbar.add(b)
             self._study_tab_buttons[key] = b
             f = tk.Frame(content, bg=BG_DARK)
             self._study_tab_frames[key] = f
@@ -16949,22 +17191,22 @@ class BookReader:
             except Exception as e:
                 print(f"[study] build tab {key}: {e}", file=sys.stderr)
 
-        # Open + Library — packed right after the last tab (Matrix), at the
-        # exact same compact size as the tab buttons so the row is uniform.
-        tk.Button(tabbar, text="📂 Open", command=self.open_file,
+        # Open + Library — flow right after the last tab, same compact
+        # size, so the whole strip wraps as one uniform row.
+        tabbar.add(tk.Button(tabbar, text="📂 Open", command=self.open_file,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_CYAN, fg="white",
                   activebackground=ACCENT_CYAN, relief=tk.FLAT, padx=6, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
-        tk.Button(tabbar, text="📚 Library", command=self.open_library,
+                  cursor="hand2", borderwidth=0))
+        tabbar.add(tk.Button(tabbar, text="📚 Library", command=self.open_library,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_PURPLE, fg="white",
                   activebackground=ACCENT_PURPLE, relief=tk.FLAT, padx=6, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
+                  cursor="hand2", borderwidth=0))
         # Prompts library — moved here from the top action bar so it lives
         # with the rest of the Study tools, at the same compact button size.
-        tk.Button(tabbar, text="🗒 Prompts", command=self.open_prompt_library,
+        tabbar.add(tk.Button(tabbar, text="🗒 Prompts", command=self.open_prompt_library,
                   font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=6, pady=5,
-                  cursor="hand2", borderwidth=0).pack(side=tk.LEFT, padx=(0, 2))
+                  cursor="hand2", borderwidth=0))
         # 🧠 Review — FSRS spaced-repetition flashcards over the Glossary
         # (Sprint 2 of RELAY-SRS-001). Badge shows how many cards are due.
         self._srs_review_btn = tk.Button(
@@ -16972,7 +17214,7 @@ class BookReader:
             font=("Segoe UI", 9, "bold"), bg=ACCENT_INDIGO, fg="white",
             activebackground=ACCENT_INDIGO, relief=tk.FLAT, padx=6, pady=5,
             cursor="hand2", borderwidth=0)
-        self._srs_review_btn.pack(side=tk.LEFT, padx=(0, 2))
+        tabbar.add(self._srs_review_btn)
         try:
             self.root.after(3000, self._srs_update_review_badge)
         except tk.TclError:
@@ -16987,7 +17229,19 @@ class BookReader:
             bg=ACCENT_SLATE, fg="white", activebackground=ACCENT_SLATE,
             relief=tk.FLAT, padx=8, pady=5, cursor="hand2", borderwidth=0,
         )
-        min_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        tabbar.add(min_btn)
+        # Lay the strip out now and whenever the window resizes.
+        try:
+            tabbar.after(0, tabbar.finalize)
+        except Exception:
+            pass
+
+        # Apply the saved accessibility text size / formatting preset to
+        # the freshly-built Study panes (Topics / Commentary / Glossary).
+        try:
+            self._apply_study_legibility()
+        except Exception:
+            pass
 
         self._show_study_tab("reader")
 
@@ -18275,6 +18529,15 @@ class BookReader:
         body.pack(fill=tk.BOTH, expand=True, padx=14, pady=14)
         body.insert("1.0", body_text)
         body.configure(state=tk.DISABLED)
+        # Honor the current accessibility text size / formatting preset.
+        spec = getattr(self, "_study_font_spec", None)
+        if spec:
+            try:
+                body.configure(font=(spec["family"], spec["size"]),
+                               spacing1=spec["spacing1"],
+                               spacing3=spec["spacing3"])
+            except Exception:
+                pass
         btns = tk.Frame(dlg, bg=BG_DARK)
         btns.pack(pady=(0, 12))
         if readable:

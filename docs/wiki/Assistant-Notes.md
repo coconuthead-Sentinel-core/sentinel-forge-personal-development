@@ -8,7 +8,7 @@
 > assistant FOR the assistant; Shannon may drop instructions into §5
 > at any time.
 
-_Last updated: 2026-07-12 (Study-tab paste-and-save + 🔊 Read on all three panels) · updated by: Claude (Opus 4.8)_
+_Last updated: 2026-07-12 (Accessibility toolbar: A-/A+/Format presets + wrapping tab bar/toolbar) · updated by: Claude (Opus 4.8)_
 
 ---
 
@@ -37,7 +37,7 @@ dashboards.
 
 ## 2. Verification status (did we build it right?)
 
-- **298 automated tests, all green** (headless; temp DBs; injectable
+- **312 automated tests, all green** (headless; temp DBs; injectable
   clocks; proven review-log atomicity; deterministic FSRS).
 - UI flows verified by headless smoke scripts under a REAL
   `mainloop()` (worker `after()` delivery silently fails without one —
@@ -97,6 +97,21 @@ dashboards.
   split_title_body, 18 tests) + paste boxes, 💾 Save, and shared
   _study_read_pane reusing the floating-toolbar highlight/speak engine.
   Suite 298. *(done)*
+- ✅ 2026-07-12 — Accessibility pass on the Study panels: lyceum/legibility.py
+  (pure preset→spec kernel, 14 tests) + floating-toolbar A− / A+ / Format ▾
+  (OpenDyslexic / ADHD focus / Dysgraphia / Dyslexia presets) applied live
+  to Topics/Commentary/Glossary panes + persisted; _FlowFrame wrapping
+  container fixes the clipped tab bar + docked toolbar (Minimize/Undock/
+  rightmost tabs were unreachable). 3 proofs (kernel 14, no-clip measure,
+  live-apply 15). Suite 312. *(done)*
+- ⚠️ 2026-07-12 — Housekeeping: earlier headless smoke scripts connected to
+  the LIVE study.db (they set DB_PATH but study data lives in
+  lyceum.db.study_db.STUDY_DB). Test rows (ZZ Smoke Topic, Chapter 1,
+  Entropy/Heap/Stack glossary, Romans 8 commentary, "First note here"
+  entries) leaked into the real DB and were surgically removed (backup in
+  session scratchpad). Smoke scripts now monkeypatch STUDY_DB to a temp
+  path. LESSON: always redirect BOTH DB_PATH and study_db.STUDY_DB in
+  headless tests.
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

@@ -180,6 +180,26 @@
   The repeatable method — review, extract the textbook construct, prove,
   build safely — is the portfolio thesis made concrete.
 
+- **2026-07-12 — Accessibility as adjustable, evidence-based formatting.**
+  The study panels gained a floating-toolbar A− / A+ text-size control and
+  a Format ▾ dropdown of reading presets (OpenDyslexic, ADHD-focus,
+  dysgraphia) — each preset a documented triple of font, size delta, and
+  line-leading drawn from Rello & Baeza-Yates (ASSETS 2013) and the British
+  Dyslexia Association style guide, not invented. The what-to-apply is a
+  pure kernel (lyceum/legibility.py) proven in a throwaway prototype (3
+  proofs / 14 checks) before any UI, then wired live to all three panes.
+  Two method notes for the paper: (1) accessibility stated as a *user-
+  adjustable* spec — the reader picks the preset — respects that ADHD,
+  dyslexia, and dysgraphia are different needs, not one "accessible mode";
+  (2) a clipped-controls bug (the tab bar and docked toolbar ran off the
+  right edge, leaving Minimize/Undock unclickable) was fixed with a
+  wrapping-flow container and *measured* shut by a headless proof that
+  asserts no control's edge exceeds the window at a cruel 760px width —
+  UI correctness treated as a testable invariant, not an eyeball check.
+  Companion lesson logged the same day: headless tests must isolate the
+  live database, not just a secondary path, or they silently pollute real
+  user data.
+
 - **2026-07-12 — One workflow, three panels (parser-first, again).** The
   owner asked for the same three-step flow — paste into a main box, save,
   then click an entry and hear it read with highlighting — across the
