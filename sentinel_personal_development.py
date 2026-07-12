@@ -3092,6 +3092,16 @@ class BookReader:
                                 spacing3=spec["spacing3"], wrap=tk.WORD)
                 except Exception:
                     pass
+        # The Topics read/write pane scales too — but keep its wrap=NONE, since
+        # its bottom horizontal slider is how the user brings long lines into
+        # view. (Its omission here was why A−/A+ appeared to "do nothing" there.)
+        tc = getattr(self, "_topic_compose", None)
+        if tc is not None:
+            try:
+                tc.configure(font=font, spacing1=spec["spacing1"],
+                             spacing3=spec["spacing3"])
+            except Exception:
+                pass
 
     def _study_font_step(self, direction: int) -> None:
         """A- (direction<0) / A+ (direction>0): resize all Study panes."""
@@ -18527,26 +18537,55 @@ class BookReader:
             entry_menu.tk_popup(event.x_root, event.y_root)
         self._topic_entries_listbox.bind("<Button-3>", _entry_menu_popup)
 
-        # Read / write pane — click here, right-click to Paste, then the
-        # yellow Save keeps it. Loading an entry and Saving UPDATES it; the
-        # 🧹 Clear on the right-click menu starts a fresh (new) entry.
+        # Read / write pane — click here, right-click to Paste, then the yellow
+        # Save keeps it. Canonical scrollable-Text layout: a Text with BOTH a
+        # vertical and a horizontal scrollbar. wrap=NONE so the bottom bar can
+        # SLIDE a long line into view; A−/A+ resize this pane too.
         compose = tk.Frame(rsplit, bg=BG_DARK)
         tk.Label(compose,
-                 text="Read / write below · right-click to paste · Save (toolbar) keeps it",
+                 text="Read / write below · right-click to paste · slide the "
+                      "bottom bar to bring text into view · A− / A+ resize · "
+                      "Save (toolbar) keeps it",
                  bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9),
                  anchor=tk.W).pack(fill=tk.X, padx=2, pady=(0, 2))
-        self._topic_compose = scrolledtext.ScrolledText(
-            compose, wrap=tk.WORD, font=("Segoe UI", 12),
+        cwrap = tk.Frame(compose, bg=BG_DARK)
+        cwrap.pack(fill=tk.BOTH, expand=True)
+        self._topic_compose = tk.Text(
+            cwrap, wrap=tk.NONE, font=("Segoe UI", 12),
             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-            padx=12, pady=10, relief=tk.FLAT, undo=True)
-        self._topic_compose.pack(fill=tk.BOTH, expand=True)
+            padx=12, pady=10, relief=tk.FLAT, undo=True,
+            highlightthickness=0, bd=0)
+        cvbar = tk.Scrollbar(cwrap, orient=tk.VERTICAL,
+                             command=self._topic_compose.yview)
+        chbar = tk.Scrollbar(cwrap, orient=tk.HORIZONTAL,
+                             command=self._topic_compose.xview)
+        self._topic_compose.configure(yscrollcommand=cvbar.set,
+                                      xscrollcommand=chbar.set)
+        self._topic_compose.grid(row=0, column=0, sticky="nsew")
+        cvbar.grid(row=0, column=1, sticky="ns")
+        chbar.grid(row=1, column=0, sticky="ew")
+        cwrap.grid_rowconfigure(0, weight=1)
+        cwrap.grid_columnconfigure(0, weight=1)
         self._attach_clipboard_menu(
             self._topic_compose, clear_cmd=self._topic_compose_clear,
             clear_label="🧹  Clear (start a new entry)")
         self._topic_current_entry_id = None
 
-        rsplit.add(entry_frame, minsize=90, stretch="always")
-        rsplit.add(compose,     minsize=150, stretch="always")
+        rsplit.add(entry_frame, minsize=80, stretch="always")
+        rsplit.add(compose,     minsize=180, stretch="always")
+        # Give the read/write pane the larger share once the tab has a height.
+        self._topics_rsash_done = False
+        def _topics_rsash(_e=None):
+            if getattr(self, "_topics_rsash_done", False):
+                return
+            h = rsplit.winfo_height()
+            if h > 120:
+                try:
+                    rsplit.sash_place(0, 1, max(90, int(h * 0.32)))
+                    self._topics_rsash_done = True
+                except Exception:
+                    pass
+        rsplit.bind("<Configure>", _topics_rsash, add="+")
 
         paned.add(left,  minsize=240, stretch="always")
         paned.add(right, minsize=300, stretch="always")
