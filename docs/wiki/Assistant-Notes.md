@@ -136,6 +136,13 @@ dashboards.
   Session-End `620x680` was clipping the owner's ~617px height. **Rule B
   promoted to a hard test gate** (linter now enforces zero A and zero B).
   Suite 326. *(done)*
+- ✅ 2026-07-12 — Floating toolbar: **traffic-light action group** (green ➕ Add
+  · yellow 💾 Save · red ➖ Remove) + **universal `_ftb_action_save`**
+  context-dispatch (journal → notes → active "💾 Save" button → Ctrl+S), works
+  in every panel incl. Topics/Glossary/Commentary (commits their Add/Edit box).
+  **A−/A+ recast as one black/white toggle** (last-pressed white, other black;
+  re-applied on dock/undock). Launch smoke-tested — no init errors. Suite 326.
+  *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

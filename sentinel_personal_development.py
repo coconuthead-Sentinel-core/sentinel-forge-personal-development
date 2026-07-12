@@ -1340,17 +1340,26 @@ class BookReader:
         # impairment → bigger text; ADHD / dyslexia / dysgraphia → a
         # formatting preset (OpenDyslexic, generous leading). ────────────
         dec_btn = tk.Button(
-            body, text="A−", command=lambda: self._study_font_step(-1),
+            body, text="A−",
+            command=lambda: (self._study_font_step(-1),
+                             self._ftb_set_font_toggle("dec")),
             font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
             activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
             cursor="hand2", borderwidth=0)
         body.add(dec_btn)
         inc_btn = tk.Button(
-            body, text="A+", command=lambda: self._study_font_step(+1),
+            body, text="A+",
+            command=lambda: (self._study_font_step(+1),
+                             self._ftb_set_font_toggle("inc")),
             font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
             activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
             cursor="hand2", borderwidth=0)
         body.add(inc_btn)
+        # A−/A+ are one black/white toggle: the last-pressed is white, the
+        # other black. Keep refs + apply the remembered state on (re)build.
+        self._ftb_dec_btn = dec_btn
+        self._ftb_inc_btn = inc_btn
+        self._ftb_set_font_toggle(getattr(self, "_ftb_font_active", "dec"))
 
         from lyceum.legibility import preset_names as _pnames
         _ftb_fmt = tk.OptionMenu(body, self.study_preset_var, *_pnames(),
@@ -1359,13 +1368,22 @@ class BookReader:
         _ftb_fmt.configure(width=12, font=("Segoe UI", 9, "bold"))
         body.add(_ftb_fmt)
 
-        # Universal Add/Remove buttons
+        # Universal action group — a TRAFFIC LIGHT: green Add, yellow Save,
+        # red Remove. Same three buttons, same colors, in every panel, so the
+        # command locus never moves (ADHD-friendly: color == meaning).
         add_btn = tk.Button(
             body, text="➕ Add", command=self._ftb_action_add,
-            font=("Segoe UI", 9, "bold"), bg="#3b82f6", fg="white",
-            activebackground="#2563eb", relief=tk.FLAT,
+            font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
+            activebackground=ACCENT_GREEN, relief=tk.FLAT,
             padx=10, pady=2, cursor="hand2", borderwidth=0)
         body.add(add_btn)
+
+        save_btn = tk.Button(
+            body, text="💾 Save", command=self._ftb_action_save,
+            font=("Segoe UI", 9, "bold"), bg="#eab308", fg="#0f172a",
+            activebackground="#ca8a04", relief=tk.FLAT,
+            padx=10, pady=2, cursor="hand2", borderwidth=0)
+        body.add(save_btn)
 
         rem_btn = tk.Button(
             body, text="➖ Remove", command=self._ftb_action_remove,
@@ -1446,6 +1464,11 @@ class BookReader:
              "must all be filled in first, so every saved prompt is "
              "complete. In the 📚 Library it opens the add-books picker. "
              "Also works on the Planner, Matrix, Journal, and more."),
+            (save_btn, "💾 Save",
+             "The middle of the traffic light (green Add · yellow Save · red "
+             "Remove). Saves whatever you're editing — your Journal entry, "
+             "Study Notes, or the open Add/Edit box in Topics, Glossary, and "
+             "Commentary — and tells you it saved."),
             (rem_btn, "➖ Remove",
              "Removes what's selected. In the Prompt Library it deletes "
              "the selected entry; in the 📚 Library it sends the "
@@ -1897,6 +1920,65 @@ class BookReader:
         if self._ftb_generate_bound_event("<Delete>"):
             return
         self.set_status("Click or select something removable, then use Remove.")
+
+    def _ftb_action_save(self) -> None:
+        """Context-aware Save (yellow, middle of the traffic light) — commits
+        whatever editable content the active panel or open dialog holds, with
+        visible confirmation. Works everywhere: it saves the Journal entry or
+        Study Notes directly, and elsewhere it clicks the panel/dialog's own
+        '💾 Save' button (e.g. the Topics / Glossary / Commentary Add/Edit
+        dialogs) or fires a Ctrl+S binding."""
+        if self._journal_save_from_toolbar():
+            return
+        if self._study_notes_save_from_toolbar():
+            return
+        if self._ftb_invoke_context_button(("save", "💾")):
+            return
+        if self._ftb_generate_bound_event("<Control-s>"):
+            return
+        self.set_status("💾 Nothing to save here — open an entry or field first.")
+
+    def _journal_save_from_toolbar(self) -> bool:
+        if not self._journal_context_active():
+            return False
+        try:
+            self._save_current_journal_entry()
+        except Exception:
+            return False
+        self.set_status("💾 ✓ Journal entry saved.")
+        return True
+
+    def _study_notes_save_from_toolbar(self) -> bool:
+        if not self._study_notes_context_active():
+            return False
+        try:
+            self._save_notes()
+        except Exception:
+            return False
+        self.set_status("💾 ✓ Study notes saved.")
+        return True
+
+    def _ftb_set_font_toggle(self, active: str) -> None:
+        """A−/A+ act as one black/white toggle: the last-pressed button is
+        WHITE (active), the other BLACK — so one is always white and one
+        always black, a glanceable memory of which way you last sized the
+        text. Re-applied whenever the toolbar is rebuilt (dock/undock)."""
+        self._ftb_font_active = active
+        WHITE_BG, WHITE_FG = "#f8fafc", "#0f172a"
+        BLACK_BG, BLACK_FG = "#0f172a", "#f8fafc"
+        dec = getattr(self, "_ftb_dec_btn", None)
+        inc = getattr(self, "_ftb_inc_btn", None)
+        if dec is None or inc is None:
+            return
+        try:
+            if active == "dec":
+                dec.configure(bg=WHITE_BG, fg=WHITE_FG, activebackground=WHITE_BG)
+                inc.configure(bg=BLACK_BG, fg=BLACK_FG, activebackground=BLACK_BG)
+            else:
+                inc.configure(bg=WHITE_BG, fg=WHITE_FG, activebackground=WHITE_BG)
+                dec.configure(bg=BLACK_BG, fg=BLACK_FG, activebackground=BLACK_BG)
+        except tk.TclError:
+            pass
 
     def _ftb_remember_focus(self, event) -> None:
         widget = getattr(event, "widget", None)

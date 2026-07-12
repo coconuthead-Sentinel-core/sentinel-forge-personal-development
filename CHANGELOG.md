@@ -31,6 +31,14 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 - **`/sentinel-sprint` skill** (`.claude/skills/sentinel-sprint/`) — the proven
   kernel → test → wire → smoke → log → mirror pipeline, formalized as a
   project-local Claude Code skill.
+- **Floating-toolbar traffic light + universal Save.** The action group is now
+  green **➕ Add** → yellow **💾 Save** → red **➖ Remove**, same spot and colors
+  in every panel. New `_ftb_action_save` context-dispatches like Add/Remove — it
+  saves the Journal entry or Study Notes directly, and elsewhere commits the
+  active panel/dialog's own Save (e.g. the Topics/Glossary/Commentary Add-Edit
+  boxes) or fires `Ctrl+S`. The **A− / A+** buttons became a single black/white
+  toggle: the last-pressed is white, the other black — a glanceable memory of
+  which way you last sized the text.
 
 ### Changed
 - **README** corrected: test count `24 → 34`; entry-point and launcher names
