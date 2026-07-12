@@ -28,3 +28,11 @@
   thread); the fix reframed the operation entirely — "remove" became
   "move to archive," matching the user's trust requirement that files
   never leave the laptop. UX vocabulary is a safety feature.
+
+- **2026-07-11 (evening) — Self-documenting maintenance loop.** The
+  project now includes an assistant-maintained operations page
+  (Assistant-Notes.md): every README review triggers a read-execute-
+  update cycle over the wiki, closing the loop between documentation
+  and action. A development methodology detail for the paper: the
+  documentation is not just ABOUT the system — it is part of the
+  system''s control loop.

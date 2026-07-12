@@ -34,6 +34,7 @@ work; it tells you exactly where things stand and what to touch next.
 | [SDLC & Process](SDLC-and-Process.md) | Methodology declaration, life-cycle position, exit criteria |
 | [Development Workflow](Development-Workflow.md) | The laptop→GitHub sync rule, branching policy, build & release |
 | [Glossary of CS Concepts](Glossary-of-CS-Concepts.md) | Plain-language definitions of every concept this codebase uses |
+| [Assistant Notes](Assistant-Notes.md) | Assistant-maintained project state, V&V status, TODO, and instruction queue — checked on every README review |
 | [Working With The Architect](Working-With-The-Architect.md) | Accessibility-first collaboration guide: how to build for and work with the project owner |
 | [Whitepaper Notes](Whitepaper-Notes.md) | Append-only raw material for the portfolio case-study white paper (1-3 sentences per docs update) |
 | [Whitepaper Outline](Whitepaper-Outline.md) | Skeletal outline in standard technical-report form — flesh out one section per sitting |
