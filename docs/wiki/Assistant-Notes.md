@@ -176,6 +176,16 @@ dashboards.
   given the larger split share. (2) `_apply_study_legibility` was missing
   `_topic_compose`, so **A−/A+ never resized it** — added (font+spacing, wrap
   kept NONE). Textbook scrollable-text pattern. Suite 326. *(done)*
+- ✅ 2026-07-12 — Topics "A−/A+ and slider don't work" — root-caused by HEADLESS
+  PROBE (scratchpad/probe_*.py), not by eyeballing. Proof: `_topic_compose` IS a
+  Text(wrap=none) with BOTH scrollbars, and a simulated A+ canvas click DID
+  resize it (16→18→20→22). The real gap: `_on_topic_selected` CLEARED the pane,
+  so A−/A+ resized an EMPTY pane and the slider had nothing to scroll while the
+  user looked at the clipped entry LIST above. Fix: `_on_topic_selected` now
+  AUTO-LOADS the most-recent entry into the pane, so readable text is present to
+  resize/slide immediately. Verified end-to-end headlessly. LESSON: a launch
+  smoke that never OPENS the study workspace never builds the tab — probe the
+  actual widget tree. Suite 326. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

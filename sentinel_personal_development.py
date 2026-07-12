@@ -18639,9 +18639,19 @@ class BookReader:
         self._topic_entries_label_var.set(f"Entries in '{title}'")
 
     def _on_topic_selected(self) -> None:
-        """A topic was picked: show its entries and ready a BLANK read/write
-        pane (mode = new entry)."""
+        """A topic was picked: show its entries and AUTO-LOAD the most recent
+        one into the read/write pane, so readable text appears immediately in
+        the pane that resizes (A−/A+) and slides (bottom bar) — no extra click.
+        Empty topic → blank pane, ready for a new entry."""
         self._show_topic_entries()
+        if getattr(self, "_topic_entries_records", None):
+            try:
+                self._topic_entries_listbox.selection_clear(0, tk.END)
+                self._topic_entries_listbox.selection_set(0)
+                self._load_topic_entry_into_pane()   # sets _topic_current_entry_id
+                return
+            except tk.TclError:
+                pass
         self._topic_current_entry_id = None
         try:
             self._topic_compose.delete("1.0", tk.END)
