@@ -8,7 +8,7 @@
 > assistant FOR the assistant; Shannon may drop instructions into §5
 > at any time.
 
-_Last updated: 2026-07-12 · updated by: Claude (Fable 5)_
+_Last updated: 2026-07-12 (README review check-in) · updated by: Claude (Fable 5)_
 
 ---
 
@@ -42,7 +42,7 @@ dashboards.
 - UI flows verified by headless smoke scripts under a REAL
   `mainloop()` (worker `after()` delivery silently fails without one —
   learned twice, now standard practice).
-- Three-way mirror verified by commit hash `64d282cf108e` and
+- Three-way mirror verified by commit hash `860e80e2c19b` and
   byte-identical README fingerprints across GitHub / OneDrive clone /
   laptop install / session worktree (2026-07-11 check).
 - Single `main` branch per repo; work branches are created per session

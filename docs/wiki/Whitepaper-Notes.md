@@ -69,3 +69,9 @@
   UI. Method note for the paper: the mockup-first protocol (three
   verifiable no-harm proofs before a single project line changed) is
   the AI-era version of a design review.
+
+- **2026-07-12 — Mirror discipline as routine.** A README review now
+  runs as a standing protocol: hash-verify GitHub/OneDrive/laptop,
+  execute the wiki instruction queue, update the operations page.
+  The pasted copy under review was itself one commit stale — caught
+  because verification compares hashes, not impressions.
