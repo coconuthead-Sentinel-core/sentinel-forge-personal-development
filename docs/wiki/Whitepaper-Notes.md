@@ -98,3 +98,13 @@
   (27 tests) and wired into the assistant so it reports the totals it
   writes into spreadsheets. A textbook parsing artifact, delivered
   additively — the strongest single CS demonstration in the codebase.
+
+- **2026-07-12 — Review #2, and the extra-mile lens.** A Word 2010
+  textbook (~1.38M chars) reviewed top-down: nearly all of it ruled OUT
+  (Word UI, mail merge, track changes). The one real-CS fit —
+  readability analysis (Flesch-Kincaid, a syllable-counting NLP kernel)
+  — was chosen precisely BECAUSE it serves the neurodivergent-first
+  thesis: an objective difficulty warning for a dyslexic reader. The
+  reviewer-noticing move is framing, not features: not "I copied a Word
+  metric" but "I turned a readability algorithm into an accessibility
+  guardrail." Proven in pseudocode (3 proofs) before any code.
