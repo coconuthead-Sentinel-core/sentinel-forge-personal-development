@@ -158,3 +158,13 @@
   2010 → readability, Copilot → prompt coach, Power Automate → ECA. Four
   canonical CS kernels, each proven in pseudocode first, each additive
   and pure. The pattern IS the portfolio thesis.
+
+- **2026-07-12 — Review #5: Shannon entropy from the cert books.** The
+  M365 certification books (~759K chars) reviewed top-down: cloud/tenant
+  admin, Teams, exam prep all ruled OUT; the one canonical-CS fit — the
+  identity-security material rests on SHANNON ENTROPY (information
+  theory, 1948), the single most universally-taught algorithm in CS. A
+  password-strength estimator (search-space + distribution entropy,
+  attacker-favorable minimum), private by design (no storage/network),
+  proven exact against closed-form values (20 checks) before any code.
+  Fifth textbook, fifth canonical pure-logic kernel — the method holds.
