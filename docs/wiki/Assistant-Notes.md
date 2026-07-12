@@ -186,6 +186,14 @@ dashboards.
   resize/slide immediately. Verified end-to-end headlessly. LESSON: a launch
   smoke that never OPENS the study workspace never builds the tab — probe the
   actual widget tree. Suite 326. *(done)*
+- ✅ 2026-07-12 — A−/A+ "empty plugs" root cause: the road-marker **Canvas**
+  version didn't receive real clicks in the `_FlowFrame` toolbar, while the
+  traffic-light **Buttons** in the same bar always did (differential evidence).
+  Reverted A−/A+ to `tk.Button` (styled white/black plates); `.invoke()` probe
+  confirms resize (18→20→22→20) + toggle. Added a breadcrumb log
+  (`%LOCALAPPDATA%\SentinelForge\fontsize_debug.log`) so a future "nothing
+  happens" report is verifiable on-machine, not guessed. `_ftb_make_font_marker`
+  / `_round_rect` left as dead code. Suite 326. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

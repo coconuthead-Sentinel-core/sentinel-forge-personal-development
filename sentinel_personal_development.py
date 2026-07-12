@@ -1339,16 +1339,27 @@ class BookReader:
         # the Study read-panes (Topics / Commentary / Glossary). Sight
         # impairment → bigger text; ADHD / dyslexia / dysgraphia → a
         # formatting preset (OpenDyslexic, generous leading). ────────────
-        # A− / A+ as ROAD-MARKER signs (rounded plates drawn on a Canvas),
-        # each with a big, dyslexia-legible letter. Together they are ONE
-        # black/white toggle: the last-pressed marker is white, the other
-        # black — so one is always white, one always black.
-        dec_cv, dec_plate, dec_lbl = self._ftb_make_font_marker(body, "A−", -1)
-        body.add(dec_cv)
-        inc_cv, inc_plate, inc_lbl = self._ftb_make_font_marker(body, "A+", +1)
-        body.add(inc_cv)
-        self._ftb_dec_marker = (dec_cv, dec_plate, dec_lbl)
-        self._ftb_inc_marker = (inc_cv, inc_plate, inc_lbl)
+        # A− / A+ — real Buttons. The traffic-light Buttons in THIS SAME bar
+        # click reliably; the earlier Canvas "road-marker" version did not fire
+        # here, so A−/A+ read as dead "empty plugs". Styled as white/black sign
+        # plates via a raised border. Together they are ONE toggle: the
+        # last-pressed is white, the other black.
+        dec_btn = tk.Button(
+            body, text="A−",
+            command=lambda: (self._study_font_step(-1),
+                             self._ftb_set_font_toggle("dec")),
+            font=("Segoe UI", 13, "bold"), relief=tk.RAISED, bd=3,
+            padx=9, pady=1, cursor="hand2", takefocus=0, borderwidth=3)
+        body.add(dec_btn)
+        inc_btn = tk.Button(
+            body, text="A+",
+            command=lambda: (self._study_font_step(+1),
+                             self._ftb_set_font_toggle("inc")),
+            font=("Segoe UI", 13, "bold"), relief=tk.RAISED, bd=3,
+            padx=9, pady=1, cursor="hand2", takefocus=0, borderwidth=3)
+        body.add(inc_btn)
+        self._ftb_dec_btn = dec_btn
+        self._ftb_inc_btn = inc_btn
         self._ftb_set_font_toggle(getattr(self, "_ftb_font_active", "dec"))
 
         from lyceum.legibility import preset_names as _pnames
@@ -1439,14 +1450,14 @@ class BookReader:
              "How fast the voice reads. Pick 🐢 Slower or Slowest if the "
              "words sound rushed or garbled — slower is also clearer. "
              "Changing it mid-read takes effect from the next sentence."),
-            (dec_cv, "A−  Smaller text",
-             "The road-marker sign that shrinks the reading text in the "
-             "Topics, Commentary, and Glossary panels one step. It and A+ "
-             "are one toggle — whichever you pressed last is white."),
-            (inc_cv, "A+  Bigger text",
-             "The road-marker sign that enlarges the reading text in those "
-             "three panels. Press it a few times if the words are hard to "
-             "see; your choice is remembered next time you open the app."),
+            (dec_btn, "A−  Smaller text",
+             "Shrinks the reading text in the Topics, Commentary, and Glossary "
+             "panels one step. It and A+ are one toggle — whichever you pressed "
+             "last is white."),
+            (inc_btn, "A+  Bigger text",
+             "Enlarges the reading text in those three panels. Press it a few "
+             "times if the words are hard to see; your choice is remembered "
+             "next time you open the app."),
             (_ftb_fmt, "🅰 Formatting preset",
              "Reformats the study panels for how you read best: "
              "OpenDyslexic and extra line spacing for dyslexia, generous "
@@ -1983,30 +1994,25 @@ class BookReader:
         return cv, plate, label
 
     def _ftb_set_font_toggle(self, active: str) -> None:
-        """A−/A+ are one black/white toggle: the last-pressed marker is WHITE
-        (active), the other BLACK — one always white, one always black, a
-        glanceable memory of which way you last sized the text. Re-applied
-        whenever the toolbar is rebuilt (dock/undock)."""
+        """A−/A+ are one black/white toggle: the last-pressed BUTTON is WHITE
+        (active), the other BLACK — one always white, one always black.
+        Re-applied whenever the toolbar is rebuilt (dock/undock)."""
         self._ftb_font_active = active
-        WHITE, BLACK = "#f8fafc", "#0f172a"
-        dec = getattr(self, "_ftb_dec_marker", None)
-        inc = getattr(self, "_ftb_inc_marker", None)
-        if not dec or not inc:
+        WHITE_BG, WHITE_FG = "#f8fafc", "#0f172a"
+        BLACK_BG, BLACK_FG = "#0f172a", "#f8fafc"
+        dec = getattr(self, "_ftb_dec_btn", None)
+        inc = getattr(self, "_ftb_inc_btn", None)
+        if dec is None or inc is None:
             return
-
-        def paint(marker, fill, ink):
-            cv, plate, label = marker
-            try:
-                cv.itemconfigure(plate, fill=fill, outline=ink)
-                cv.itemconfigure(label, fill=ink)
-            except tk.TclError:
-                pass
-        if active == "dec":
-            paint(dec, WHITE, BLACK)
-            paint(inc, BLACK, WHITE)
-        else:
-            paint(inc, WHITE, BLACK)
-            paint(dec, BLACK, WHITE)
+        try:
+            if active == "dec":
+                dec.configure(bg=WHITE_BG, fg=WHITE_FG, activebackground=WHITE_BG)
+                inc.configure(bg=BLACK_BG, fg=BLACK_FG, activebackground=BLACK_BG)
+            else:
+                inc.configure(bg=WHITE_BG, fg=WHITE_FG, activebackground=WHITE_BG)
+                dec.configure(bg=BLACK_BG, fg=BLACK_FG, activebackground=BLACK_BG)
+        except tk.TclError:
+            pass
 
     def _ftb_remember_focus(self, event) -> None:
         widget = getattr(event, "widget", None)
@@ -3106,9 +3112,24 @@ class BookReader:
     def _study_font_step(self, direction: int) -> None:
         """A- (direction<0) / A+ (direction>0): resize all Study panes."""
         from lyceum.legibility import step_size
+        old = getattr(self, "study_font_size", None)
         self.study_font_size = step_size(self.study_font_size, direction)
         self._apply_study_legibility()
         self._persist_study_legibility()
+        # Breadcrumb: verify real clicks on THIS machine instead of guessing.
+        try:
+            import os as _os
+            base = _os.environ.get("LOCALAPPDATA") or _os.path.expanduser("~")
+            logp = _os.path.join(base, "SentinelForge", "fontsize_debug.log")
+            _os.makedirs(_os.path.dirname(logp), exist_ok=True)
+            tc = getattr(self, "_topic_compose", None)
+            with open(logp, "a", encoding="utf-8") as _f:
+                _f.write(f"A{'+' if direction > 0 else '-'} click: {old} -> "
+                         f"{self.study_font_size}pt; topic_compose="
+                         f"{'yes' if tc is not None else 'no'}; "
+                         f"font={tc.cget('font') if tc is not None else 'n/a'}\n")
+        except Exception:
+            pass
         try:
             self.set_status(f"🔡 Study text size: {self.study_font_size}pt")
         except Exception:
