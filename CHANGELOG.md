@@ -19,6 +19,18 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   feature→method map, the fixed-bug history, testing/QA, SDLC posture, the
   development workflow, a CS glossary, and running session notes.
 - This `CHANGELOG.md`.
+- **Live-DB pollution guard** — `lyceum.db.assert_not_live_db` / `is_live_db`
+  plus a `study_db.temp_study_db()` isolation context that refuses the live
+  `study.db`, closing the recurring "headless run wrote to real data" bug class
+  (`tests/test_db_isolation_guard.py`).
+- **Design-law linter** (`lyceum/lint_designlaws.py`) — an AST check for the
+  codebase's known UI traps: tuple `pady/padx` in a widget constructor
+  (**Rule A**, regression-gated at zero) and hardcoded `.geometry("WxH")`
+  literals (**Rule B**). `tests/test_designlaws.py`. First run flagged **4**
+  hardcoded window sizes (one exceeds the owner's effective screen height).
+- **`/sentinel-sprint` skill** (`.claude/skills/sentinel-sprint/`) — the proven
+  kernel → test → wire → smoke → log → mirror pipeline, formalized as a
+  project-local Claude Code skill.
 
 ### Changed
 - **README** corrected: test count `24 → 34`; entry-point and launcher names
