@@ -8,7 +8,7 @@
 > assistant FOR the assistant; Shannon may drop instructions into §5
 > at any time.
 
-_Last updated: 2026-07-12 (Shannon entropy — M365 cert integration) · updated by: Claude (Fable 5)_
+_Last updated: 2026-07-12 (Study-tab paste-and-save + 🔊 Read on all three panels) · updated by: Claude (Opus 4.8)_
 
 ---
 
@@ -37,7 +37,7 @@ dashboards.
 
 ## 2. Verification status (did we build it right?)
 
-- **280 automated tests, all green** (headless; temp DBs; injectable
+- **298 automated tests, all green** (headless; temp DBs; injectable
   clocks; proven review-log atomicity; deterministic FSRS).
 - UI flows verified by headless smoke scripts under a REAL
   `mainloop()` (worker `after()` delivery silently fails without one —
@@ -92,6 +92,11 @@ dashboards.
 - ✅ 2026-07-12 — Copilot book reviewed → Prompt Coach BUILT (lyceum/prompt_coach.py, rubric analyzer) + wired live under AI Chat input (score/band/tip + ✨ Improve button). Sprint 1: 18 tests; Sprint 2: runtime proof. Suite 248. *(done)*
 - ✅ 2026-07-12 — Power Automate reviewed → ECA rule engine BUILT (lyceum/automation.py, pure decision engine) + wired to focus_completed (human-in-the-loop suggestion). Sprint 1: 17 tests; Sprint 2: runtime proof. Suite 265. *(done)*
 - ✅ 2026-07-12 — M365 cert books reviewed → Shannon-entropy strength BUILT (lyceum/password_strength.py) + 🔒 Password Strength utility (live, local, private). Sprint 1: 15 tests; Sprint 2: runtime proof. Suite 280. *(done)*
+- ✅ 2026-07-12 — Study-tab paste-and-save + 🔊 Read on all three panels
+  (Topics, Commentary, Glossary): lyceum/entry_parse.py (parse_glossary /
+  split_title_body, 18 tests) + paste boxes, 💾 Save, and shared
+  _study_read_pane reusing the floating-toolbar highlight/speak engine.
+  Suite 298. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

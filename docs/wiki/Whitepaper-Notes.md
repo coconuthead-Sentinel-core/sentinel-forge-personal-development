@@ -179,3 +179,18 @@
   CS kernels, each proven in pseudocode first, each additive and pure.
   The repeatable method — review, extract the textbook construct, prove,
   build safely — is the portfolio thesis made concrete.
+
+- **2026-07-12 — One workflow, three panels (parser-first, again).** The
+  owner asked for the same three-step flow — paste into a main box, save,
+  then click an entry and hear it read with highlighting — across the
+  Topics, Commentary, and Glossary tabs. The parsing was extracted to a
+  pure kernel (lyceum/entry_parse.py) and proven headlessly (18 tests)
+  before the UI: the first draft swallowed a fresh un-indented term into
+  the previous definition, a bug the tests caught and an indented-
+  continuation rule fixed. The read-aloud reused the existing floating-
+  toolbar highlight-and-speak engine rather than a second copy — pointing
+  it at each panel's read-pane on selection. Two accessibility lessons for
+  the paper: (1) a consistent interaction grammar across panels lowers
+  cognitive load for a neurodivergent user more than any single feature;
+  (2) reusing one proven output path (speech) instead of duplicating it is
+  both cheaper and safer than re-implementing per surface.
