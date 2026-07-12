@@ -1339,26 +1339,16 @@ class BookReader:
         # the Study read-panes (Topics / Commentary / Glossary). Sight
         # impairment → bigger text; ADHD / dyslexia / dysgraphia → a
         # formatting preset (OpenDyslexic, generous leading). ────────────
-        dec_btn = tk.Button(
-            body, text="A−",
-            command=lambda: (self._study_font_step(-1),
-                             self._ftb_set_font_toggle("dec")),
-            font=("Segoe UI", 10, "bold"), bg=ACCENT_SLATE, fg="white",
-            activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
-            cursor="hand2", borderwidth=0)
-        body.add(dec_btn)
-        inc_btn = tk.Button(
-            body, text="A+",
-            command=lambda: (self._study_font_step(+1),
-                             self._ftb_set_font_toggle("inc")),
-            font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
-            activebackground=ACCENT_SLATE, relief=tk.FLAT, padx=8, pady=2,
-            cursor="hand2", borderwidth=0)
-        body.add(inc_btn)
-        # A−/A+ are one black/white toggle: the last-pressed is white, the
-        # other black. Keep refs + apply the remembered state on (re)build.
-        self._ftb_dec_btn = dec_btn
-        self._ftb_inc_btn = inc_btn
+        # A− / A+ as ROAD-MARKER signs (rounded plates drawn on a Canvas),
+        # each with a big, dyslexia-legible letter. Together they are ONE
+        # black/white toggle: the last-pressed marker is white, the other
+        # black — so one is always white, one always black.
+        dec_cv, dec_plate, dec_lbl = self._ftb_make_font_marker(body, "A−", -1)
+        body.add(dec_cv)
+        inc_cv, inc_plate, inc_lbl = self._ftb_make_font_marker(body, "A+", +1)
+        body.add(inc_cv)
+        self._ftb_dec_marker = (dec_cv, dec_plate, dec_lbl)
+        self._ftb_inc_marker = (inc_cv, inc_plate, inc_lbl)
         self._ftb_set_font_toggle(getattr(self, "_ftb_font_active", "dec"))
 
         from lyceum.legibility import preset_names as _pnames
@@ -1368,29 +1358,33 @@ class BookReader:
         _ftb_fmt.configure(width=12, font=("Segoe UI", 9, "bold"))
         body.add(_ftb_fmt)
 
-        # Universal action group — a TRAFFIC LIGHT: green Add, yellow Save,
-        # red Remove. Same three buttons, same colors, in every panel, so the
-        # command locus never moves (ADHD-friendly: color == meaning).
-        add_btn = tk.Button(
-            body, text="➕ Add", command=self._ftb_action_add,
-            font=("Segoe UI", 9, "bold"), bg=ACCENT_GREEN, fg="white",
-            activebackground=ACCENT_GREEN, relief=tk.FLAT,
-            padx=10, pady=2, cursor="hand2", borderwidth=0)
-        body.add(add_btn)
+        # Universal action group — a TRAFFIC LIGHT with the word ABOVE each
+        # colored lamp: green Add · yellow Save · red Delete. Same cluster,
+        # same colors, same place in every panel — a zero-instruction "safe
+        # spot" (color == meaning; the word names it) for a visual/tactile,
+        # ADHD/dyslexia learner.
+        light = tk.Frame(body, bg=BG_PANEL)
 
-        save_btn = tk.Button(
-            body, text="💾 Save", command=self._ftb_action_save,
-            font=("Segoe UI", 9, "bold"), bg="#eab308", fg="#0f172a",
-            activebackground="#ca8a04", relief=tk.FLAT,
-            padx=10, pady=2, cursor="hand2", borderwidth=0)
-        body.add(save_btn)
+        def _signal(word, icon, lamp, lamp_active, cmd, ink="white"):
+            cell = tk.Frame(light, bg=BG_PANEL)
+            tk.Label(cell, text=word, bg=BG_PANEL, fg=FG_TEXT,
+                     font=("Segoe UI", 9, "bold")).pack(side=tk.TOP)
+            b = tk.Button(cell, text=icon, command=cmd,
+                          font=("Segoe UI", 12, "bold"), width=3,
+                          bg=lamp, fg=ink, activebackground=lamp_active,
+                          relief=tk.FLAT, padx=6, pady=1,
+                          cursor="hand2", borderwidth=0)
+            b.pack(side=tk.TOP, fill=tk.X)
+            cell.pack(side=tk.LEFT, padx=3)
+            return b
 
-        rem_btn = tk.Button(
-            body, text="➖ Remove", command=self._ftb_action_remove,
-            font=("Segoe UI", 9, "bold"), bg="#ef4444", fg="white",
-            activebackground="#dc2626", relief=tk.FLAT,
-            padx=10, pady=2, cursor="hand2", borderwidth=0)
-        body.add(rem_btn)
+        add_btn = _signal("Add", "➕", ACCENT_GREEN, "#15803d",
+                          self._ftb_action_add)
+        save_btn = _signal("Save", "💾", "#eab308", "#ca8a04",
+                           self._ftb_action_save, ink="#0f172a")
+        rem_btn = _signal("Delete", "🗑", "#ef4444", "#dc2626",
+                          self._ftb_action_remove)
+        body.add(light)
         # Lay the strip out now (and it re-flows on every resize).
         try:
             body.after(0, body.finalize)
@@ -1445,14 +1439,14 @@ class BookReader:
              "How fast the voice reads. Pick 🐢 Slower or Slowest if the "
              "words sound rushed or garbled — slower is also clearer. "
              "Changing it mid-read takes effect from the next sentence."),
-            (dec_btn, "A−  Smaller text",
-             "Shrinks the text in the Topics, Commentary, and Glossary "
-             "panels one step. For comfort — the reading text, not the "
-             "buttons."),
-            (inc_btn, "A+  Bigger text",
-             "Enlarges the text in the Topics, Commentary, and Glossary "
-             "panels. Press it a few times if the words are hard to see; "
-             "your choice is remembered next time you open the app."),
+            (dec_cv, "A−  Smaller text",
+             "The road-marker sign that shrinks the reading text in the "
+             "Topics, Commentary, and Glossary panels one step. It and A+ "
+             "are one toggle — whichever you pressed last is white."),
+            (inc_cv, "A+  Bigger text",
+             "The road-marker sign that enlarges the reading text in those "
+             "three panels. Press it a few times if the words are hard to "
+             "see; your choice is remembered next time you open the app."),
             (_ftb_fmt, "🅰 Formatting preset",
              "Reformats the study panels for how you read best: "
              "OpenDyslexic and extra line spacing for dyslexia, generous "
@@ -1465,15 +1459,14 @@ class BookReader:
              "complete. In the 📚 Library it opens the add-books picker. "
              "Also works on the Planner, Matrix, Journal, and more."),
             (save_btn, "💾 Save",
-             "The middle of the traffic light (green Add · yellow Save · red "
-             "Remove). Saves whatever you're editing — your Journal entry, "
-             "Study Notes, or the open Add/Edit box in Topics, Glossary, and "
-             "Commentary — and tells you it saved."),
-            (rem_btn, "➖ Remove",
-             "Removes what's selected. In the Prompt Library it deletes "
-             "the selected entry; in the 📚 Library it sends the "
-             "selected book to the Recycle Bin. It always asks before "
-             "deleting. Select something first, then press Remove."),
+             "The yellow lamp — middle of the traffic light (green Add · "
+             "yellow Save · red Delete). Saves whatever you're editing — your "
+             "Journal entry, Study Notes, or the open Add/Edit box in Topics, "
+             "Glossary, and Commentary — and tells you it saved."),
+            (rem_btn, "🗑 Delete",
+             "The red lamp. Deletes what's selected — in the Prompt Library "
+             "the selected entry; in the 📚 Library it archives the selected "
+             "book. It always asks first. Select something, then Delete."),
             (self._ftb_dock_btn, "⇱ / ⇲ Dock",
              "⇱ Undock pops the bar out so it floats. While floating, "
              "⇲ Dock ▼ opens a menu of your open windows — including "
@@ -1958,27 +1951,56 @@ class BookReader:
         self.set_status("💾 ✓ Study notes saved.")
         return True
 
+    def _round_rect(self, cv, x1, y1, x2, y2, r, **kw):
+        """Draw a rounded rectangle on a Canvas (smooth polygon); returns the
+        item id. Gives the A−/A+ markers their road-sign plate shape."""
+        pts = [x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r,
+               x2, y2, x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r,
+               x1, y1 + r, x1, y1]
+        return cv.create_polygon(pts, smooth=True, **kw)
+
+    def _ftb_make_font_marker(self, parent, text: str, direction: int):
+        """One A−/A+ control drawn as a ROAD-MARKER sign: a rounded plate on a
+        Canvas with a big, dyslexia-legible letter. Clicking steps the Study
+        text size and flips the black/white toggle. Returns
+        (canvas, plate_id, text_id)."""
+        W, H = 52, 40
+        cv = tk.Canvas(parent, width=W, height=H, bg=BG_PANEL,
+                       highlightthickness=0, bd=0, cursor="hand2")
+        plate = self._round_rect(cv, 4, 3, W - 4, H - 3, 9,
+                                 fill="#f8fafc", outline="#0f172a", width=2)
+        label = cv.create_text(W // 2, H // 2, text=text,
+                               font=("Segoe UI", 15, "bold"), fill="#0f172a")
+        cv.bind("<Button-1>", lambda _e, d=direction: (
+            self._study_font_step(d),
+            self._ftb_set_font_toggle("dec" if d < 0 else "inc")))
+        return cv, plate, label
+
     def _ftb_set_font_toggle(self, active: str) -> None:
-        """A−/A+ act as one black/white toggle: the last-pressed button is
-        WHITE (active), the other BLACK — so one is always white and one
-        always black, a glanceable memory of which way you last sized the
-        text. Re-applied whenever the toolbar is rebuilt (dock/undock)."""
+        """A−/A+ are one black/white toggle: the last-pressed marker is WHITE
+        (active), the other BLACK — one always white, one always black, a
+        glanceable memory of which way you last sized the text. Re-applied
+        whenever the toolbar is rebuilt (dock/undock)."""
         self._ftb_font_active = active
-        WHITE_BG, WHITE_FG = "#f8fafc", "#0f172a"
-        BLACK_BG, BLACK_FG = "#0f172a", "#f8fafc"
-        dec = getattr(self, "_ftb_dec_btn", None)
-        inc = getattr(self, "_ftb_inc_btn", None)
-        if dec is None or inc is None:
+        WHITE, BLACK = "#f8fafc", "#0f172a"
+        dec = getattr(self, "_ftb_dec_marker", None)
+        inc = getattr(self, "_ftb_inc_marker", None)
+        if not dec or not inc:
             return
-        try:
-            if active == "dec":
-                dec.configure(bg=WHITE_BG, fg=WHITE_FG, activebackground=WHITE_BG)
-                inc.configure(bg=BLACK_BG, fg=BLACK_FG, activebackground=BLACK_BG)
-            else:
-                inc.configure(bg=WHITE_BG, fg=WHITE_FG, activebackground=WHITE_BG)
-                dec.configure(bg=BLACK_BG, fg=BLACK_FG, activebackground=BLACK_BG)
-        except tk.TclError:
-            pass
+
+        def paint(marker, fill, ink):
+            cv, plate, label = marker
+            try:
+                cv.itemconfigure(plate, fill=fill, outline=ink)
+                cv.itemconfigure(label, fill=ink)
+            except tk.TclError:
+                pass
+        if active == "dec":
+            paint(dec, WHITE, BLACK)
+            paint(inc, BLACK, WHITE)
+        else:
+            paint(inc, WHITE, BLACK)
+            paint(dec, BLACK, WHITE)
 
     def _ftb_remember_focus(self, event) -> None:
         widget = getattr(event, "widget", None)

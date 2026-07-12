@@ -220,3 +220,56 @@ because every architectural decision, every trap, and every acceptance
 gate is pre-answered here. Without it: months, and the traps get paid
 for twice. This is the cheapest insurance in the repo — keep it
 current when rooms are added.
+
+---
+
+## 10. The floating-toolbar control cluster (the "safe spot")
+
+The floating toolbar is the ONE fixed command locus — same controls, same
+colors, same place, docked or floating, in every panel. Intent:
+zero-instruction recognition for a visual/tactile, ADHD/dyslexia learner by
+borrowing universal real-world signal grammar.
+
+```pseudocode
+build_floating_toolbar(body):
+    ... mic / read / voice / speed / format-preset pickers ...
+
+    # ── A− / A+  as ROAD-MARKER signs = ONE black/white toggle ──
+    make_font_marker(parent, text, dir):
+        canvas 52x40, bg = panel
+        plate  = rounded_rect(canvas, inset, r=9, fill=white, outline=black, w=2)
+        letter = canvas_text(center, text, big bold, fill=black)
+        on click: study_font_step(dir); set_font_toggle(dir<0 ? "dec" : "inc")
+        return (canvas, plate, letter)
+    dec = make_font_marker(body, "A-", -1);  inc = make_font_marker(body, "A+", +1)
+    set_font_toggle(active):                 # ONE always white, ONE always black
+        paint(active_marker, fill=white, ink=black)   # last-pressed = white
+        paint(other_marker,  fill=black, ink=white)
+        persist active                       # survives dock/undock rebuild
+
+    # ── Traffic light: the WORD sits ABOVE a colored lamp ──
+    signal(word, icon, lamp_color, cmd, ink=white):
+        cell = frame
+          label(word)              packed TOP     # names the action
+          button(icon, lamp_color) packed below   # colored lamp == meaning
+        return button
+    signal("Add",    +,   GREEN)          -> ftb_action_add
+    signal("Save",   disk, YELLOW, black) -> ftb_action_save
+    signal("Delete", bin,  RED)           -> ftb_action_remove
+
+    # ── Universal, context-dispatched actions (identical in every panel) ──
+    ftb_action_add:    try each panel's add-from-toolbar; else click an
+                       "add/new/create/upload" button in the active context
+    ftb_action_save:   journal? save entry. notes? save. else click the active
+                       panel/dialog's "Save" button; else fire Ctrl+S
+    ftb_action_remove: try each panel's remove-from-toolbar; else click a
+                       "delete/remove/clear" button; ALWAYS confirm first
+```
+
+**Design laws carried here:** color == meaning (green go / yellow hold /
+red stop); the word sits ABOVE the color so it reads without training;
+A−/A+ keep one marker white and one black at all times, so "which way did I
+size it?" is answerable at a glance. Text-size + Format presets touch the
+READING panes only, never the navigation lists (that scaling bug is fixed
+and lint-gated). The three actions are one context-dispatch each, so the
+cluster behaves the same everywhere it appears.

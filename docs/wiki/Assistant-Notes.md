@@ -143,6 +143,15 @@ dashboards.
   **A−/A+ recast as one black/white toggle** (last-pressed white, other black;
   re-applied on dock/undock). Launch smoke-tested — no init errors. Suite 326.
   *(done)*
+- ✅ 2026-07-12 — Toolbar cluster refined to Shannon's spec: traffic light now
+  shows the WORD above each lamp (Add/green · Save/yellow · Delete/red — red
+  relabeled from "Remove"); A−/A+ redrawn as road-marker canvas plates forming
+  the black/white toggle (new helpers `_round_rect` + `_ftb_make_font_marker`).
+  Pseudocode captured in `Rebuild-Blueprint.md` §10 (per "pseudocode as clone
+  documents"). Launch smoke-tested — canvas cluster builds clean; suite 326.
+  ⚠️ Appearance NOT visually verified (app runs under Python, which is on the
+  Computer-Use deny list, so no screenshot) — Shannon to eyeball and request
+  tweaks (shape/size/shade). *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
