@@ -227,3 +227,13 @@
   only (never navigation indexes), and any user string placed in a modal
   must be length-capped — reinforcing that accessibility features carry
   their own failure modes worth documenting.
+- **The toolbar as a fixed "safe spot" (2026-07-12).** The floating toolbar
+  was refined into one uniform command cluster present in every panel: a
+  traffic light with the word ABOVE each colored lamp (green Add, yellow
+  Save, red Delete) and A−/A+ drawn as road-marker signs that hold one white
+  and one black at all times. Thesis for the paper: for a visual/tactile,
+  ADHD/dyslexia learner, borrowing UNIVERSAL real-world signal grammar
+  (traffic lights, road markers) collapses the learning curve toward zero —
+  the control is recognized, not read — and a command locus that never moves
+  is itself an accessibility feature. (Owner-articulated design; the engineer
+  translated it to Tk canvas primitives, noting Tk's shape limits honestly.)

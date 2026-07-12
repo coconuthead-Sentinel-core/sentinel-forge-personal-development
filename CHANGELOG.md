@@ -39,6 +39,13 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   boxes) or fires `Ctrl+S`. The **A− / A+** buttons became a single black/white
   toggle: the last-pressed is white, the other black — a glanceable memory of
   which way you last sized the text.
+- **Toolbar refined to a labeled, real-world control cluster.** Each action is
+  now a **word above a colored lamp** — **Add** over green, **Save** over
+  yellow, **Delete** over red (red relabeled from "Remove"). **A− / A+** are
+  redrawn as **road-marker signs** (rounded canvas plates, large
+  dyslexia-legible letter) forming the black/white toggle. Zero-instruction
+  recognition for a visual/tactile, ADHD/dyslexia learner; identical in every
+  panel. Pseudocode captured in `docs/wiki/Rebuild-Blueprint.md` §10.
 
 ### Changed
 - **README** corrected: test count `24 → 34`; entry-point and launcher names
