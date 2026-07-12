@@ -46,6 +46,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   dyslexia-legible letter) forming the black/white toggle. Zero-instruction
   recognition for a visual/tactile, ADHD/dyslexia learner; identical in every
   panel. Pseudocode captured in `docs/wiki/Rebuild-Blueprint.md` §10.
+- **Toolbar-driven text inputs (non-modal).** The New-topic, Rename-topic,
+  Rename-bookmark, and Glossary Look-up boxes lost their OK/Cancel buttons and
+  became non-modal `_prompt_inline` inputs: a right-click clipboard menu
+  (Cut/Copy/Paste/🧹 Clear/Select-all) plus **Enter or the floating toolbar's
+  yellow Save** to commit, Esc/✕ to cancel. The toolbar is the command locus
+  even for entering text.
 
 ### Changed
 - **README** corrected: test count `24 → 34`; entry-point and launcher names

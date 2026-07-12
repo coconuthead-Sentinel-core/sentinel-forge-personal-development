@@ -36,11 +36,13 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-280 automated tests cover the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+326 automated tests cover the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
-the cached file indexer, and the FSRS spaced-repetition core — all
-logic kept free of Tkinter so it is testable without launching the GUI.
+the cached file indexer, the FSRS spaced-repetition core, the study-panel
+legibility kernel, the **design-law linter**, and the **live-DB isolation
+guard** — all logic kept free of Tkinter so it is testable without launching
+the GUI.
 
 ---
 
@@ -123,7 +125,18 @@ Beyond reading, the app is a study and focus workstation:
   best streak, and month navigation.
 - **Study tabs** — autosaving **Study Notes**, **Topics**, **Glossary**,
   dated **Journal**, a four-quadrant **Eisenhower Matrix**, and a
-  Sunsama-style weekly **Planner**.
+  Sunsama-style weekly **Planner**. The three reference panels (Topics,
+  Glossary, Commentary) share one clean **Journal-style layout** with a
+  horizontal reading slider, and secondary actions live on a right-click menu.
+- **🚦 Floating toolbar as the fixed "safe spot"** — one uniform control
+  cluster, docked or floating, identical in every panel: a **traffic light**
+  with the word above each colored lamp (**green Add · yellow Save · red
+  Delete**), and **A− / A+** drawn as **road-marker signs** that hold one
+  white and one black at all times (last-pressed = white). Add / Save / Delete
+  each **context-dispatch** to the active panel, and text-input boxes are
+  **toolbar-driven** — no OK/Cancel: right-click to Cut/Copy/Paste/Clear, then
+  **Enter or the yellow Save** commits. Designed for zero-instruction
+  recognition by a visual/tactile, ADHD/dyslexia learner.
 - **🚀 Performance dashboard** (4DX + Ziglar): a **🏆 Compelling
   Scoreboard** of daily lead measures with streaks, a **🧠 Idea
   Warehouse** (ABCDE priorities, Big-Three, schedule-to-planner,
@@ -443,6 +456,14 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 - ✅ 🧠 Knowledge Harvester — mine any Library book for term/definition
   pairs (checkbox preview, human-approved) straight into the Glossary,
   where the FSRS review deck picks them up: read → harvest → remember
+- ✅ 🚦 Accessibility toolbar cluster — traffic-light **Add/Save/Delete** +
+  road-marker **A−/A+**, all context-dispatched; text inputs are non-modal and
+  toolbar-driven (right-click clipboard menu, Enter/Save to commit)
+- ✅ 🛡 Engineering guardrails — a **design-law linter** (`lyceum/lint_designlaws.py`,
+  AST; blocks constructor-tuple `pady` and hardcoded window sizes) and a
+  **live-DB isolation guard** (`db_location.assert_not_live_db` +
+  `study_db.temp_study_db`), both enforced by the test suite; plus the
+  project-local `/sentinel-sprint` build-pipeline skill
 - 🔲 Voice-note recording (browser MediaRecorder; or `pyaudio` in Tk)
 - 🔲 Tagging UI for the `tags: []` field (schema already supports it)
 - 🔲 Two-way sync with the [Sentinel Forge platform](https://github.com/coconuthead-Sentinel-core/Sentinel-of-sentinel-s-Forge)

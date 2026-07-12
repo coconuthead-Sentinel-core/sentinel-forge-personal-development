@@ -237,3 +237,13 @@
   the control is recognized, not read — and a command locus that never moves
   is itself an accessibility feature. (Owner-articulated design; the engineer
   translated it to Tk canvas primitives, noting Tk's shape limits honestly.)
+- **Input as a toolbar verb (2026-07-12).** The last modal boxes (New-topic,
+  the renames, glossary look-up) were made non-modal and toolbar-driven: no
+  OK/Cancel, a universal right-click clipboard menu, and commit via Enter or
+  the toolbar's yellow Save. The point for the paper: once a fixed command
+  cluster exists, folding even text entry into it removes the last "foreign"
+  modal step — the user never leaves the safe spot, which for an ADHD/dyslexia
+  learner is the difference between flow and friction. Engineering caveat worth
+  recording: this trades a synchronous modal (`value = prompt()`) for an async
+  callback (`prompt(on_commit=…)`), so each call site had to be split into
+  open-input + commit — a deliberate, tested refactor, not a cosmetic swap.
