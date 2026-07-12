@@ -90,3 +90,11 @@
   recursive-descent parser → evaluator) — was prototyped and proven
   (20/20 checks) in pseudocode BEFORE a line of feature code. Disciplined
   scoping (what NOT to build) is itself the senior-engineering signal.
+
+- **2026-07-12 — Formula engine shipped (Excel Bible → real CS).** The
+  review-gated build landed: a tokenizer → recursive-descent parser →
+  tree-walking evaluator (lyceum/formula.py) for Excel-style formulas,
+  proven in pseudocode first (20 checks) then built in two sprints
+  (27 tests) and wired into the assistant so it reports the totals it
+  writes into spreadsheets. A textbook parsing artifact, delivered
+  additively — the strongest single CS demonstration in the codebase.

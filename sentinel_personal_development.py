@@ -3799,6 +3799,19 @@ class BookReader:
                 path = os.path.join(self._sentinel_documents_dir(),
                                     dw.suggest_filename("xlsx", title))
                 dw.write_table_xlsx(path, title or "Sheet1", headers, rows)
+                # Compute the totals the spreadsheet's =SUM() formulas
+                # will show (via lyceum/formula.py) so the assistant can
+                # report the real numbers — openpyxl writes the formula
+                # but can't calculate it.
+                try:
+                    totals = dw.compute_totals(headers, rows)
+                    if totals:
+                        parts = ", ".join(
+                            f"{k}: {v:,.2f}".rstrip("0").rstrip(".")
+                            for k, v in totals.items())
+                        self._chat_say(f"🧮 Computed totals — {parts}.")
+                except Exception:
+                    pass
             else:
                 reply = brain.ask(dw.letter_prompt(request),
                                   system=dw.LETTER_SYSTEM)

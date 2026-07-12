@@ -89,5 +89,31 @@ class FilenameTest(unittest.TestCase):
                          "Spreadsheet 2026-07-04 0905.xlsx")
 
 
+class ComputeTotalsTest(unittest.TestCase):
+    """compute_totals() evaluates a table's column SUMs via the formula
+    engine (no Excel needed) — the doc_writer ↔ formula.py wiring."""
+
+    def test_sums_numeric_columns(self):
+        headers = ["Item", "Amount"]
+        rows = [["Rent", 900.0], ["Food", 250.0], ["Gas", 120.0]]
+        totals = dw.compute_totals(headers, rows)
+        self.assertEqual(totals, {"Amount": 1270.0})
+
+    def test_multiple_numeric_columns(self):
+        headers = ["Task", "Hours", "Rate"]
+        rows = [["A", 2.0, 20.0], ["B", 3.0, 25.0]]
+        totals = dw.compute_totals(headers, rows)
+        self.assertEqual(totals["Hours"], 5.0)
+        self.assertEqual(totals["Rate"], 45.0)
+
+    def test_text_only_table_has_no_totals(self):
+        totals = dw.compute_totals(["Role", "Name"],
+                                   [["QA", "Shannon"], ["Dev", "Claude"]])
+        self.assertEqual(totals, {})
+
+    def test_empty_rows(self):
+        self.assertEqual(dw.compute_totals(["A"], []), {})
+
+
 if __name__ == "__main__":
     unittest.main()

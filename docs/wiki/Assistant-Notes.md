@@ -8,7 +8,7 @@
 > assistant FOR the assistant; Shannon may drop instructions into §5
 > at any time.
 
-_Last updated: 2026-07-12 (Commentary store + window-fit sweep) · updated by: Claude (Fable 5)_
+_Last updated: 2026-07-12 (formula engine — Excel Bible integration) · updated by: Claude (Fable 5)_
 
 ---
 
@@ -37,7 +37,7 @@ dashboards.
 
 ## 2. Verification status (did we build it right?)
 
-- **188 automated tests, all green** (headless; temp DBs; injectable
+- **215 automated tests, all green** (headless; temp DBs; injectable
   clocks; proven review-log atomicity; deterministic FSRS).
 - UI flows verified by headless smoke scripts under a REAL
   `mainloop()` (worker `after()` delivery silently fails without one —
@@ -87,6 +87,7 @@ dashboards.
 - ✅ 2026-07-11 (late) — Fill the Codex engineering template pack for this project -> docs/rebuild-pack/ (8 documents; Codex source left blank per its policy). *(done)*
 - ✅ 2026-07-12 — Knowledge Harvester approved ("build it in sprints") and shipped: Sprint 1 lyceum/harvest.py + 10 tests; Sprint 2 Library 🧠 Harvest terms button + preview-approve window. Suite 182. *(done)*
 - ✅ 2026-07-12 — Commentary tab rebuilt as a Glossary-style structured store (commentaries table, search/list/read-pane/Add/Edit/Delete/Import); window-fit sweep (11 dialogs). *(done)*
+- ✅ 2026-07-12 — Excel 365 Bible reviewed → formula engine BUILT (lyceum/formula.py, tokenizer/parser/evaluator) + wired into doc_writer (compute_totals). Sprint 1: 23 tests; Sprint 2: 4 tests + runtime proof. Suite 215. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

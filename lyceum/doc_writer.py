@@ -150,6 +150,44 @@ def write_table_xlsx(path: str, title: str, headers: list, rows: list) -> str:
     return path
 
 
+def compute_totals(headers: list, rows: list) -> dict:
+    """Evaluate the SUM total for each numeric column of a table using
+    the spreadsheet formula engine (lyceum/formula.py) — WITHOUT opening
+    Excel. Returns {column_header: total}. Lets the assistant tell the
+    user the real number it just wrote into the .xlsx (openpyxl stores
+    the =SUM() formula but can't calculate it).
+
+    Pure: builds an A1 grid from the rows and asks the engine for each
+    column's SUM. Non-numeric columns are skipped."""
+    if not rows:
+        return {}
+    try:
+        from lyceum.formula import excel, num_to_col
+    except Exception:
+        return {}
+    ncols = max(len(r) for r in rows)
+    first = 2 if headers else 1
+    last = first + len(rows) - 1
+    grid: dict = {}
+    for ri, r in enumerate(rows):
+        for ci in range(ncols):
+            if ci < len(r) and isinstance(r[ci], float):
+                grid[f"{num_to_col(ci + 1)}{first + ri}"] = r[ci]
+    totals: dict = {}
+    for ci in range(ncols):
+        vals = [r[ci] for r in rows if ci < len(r)]
+        if vals and all(isinstance(v, float) for v in vals):
+            col = num_to_col(ci + 1)
+            try:
+                total = excel(f"=SUM({col}{first}:{col}{last})", grid)
+            except Exception:
+                continue
+            name = (headers[ci] if headers and ci < len(headers)
+                    else f"Column {col}")
+            totals[name] = total
+    return totals
+
+
 def write_letter_docx(path: str, title: str, body: str) -> str:
     """Write a real .docx: optional heading + one paragraph per blank-line
     block of the drafted text. Returns the path."""

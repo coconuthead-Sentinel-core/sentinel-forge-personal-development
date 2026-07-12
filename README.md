@@ -36,7 +36,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-188 automated tests cover the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+215 automated tests cover the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, and the FSRS spaced-repetition core — all
@@ -421,6 +421,10 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 - ✅ 🐢/🐇 reading-speed control wired through every voice path
 - ✅ Library 🗃 archive workflow — removals move files to `Books Archive`,
   never the Recycle Bin
+- ✅ 🧮 Spreadsheet formula engine (`lyceum/formula.py`) — a tokenizer →
+  recursive-descent parser → evaluator for Excel-style formulas (SUM,
+  AVERAGE, IF, lookups, A1 ranges); the assistant computes the totals it
+  writes into .xlsx and reports the real numbers
 - ✅ 🧠 Knowledge Harvester — mine any Library book for term/definition
   pairs (checkbox preview, human-approved) straight into the Glossary,
   where the FSRS review deck picks them up: read → harvest → remember
