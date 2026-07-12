@@ -51,6 +51,18 @@ class LiveSourceRegressionTest(unittest.TestCase):
             "constructor-tuple pad regressed:\n" +
             "\n".join(f"  line {f.line}: {f.message}" for f in offenders))
 
+    def test_app_has_no_hardcoded_geometry(self):
+        """Windows must size from winfo_screenwidth/height (Design Law #1) —
+        hardcoded .geometry('WxH') clips the owner's screen. The 4 original
+        offenders now route through _fit_dialog; this locks Rule B at zero."""
+        if not os.path.exists(_APP):
+            self.skipTest("app file not found")
+        offenders = [f for f in lint.scan_file(_APP) if f.rule == "B"]
+        self.assertEqual(
+            offenders, [],
+            "hardcoded geometry regressed (use _fit_dialog / winfo_screen*):\n" +
+            "\n".join(f"  line {f.line}: {f.message}" for f in offenders))
+
 
 if __name__ == "__main__":
     unittest.main()
