@@ -52,3 +52,11 @@
   from the engineering template pack) demonstrates the discipline —
   reusable process assets, per-project instances. That separation is
   itself an SDLC maturity marker worth a paragraph in the paper.
+
+- **2026-07-11 (late) — Spreadsheet as floor plan.** The rebuild pack
+  gained an Excel floor plan: colored cell blocks draw the rooms, and
+  symbol fixtures (🔌 thread seams, 🚿 outputs, 🧊 storage) link to
+  tables naming the exact code home of every outlet and pipe. For a
+  dyscalculic, spatially-thinking owner, a grid the eye can walk
+  through communicates architecture better than prose — accessibility
+  applied to the documentation itself.

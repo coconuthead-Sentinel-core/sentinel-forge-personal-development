@@ -24,3 +24,4 @@ drawing. Together they are the full replacement-cost insurance.
 | 06 | Configuration & Secrets Inventory | Every knob; the no-secrets design |
 | 07 | Deployment & Release Inventory | How builds ship and mirror |
 | 08 | Build Evidence & Signoff | Proof the build is real |
+| 09 | Floor Plan (.xlsx) | The house drawn in Excel: rooms, 🔌 outlets, 🚿 plumbing fixtures, room schedule |
