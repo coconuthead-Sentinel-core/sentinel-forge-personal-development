@@ -80,6 +80,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   title was a large pasted block (e.g. a whole AI reply), the confirm dialog
   grew until its Yes/No buttons left the visible area. It now shows a
   60-character single-line preview of the title.
+- **Topics entries were unaddable/unreadable after the uniformity pass — fixed.**
+  The Topics tab now has a **read/write pane** below the entries list: click an
+  entry to READ its full text (word-wrapped, honoring your A−/A+ size),
+  right-click to **paste** new content, and the **yellow toolbar Save** keeps it
+  (blank lines split a paste into several entries; editing a loaded entry
+  updates it in place, no duplicates).
 - **4 hardcoded window sizes removed** (Explain, Session End, Prompt Library,
   Add-to-topic) — routed through the screen-relative `_fit_dialog` helper. The
   Session-End dialog's `620x680` exceeded the owner's ~617 px effective height

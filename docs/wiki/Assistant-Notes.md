@@ -160,6 +160,16 @@ dashboards.
   box first (`_ftb_inline_input`). README bumped **280→326** + toolbar / panel
   / guardrails features + roadmap ticks. Local scratch (`test_dpi.py`,
   `test_sd.py`) cleared. Suite 326. *(done)*
+- ✅ 2026-07-12 — Topics regression fixed (Shannon: "you should be able to read
+  the text within that section"). The uniformity pass had removed the
+  paste-and-save box, leaving NO way to add or read entry text. Restored as a
+  toolbar-driven **read/write pane** below the entries list (`_topic_compose`):
+  click an entry → loads full text to read (accessibility font honored);
+  right-click paste; yellow Save → `_topics_save_from_toolbar` INSERTs
+  (blank-line split) or UPDATEs the loaded entry, then reloads so it stays
+  readable and re-Save can't duplicate. New: `_on_topic_selected`,
+  `_load_topic_entry_into_pane`, `_topic_compose_clear`,
+  `_select_topic_entry_by_id`. Suite 326. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
