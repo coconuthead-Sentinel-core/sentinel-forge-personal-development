@@ -83,6 +83,7 @@ dashboards.
   mirror to laptop + OneDrive. *(done — this commit)*
 - ✅ 2026-07-11 — Standing: append 1–3 sentences to
   `Whitepaper-Notes.md` on every README/docs touch. *(active habit)*
+- ✅ 2026-07-11 (late) — Create Rebuild-Blueprint.md (house-plans pseudocode seed file for full reconstruction). *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

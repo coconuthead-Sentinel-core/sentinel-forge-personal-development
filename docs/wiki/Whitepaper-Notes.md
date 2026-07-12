@@ -36,3 +36,11 @@
   and action. A development methodology detail for the paper: the
   documentation is not just ABOUT the system — it is part of the
   system''s control loop.
+
+- **2026-07-11 (late) — Rebuild blueprint as insurance.** The project
+  now carries its own reconstruction plans (Rebuild-Blueprint.md):
+  language-portable pseudocode of the foundation, threading circuits,
+  data plumbing, and room-by-room build order with acceptance gates —
+  written after an earlier project WAS lost. Estimated replacement
+  cost drops from months to 8-12 sessions. Documentation as disaster
+  insurance is a paper-worthy practice for solo developers.
