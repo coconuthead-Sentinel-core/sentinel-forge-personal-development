@@ -148,3 +148,13 @@
   in pseudocode (3 proofs / 22 checks incl. malformed-rule safety)
   before any code. The through-line of the whole review series: name the
   textbook construct, implement it purely, prove it, keep it additive.
+
+- **2026-07-12 — ECA engine shipped (Power Automate → automation).** An
+  Event-Condition-Action rule engine (lyceum/automation.py) — the
+  textbook construct under every workflow product — now fires on real
+  app events (a completed focus block) and SUGGESTS actions, never
+  performing them: a pure decision function, the shell + human decide.
+  This completes a four-textbook arc: Excel Bible → formula engine, Word
+  2010 → readability, Copilot → prompt coach, Power Automate → ECA. Four
+  canonical CS kernels, each proven in pseudocode first, each additive
+  and pure. The pattern IS the portfolio thesis.

@@ -18296,6 +18296,37 @@ class BookReader:
         except Exception:
             pass
 
+    # ---- ECA automation runner (lyceum/automation.py) ------------------
+    def _automation_rules(self) -> list:
+        """The active WHEN→THEN rules. One built-in demonstration rule
+        for now; a future editor can add user rules persisted in the DB.
+        Each rule is a plain dict — see lyceum/automation.py."""
+        return [
+            {
+                "name": "suggest marking studied after a real focus block",
+                "trigger": "focus_completed",
+                "conditions": [("minutes", ">=", 25)],
+                "actions": ["suggest:mark_studied"],
+                "enabled": True,
+            },
+        ]
+
+    def _run_automation(self, event: str, facts: dict) -> None:
+        """Fire the PURE ECA engine for an app event, then surface each
+        suggested action to the user. Human-in-the-loop: the engine only
+        decides; nothing is executed automatically. Never raises."""
+        try:
+            from lyceum.automation import evaluate
+            actions = evaluate(event, facts, self._automation_rules())
+        except Exception:
+            return
+        for action in actions:
+            if action == "suggest:mark_studied":
+                mins = int((facts or {}).get("minutes", 0))
+                self.set_status(
+                    f"🤖 Rule: you focused {mins} min — open 🏆 Scoreboard "
+                    "and mark your 'studied' win for today.")
+
     def _srs_mark_scoreboard(self) -> None:
         """First review of the day auto-marks the '🧠 Reviewed my
         flashcards' lead measure on the 🏆 Scoreboard — the Sprint 2
@@ -23306,6 +23337,12 @@ class BookReader:
                 except tk.TclError:
                     pass
                 self.set_status("✅ Focus block complete.")
+                # ECA automation (lyceum/automation.py): a focus block
+                # just finished — let the pure rule engine DECIDE whether
+                # to suggest anything. It never acts; it only suggests.
+                self._run_automation(
+                    "focus_completed",
+                    {"minutes": int(getattr(self, "_focus_block_minutes", 0))})
             elif was:
                 dnd_var.set("")
 
@@ -23325,6 +23362,7 @@ class BookReader:
                 self.set_status("Nothing to focus on — capture an idea first.")
                 return
             self._focus_block_remaining = mins * 60
+            self._focus_block_minutes = mins
             self._dnd_active = True
             dnd_var.set("🔕 Do Not Disturb — single-handle this ONE task to 100%.")
             try:
