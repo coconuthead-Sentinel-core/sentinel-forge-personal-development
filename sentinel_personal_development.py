@@ -16393,36 +16393,59 @@ class BookReader:
                 )
 
     def _prompt_for_text(self, title: str, prompt: str) -> str | None:
-        """Tiny themed text-input dialog. Returns text or None on cancel."""
+        """Themed text-input dialog. Returns text or None on cancel.
+
+        A full-size, resizable window with real title-bar controls
+        (—/▢/✕). NOT transient: `transient()` strips the minimize/
+        maximize buttons on Windows — the recurring trap. The button
+        row is packed at the BOTTOM first so OK/Cancel can never be
+        clipped no matter how the window is sized (the old fixed 150px
+        cut the OK button in half)."""
         dlg = tk.Toplevel(self.root)
         dlg.title(title)
         dlg.configure(bg=BG_DARK)
-        dlg.transient(self.root)
-        dlg.grab_set()
-        dlg.geometry("400x150")
-        tk.Label(dlg, text=prompt, bg=BG_DARK, fg=FG_TEXT,
-                 font=("Segoe UI", 11), padx=14, pady=14).pack(anchor=tk.W)
-        var = tk.StringVar()
-        e = tk.Entry(dlg, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
-                     insertbackground=FG_TEXT, font=("Segoe UI", 11),
-                     relief=tk.FLAT, bd=0)
-        e.pack(fill=tk.X, padx=14, ipady=5)
-        e.focus_set()
+        # sized to the screen, centered, and freely resizable
+        try:
+            sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w, h = min(480, sw - 80), min(220, sh - 120)
+        dlg.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}"
+                     f"+{max(0, (sh - h) // 2 - 40)}")
+        dlg.minsize(320, 170)
+        dlg.grab_set()          # modal input, but keeps its own controls
+
         out = {"v": None}
+
         def ok():
-            out["v"] = var.get(); dlg.destroy()
+            out["v"] = var.get()
+            dlg.destroy()
+
+        # Bottom button row FIRST — reserved before the growing fields,
+        # so it is always on-screen (window-fit law).
         row = tk.Frame(dlg, bg=BG_DARK, padx=14, pady=12)
-        row.pack(fill=tk.X)
+        row.pack(side=tk.BOTTOM, fill=tk.X)
         tk.Button(row, text="OK", command=ok, font=("Segoe UI", 11, "bold"),
                   bg=ACCENT_GREEN, fg="white", activebackground=ACCENT_GREEN,
-                  relief=tk.FLAT, padx=14, pady=6, cursor="hand2", borderwidth=0,
-                  ).pack(side=tk.RIGHT, padx=(6, 0))
+                  relief=tk.FLAT, padx=16, pady=6, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT, padx=(6, 0))
         tk.Button(row, text="Cancel", command=dlg.destroy,
                   font=("Segoe UI", 11, "bold"), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
                   padx=14, pady=6, cursor="hand2", borderwidth=0,
                   ).pack(side=tk.RIGHT)
+
+        tk.Label(dlg, text=prompt, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 11), padx=14,
+                 anchor=tk.W).pack(fill=tk.X, pady=(16, 4))
+        var = tk.StringVar()
+        e = tk.Entry(dlg, textvariable=var, bg=BG_INPUT, fg=FG_TEXT,
+                     insertbackground=FG_TEXT, font=("Segoe UI", 12),
+                     relief=tk.FLAT, bd=0)
+        e.pack(fill=tk.X, padx=14, ipady=6)
+        e.focus_set()
         e.bind("<Return>", lambda _e: ok())
+        dlg.bind("<Escape>", lambda _e: dlg.destroy())
         dlg.wait_window()
         return out["v"]
 
