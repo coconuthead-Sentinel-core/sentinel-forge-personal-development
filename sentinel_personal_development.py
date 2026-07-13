@@ -205,6 +205,18 @@ def _vlog(msg: str) -> None:
     except Exception:
         pass  # logging must never break the app
 
+
+def _norm_speech_logged(raw: str) -> str:
+    """normalize_for_speech + breadcrumb: when normalization CHANGES a chunk,
+    log before -> after (truncated) to voice_debug.log. This is the standing
+    breadcrumb method — a garbled-reading report becomes one log read (what
+    the engine was actually given), not a guessing cycle. Unchanged chunks
+    are not logged, so the file doesn't bloat."""
+    normalized = normalize_for_speech(raw)
+    if normalized != raw:
+        _vlog(f"tts-norm: {raw[:100]!r} -> {normalized[:130]!r}")
+    return normalized
+
 # Audit rubric grade vocabulary (Walkenbach / A1 course pattern).
 AUDIT_GRADES = ("A+", "A", "A−", "B+", "B", "B−",
                 "C+", "C", "C−", "D", "F", "n/a", "")
@@ -2295,7 +2307,7 @@ class BookReader:
             for char_s, char_e, tk_s, tk_e in chunks:
                 if self._ftb_worker_id != current_worker_id or not getattr(self, "_ftb_reading", False):
                     break
-                chunk_text = normalize_for_speech(text[char_s:char_e].strip())
+                chunk_text = _norm_speech_logged(text[char_s:char_e].strip())
                 if not chunk_text:
                     continue
                 
@@ -15353,7 +15365,7 @@ class BookReader:
             for char_s, char_e, tk_s, tk_e in chunks:
                 if not self.is_reading:
                     break
-                chunk_text = normalize_for_speech(text[char_s:char_e].strip())
+                chunk_text = _norm_speech_logged(text[char_s:char_e].strip())
                 if not chunk_text:
                     continue
                 self._highlight_queue.put(("highlight", tk_s, tk_e))
@@ -15445,7 +15457,7 @@ class BookReader:
             for char_s, char_e, tk_s, tk_e in chunks:
                 if not self.is_reading:
                     break
-                chunk_text = normalize_for_speech(text[char_s:char_e].strip())
+                chunk_text = _norm_speech_logged(text[char_s:char_e].strip())
                 if not chunk_text:
                     continue
                 self._highlight_queue.put(("highlight", tk_s, tk_e))

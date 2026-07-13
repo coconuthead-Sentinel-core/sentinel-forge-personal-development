@@ -345,6 +345,15 @@ dashboards.
 
 ## 6. Notes to future self
 
+- **Breadcrumb-first debugging is standing practice (Shannon's order,
+  2026-07-13).** When a control or output "doesn't work" on his screen,
+  the FIRST move is to read (or add) a breadcrumb log at the seam, then
+  diagnose from recorded facts — never guess-and-patch. Existing
+  breadcrumbs: `voice_debug.log` (every voice change / read-aloud /
+  TTS subprocess + `tts-norm:` before→after normalization lines) and
+  `fontsize_debug.log` (every A−/A+ click with sizes) — both in
+  `%LOCALAPPDATA%\SentinelForge\`. This method solved the A−/A+ case in
+  one file read. New user-facing pathways get a breadcrumb at build time.
 - The copy Shannon RUNS is `Desktop\Sentinel-Forge` — after every
   push, pull there, or he sees stale code.
 - His scoreboard slots are full with his own measures — never evict.
