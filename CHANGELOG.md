@@ -11,6 +11,19 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **🧾 Bill Sentinel (Sprint F — the owner's own ask)** — prospective-memory
+  scaffolding for bills. Pure kernel `lyceum/bills.py` (`next_due` with
+  month-end clamping, `classify`, `next_action`) + a Money-hub card and
+  window: every bill shows 🟢 automated / quiet / 🟡 due soon / 🔴 overdue,
+  and ONE next-action line leads the panel (first red, else first amber,
+  else "set up autopay for …"). Actions: add, mark paid, autopay toggle,
+  send an amber/red bill to today's planner, archive (never delete). The
+  goal state is every bill green (autopay) so the app goes quiet —
+  automation and defaults beat remembering (Thaler & Benartzi 2004);
+  the panel says plainly that the app cannot pay bills. Additive `bills`
+  table; 17 tests incl. February clamping and next-action priority.
+  Design decision (reconciled from the blueprint): a bill with no payment
+  history is never called "overdue" — no evidence a cycle was missed.
 - **V2MOM if-then line (Sprint D)** — the goal intake gains one **optional**
   field under Obstacles: *"If <your obstacle> happens, then I will …"*
   (implementation intentions roughly double follow-through — Gollwitzer &

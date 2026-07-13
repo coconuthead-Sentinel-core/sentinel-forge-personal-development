@@ -81,6 +81,7 @@ Each is a behavioral-finance concept turned into a panel. Builders are
 | Hidden Fee Checker | `open_fee_checker`, `_draw_fee_bars` | expense-ratio drag |
 | Critical Mass (decumulation) | `open_critical_mass`, `_years_until_depleted` | safe-withdrawal |
 | Zero-Based / KWINK audit | `_run_zero_based_audit`, `open_subscription_audit` | Tracy sunk-cost cure |
+| Bill Sentinel | `open_bill_sentinel` + pure kernel `lyceum/bills.py` (`classify`, `next_action`) | prospective-memory scaffold; autopay = goal state (Thaler & Benartzi 2004) |
 
 > **Note for maintainers:** the finance suite is the largest contributor to
 > `BookReader`'s method count. If/when the God Object is decomposed, each

@@ -560,6 +560,21 @@ CREATE TABLE IF NOT EXISTS habit_marks (
     PRIMARY KEY (habit_id, day)
 );
 
+-- Bill Sentinel (Sprint F): prospective-memory scaffolding for bills. The
+-- app cannot pay anything — it tracks which bills are AUTOMATED (autopay,
+-- green, silent) and cues the ones that still depend on memory. Rows are
+-- archived, never deleted.
+CREATE TABLE IF NOT EXISTS bills (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL DEFAULT 0,
+    due_day INTEGER NOT NULL DEFAULT 1,      -- 1-31, clamped to month end
+    autopay INTEGER NOT NULL DEFAULT 0,      -- 1 = automated (the goal state)
+    last_paid TEXT,                           -- YYYY-MM-DD of last manual pay
+    archived INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
 -- PERT "back from the future" planner: start from the target date and schedule
 -- every milestone BACKWARD to reveal when each must begin — and what to do today.
 CREATE TABLE IF NOT EXISTS pert_plans (

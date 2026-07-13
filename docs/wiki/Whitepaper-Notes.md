@@ -318,3 +318,12 @@
   Method note for the paper: accessibility review of a shipped UI can be a
   PURE-FUNCTION audit — no screenshots, no judgment calls, just published
   math over the palette constants.
+
+- **2026-07-13 — Bill Sentinel: the quietest screen is the goal.** The
+  bills panel inverts the usual dashboard instinct: its success state is
+  SILENCE — every bill on autopay, one green line, nothing to remember
+  (automation/defaults over memory, Thaler & Benartzi 2004). For the ADHD
+  prospective-memory thesis this is the purest example yet: the feature's
+  KPI is how little the user must attend to it. Also a small honesty
+  artifact: the panel states on its face that the app cannot pay bills —
+  scaffolding, not agency.

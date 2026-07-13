@@ -104,6 +104,7 @@ conventional choice).
 | `smart_contract` / `raises` | Save-More-Tomorrow wedge contract (id=1) + logged raises. |
 | `subscriptions` | Zero-Based / KWINK audit of recurring charges. |
 | `asset_holdings` | Three-Bucket allocation (security\|growth\|dream). |
+| `bills` | Bill Sentinel: `due_day` 1–31 (month-end clamped), `autopay` flag (goal state = 1), `last_paid`, `archived` (never deleted). |
 
 ### Accessibility / voice
 

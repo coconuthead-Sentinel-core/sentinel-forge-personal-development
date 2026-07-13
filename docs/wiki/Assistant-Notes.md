@@ -299,6 +299,18 @@ dashboards.
   noted per classroom-code: used the window's `_field` ScrolledText idiom
   (with the mic hook) instead of a bare Entry — house style. 3 tests
   (old-schema migration, round-trip, optionality). Suite **362**. *(done)*
+- ✅ 2026-07-13 — **Sprint F shipped**: 🧾 Bill Sentinel. Kernel
+  `lyceum/bills.py` (month-end-clamped `next_due`, `classify`,
+  `next_action`) + additive `bills` table + Money-hub card + window (one
+  next-action line, add/mark-paid/autopay-toggle/to-planner/archive,
+  honesty line "this app cannot pay bills"). 17 tests; smoke probe showed
+  RED-first prioritization live. Reconciled decision vs blueprint: no
+  payment history ⇒ never "overdue" (no evidence of a missed cycle).
+  **Deferred, explicitly:** wiring manual bills into the appointments
+  T-60/-30/-15 machinery — that machinery is time-of-day based and bills
+  have only a due DAY; the planner feed (user-in-the-loop "📅 To planner")
+  covers the cue instead. Revisit if Shannon wants timed reminders.
+  Suite **379**. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
