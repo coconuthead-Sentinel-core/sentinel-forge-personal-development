@@ -247,3 +247,34 @@
   recording: this trades a synchronous modal (`value = prompt()`) for an async
   callback (`prompt(on_commit=…)`), so each call site had to be split into
   open-input + commit — a deliberate, tested refactor, not a cosmetic swap.
+- **Self-examination made mechanical: the Job Readiness audit (2026-07-13).**
+  Shannon asked the real question — "what's gonna be real world for a human to
+  get a real world job?" — and the answer became a six-pillar rubric (Story,
+  Proof, Skills, People, Pipeline, Interview) where every 0–4 level is written
+  in plain language and every level below max carries ONE concrete next action.
+  Thesis for the paper: for an ADHD learner, an honest audit only works when
+  the output is a single next move rather than a score — the meter gives the
+  picture, but the "👉 Next move" line is the feature. Same functional-core
+  discipline as always: pure kernel, 15 headless tests, then the Tk shell.
+- **Fact-checking an AI research audit before letting it touch the work
+  (2026-07-13).** Shannon brought an external "evidence-based improvement
+  audit"; the review found it mixed genuine science (Zorzi 2012, Kollins 2020,
+  Gollwitzer 2006) with at least two fabricated citations ("Pijpker 2025",
+  "Cortese 2024 JAMA Psychiatry"), two false premises about this codebase, and
+  buggy sample code. Method for the paper: verify every citation, check every
+  premise against the real code, adopt ideas but never prose or code —
+  the same nothing-ships-unproven rule the kernels live by, applied to
+  research claims. Outcome: a docs honesty pass shipped same-day and three
+  evidence-backed sprints blueprinted in pseudocode (two-lapse streak
+  protocol, WCAG contrast gate, V2MOM if-then line).
+- **The handoff as a deliverable (2026-07-13).** Shannon's consolidation
+  order turned two vetted references (the fact-checked improvement audit and
+  the neurodivergence check-in review) into a third: a desktop-assistant
+  handoff whose first instruction is "re-derive the pseudocode yourself
+  before coding." Thesis for the paper: in a multi-assistant workflow the
+  artifact that transfers is not code but VERIFIED REASONING — pseudocode
+  plus admission rules ("Strict Clinical Science 2026") — so each assistant
+  re-proves the design instead of trusting the last one. Bill Sentinel was
+  queued the same way: prospective-memory scaffolding (automation-tracking +
+  timed cues) specified as evidence first, kernel pseudocode second, code
+  deliberately last.

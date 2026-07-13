@@ -43,6 +43,8 @@ work; it tells you exactly where things stand and what to touch next.
 | [Review — Copilot At Work](Review-CopilotAtWork.md) | Clinical CS review of the M365 Copilot book → what integrates (a prompt-quality analyzer) with proven pseudocode |
 | [Review — Word 2010 book](Review-Word2010Book.md) | Clinical CS review of the Word textbook → what integrates (readability analysis) with proven pseudocode |
 | [Review — Excel 365 Bible](Review-Excel365Bible.md) | Clinical CS review of the Excel Bible → what integrates (a formula engine) with proven pseudocode |
+| [Review — Improvement Audit](Review-ImprovementAudit.md) | Fact-check of the July 2026 external research audit → citation audit, per-item verdicts, sprint blueprint in pseudocode |
+| [Desktop Assistant Handoff](../DESKTOP_ASSISTANT_HANDOFF.md) | Working orders for the desktop Claude: guardrails, sprint queue in pseudocode (B/C/D/F), paperwork duties, real-hardware button audit |
 | [Whitepaper Outline](Whitepaper-Outline.md) | Skeletal outline in standard technical-report form — flesh out one section per sitting |
 | [Session Notes & Handoff](Session-Notes-and-Handoff.md) | Running log for future sessions; current state and next actions |
 

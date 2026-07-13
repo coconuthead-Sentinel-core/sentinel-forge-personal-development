@@ -11,6 +11,31 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Desktop-assistant handoff** (`docs/DESKTOP_ASSISTANT_HANDOFF.md`) — the
+  third reference, distilled from the vetted improvement audit and the
+  2026-07-13 neurodivergence-research check-in: the "Strict Clinical Science
+  2026" admission rule, the sprint queue in pseudocode (two-lapse streak
+  protocol, WCAG contrast gate, V2MOM if-then line, **Bill Sentinel** —
+  prospective-memory scaffolding for bills), the per-sprint paperwork duty,
+  and the real-hardware dead-button audit. README now opens with the
+  guardrails and points the desktop assistant at it.
+
+### Removed
+- Dead code: `_round_rect` / `_ftb_make_font_marker` (the Canvas road-marker
+  A−/A+ that never received clicks; reverted to Buttons on 2026-07-12 and
+  left as dead code since). Pseudocode preserved in `Rebuild-Blueprint.md` §10.
+- **💼 Job Readiness audit** — the real-world job self-examination. A pure
+  kernel (`lyceum/job_readiness.py`) scores six pillars a hiring process
+  actually checks (Story, Proof, Skills, People, Pipeline, Interview) 0–4
+  against plain-language rubrics; readiness is the share of the 24 rubric
+  points, and the **next move** is always the concrete step above the lowest
+  pillar (foundational order breaks ties). Wired into the Planning hub as
+  **💼 Job Ready**: live meter + band badge (🔴 COLD START → 🏆 OFFER READY),
+  per-pillar rubric text that follows the slider, one saved check-in per day
+  (same-day saves replace, history is never deleted), delta vs the previous
+  check-in on save, and slider prefill from the last check. New
+  `job_readiness_checks` table (additive). 15 new tests incl. a
+  `temp_study_db()` round-trip; smoke-tested under a real `mainloop()`.
 - **Continuous Integration** — a GitHub Actions workflow (`.github/workflows/ci.yml`)
   runs `py_compile` and the unit-test suite on every push and pull request to
   `main`, on Python 3.11 and 3.13 (Windows). Automated Verification & Validation
@@ -54,6 +79,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   even for entering text.
 
 ### Changed
+- **Evidence-honesty pass on the README** (from the vetted July 2026 external
+  improvement audit — see the new wiki page
+  `Review-ImprovementAudit.md` for the full fact-check, per-item verdicts,
+  and the Sprint B/C/D pseudocode blueprint). Claims now name their real
+  mechanisms and citations: Vision Board "RAS programming" → goal-priming
+  (Oettingen 2014); 10-Goals "subconscious" → retrieval practice (Roediger &
+  Karpicke 2006); Pay-Yourself-First "refuses" labeled a pre-commitment
+  device (Thaler & Benartzi 2004); All Seasons relabeled the simplified
+  public Robbins mix, a fixed target allocation — not risk parity, not
+  "Dalio's exact"; 5-4-3-2-1 labeled trade-book origin with an
+  implementation-intention mechanism (Gollwitzer 1999); V2MOM attributed to
+  Benioff/Salesforce. `lyceum/legibility.py` docstring adds the real
+  specialized-font null results (Wery & Diliberto 2017; Kuster et al. 2017).
+  Two citations in the source audit were found fabricated and kept OUT.
 - **A− / A+ are real Buttons again (they were dead "empty plugs").** The
   road-marker **Canvas** version did not receive real clicks in the flow-layout
   toolbar — while the traffic-light **Buttons** in the same bar always did. A−/A+

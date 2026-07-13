@@ -8,7 +8,7 @@
 > assistant FOR the assistant; Shannon may drop instructions into §5
 > at any time.
 
-_Last updated: 2026-07-12 (Study-panel uniformity + reading sliders; then DB-isolation guard, design-law linter, /sentinel-sprint skill) · updated by: Claude (Opus 4.8)_
+_Last updated: 2026-07-13 (💼 Job Readiness audit — six-pillar real-world job self-examination, kernel + Planning-hub window) · updated by: Claude_
 
 ---
 
@@ -194,6 +194,56 @@ dashboards.
   (`%LOCALAPPDATA%\SentinelForge\fontsize_debug.log`) so a future "nothing
   happens" report is verifiable on-machine, not guessed. `_ftb_make_font_marker`
   / `_round_rect` left as dead code. Suite 326. *(done)*
+- ✅ 2026-07-13 — Shannon's ask ("what's gonna be real world for a human to get
+  a real world job? … additive, no teardown") → **💼 Job Readiness audit**
+  BUILT via /sentinel-sprint. Pure kernel `lyceum/job_readiness.py` (six
+  pillars: Story/Proof/Skills/People/Pipeline/Interview, 0–4 rubric each;
+  `readiness` → pct+band+badge, `next_moves` weakest-first with foundational
+  tie-break, `compare` deltas, tolerant encode/decode). Additive
+  `job_readiness_checks` table (UNIQUE check_date; same-day save REPLACES —
+  one honest look per day; never deleted). Shell: `open_job_readiness` in the
+  Planning hub (💼 Job Ready, ACCENT_EMERALD) — live meter canvas + band
+  badge, rubric text follows each slider, "👉 Next move" line, save shows
+  delta vs previous check, sliders prefill from last check. Sprint 1: 15
+  tests incl. temp_study_db round-trip; Sprint 2: xvfb mainloop smoke
+  (open → slide → save → resave-replaces → reopen-prefills). Suite 341.
+  Design-law linter green. *(done)*
+- ✅ 2026-07-13 — External improvement audit vetted (see
+  `Review-ImprovementAudit.md`): citations fact-checked (2 fabricated, kept
+  out), premises checked against the real code (2 false), per-item verdicts
+  recorded. **Sprint A shipped**: README evidence-honesty pass (RAS →
+  goal-priming; subconscious → retrieval practice; savings-refusal →
+  pre-commitment; All Seasons → honest "fixed target allocation, simplified
+  public mix"; 5-4-3-2-1 → trade-book + implementation-intention mechanism;
+  V2MOM → Benioff attribution) + legibility.py real font-null-result
+  citations. *(done)*
+- ⏳ 2026-07-13 — QUEUED from the vetted audit (pseudocode ready in
+  `Review-ImprovementAudit.md` §4; run each as a /sentinel-sprint):
+  **Sprint B** two-lapse streak protocol (`lyceum/streaks.py`: first miss =
+  amber self-compassion, second consecutive = red fresh-start prompt; wire
+  into the Never-Miss-Twice banner). **Sprint C** WCAG contrast kernel
+  (`lyceum/wcag.py`) + palette AA test gate — probe the current palette
+  FIRST and show Shannon any failing pair before recoloring anything.
+  **Sprint D** V2MOM "If ⟨obstacle⟩, then I will ⟨action⟩" field (additive
+  column; encouraged, not required). Sprint E (inverse-volatility All
+  Seasons view) is PARKED unless Shannon asks.
+- ✅ 2026-07-13 — Shannon's consolidation order executed: (1) dead code
+  removed (`_round_rect`/`_ftb_make_font_marker`); no empty/stub files
+  found; (2) **`docs/DESKTOP_ASSISTANT_HANDOFF.md` created** — the third
+  reference distilled from Review-ImprovementAudit.md + the check-in
+  review, carrying the "Strict Clinical Science 2026" admission rule, the
+  sprint queue (B streaks / C WCAG / D if-then / **F Bill Sentinel**, all
+  in pseudocode), paperwork duties, and the real-hardware dead-button
+  audit; (3) README opens with the desktop-assistant guardrails;
+  (4) everything merged to `main`, session branch deleted. OneDrive +
+  Desktop mirrors are the DESKTOP assistant's first mechanical step (cloud
+  session cannot reach them). *(done)*
+- ⏳ 2026-07-13 — FOR THE DESKTOP ASSISTANT: follow
+  `docs/DESKTOP_ASSISTANT_HANDOFF.md` §2 — re-derive each queued sprint in
+  your own pseudocode BEFORE coding, then B → C → D → F through the full
+  /sentinel-sprint pipeline; §4 dead-button audit on real hardware
+  (Shannon reports non-working buttons — find, log here, fix). Mirror both
+  clones after every merge.
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

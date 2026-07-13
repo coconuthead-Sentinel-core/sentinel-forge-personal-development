@@ -1968,30 +1968,10 @@ class BookReader:
         self.set_status("💾 ✓ Study notes saved.")
         return True
 
-    def _round_rect(self, cv, x1, y1, x2, y2, r, **kw):
-        """Draw a rounded rectangle on a Canvas (smooth polygon); returns the
-        item id. Gives the A−/A+ markers their road-sign plate shape."""
-        pts = [x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r,
-               x2, y2, x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r,
-               x1, y1 + r, x1, y1]
-        return cv.create_polygon(pts, smooth=True, **kw)
-
-    def _ftb_make_font_marker(self, parent, text: str, direction: int):
-        """One A−/A+ control drawn as a ROAD-MARKER sign: a rounded plate on a
-        Canvas with a big, dyslexia-legible letter. Clicking steps the Study
-        text size and flips the black/white toggle. Returns
-        (canvas, plate_id, text_id)."""
-        W, H = 52, 40
-        cv = tk.Canvas(parent, width=W, height=H, bg=BG_PANEL,
-                       highlightthickness=0, bd=0, cursor="hand2")
-        plate = self._round_rect(cv, 4, 3, W - 4, H - 3, 9,
-                                 fill="#f8fafc", outline="#0f172a", width=2)
-        label = cv.create_text(W // 2, H // 2, text=text,
-                               font=("Segoe UI", 15, "bold"), fill="#0f172a")
-        cv.bind("<Button-1>", lambda _e, d=direction: (
-            self._study_font_step(d),
-            self._ftb_set_font_toggle("dec" if d < 0 else "inc")))
-        return cv, plate, label
+    # (_round_rect / _ftb_make_font_marker removed 2026-07-13: the Canvas
+    #  road-marker A−/A+ never received clicks in the flow toolbar and was
+    #  reverted to real Buttons; the helpers sat as dead code since. The
+    #  pseudocode survives in Rebuild-Blueprint.md §10 if ever wanted back.)
 
     def _ftb_set_font_toggle(self, active: str) -> None:
         """A−/A+ are one black/white toggle: the last-pressed BUTTON is WHITE
@@ -8380,9 +8360,10 @@ class BookReader:
 
     def open_v2mom(self):
         """The 'Why' engine: a goal isn't real until you can say WHY it matters
-        and name what's stopping you. Robbins' V2MOM — Vision, Values, Methods,
-        Obstacles, Measurement — won't let you save until the Why and Obstacles
-        are filled in. Knowing why beats knowing how."""
+        and name what's stopping you. Benioff's V2MOM (the Salesforce planning
+        method) — Vision, Values, Methods, Obstacles, Measurement — won't let
+        you save until the Why and Obstacles are filled in. Knowing why beats
+        knowing how."""
         try:
             self._init_study_db()
         except Exception:
@@ -8788,6 +8769,238 @@ class BookReader:
 
         _refresh_streak()
         entries[0][1].focus_set()
+
+    # ---- Job Readiness audit (real-world job self-examination) --------
+    def _job_ready_last_check(self, before_date=None):
+        """Most recent saved check as (check_date, scores_json, pct) or None.
+        ``before_date`` (YYYY-MM-DD) excludes that day and later — used to
+        find the previous check when comparing against today's save."""
+        try:
+            if before_date:
+                rows = self._db_query(
+                    "SELECT check_date, scores, pct FROM job_readiness_checks "
+                    "WHERE check_date < ? ORDER BY check_date DESC LIMIT 1",
+                    (before_date,))
+            else:
+                rows = self._db_query(
+                    "SELECT check_date, scores, pct FROM job_readiness_checks "
+                    "ORDER BY check_date DESC LIMIT 1")
+        except Exception:
+            rows = []
+        return rows[0] if rows else None
+
+    def open_job_readiness(self):
+        """The real-world job self-examination: six pillars a hiring process
+        actually checks (story, proof, skills, people, pipeline, interview),
+        each scored 0-4 against a cold-honest rubric. The meter and the
+        'next move' update live; one check-in saved per day builds the
+        history that shows whether the search is really moving."""
+        from lyceum import job_readiness as _jr
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_job_ready_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+
+        win = tk.Toplevel(self.root)
+        self._job_ready_win = win
+        win.title("💼 Job Readiness")
+        try:
+            sw = win.winfo_screenwidth(); sh = win.winfo_screenheight()
+        except tk.TclError:
+            sw, sh = 1280, 800
+        w = min(720, max(540, sw - 100)); h = min(680, max(480, sh - 90))
+        x = max(0, (sw - w) // 2); y = max(0, (sh - h) // 2 - 24)
+        win.geometry(f"{w}x{h}+{x}+{y}")
+        win.minsize(540, 480)
+        win.configure(bg=BG_DARK)
+
+        def _close():
+            self._job_ready_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        _BAND_COLOR = {
+            "cold_start": ACCENT_RED, "foundations": ACCENT_ORANGE,
+            "warming_up": ACCENT_GOLD, "in_the_hunt": ACCENT_CYAN,
+            "interview_ready": ACCENT_GREEN, "offer_ready": ACCENT_EMERALD,
+        }
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="💼 Job Readiness", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        badge_var = tk.StringVar()
+        badge_lbl = tk.Label(head, textvariable=badge_var, bg=BG_PANEL,
+                             fg=ACCENT_GOLD, font=("Segoe UI", 11, "bold"))
+        badge_lbl.pack(side=tk.LEFT, padx=(12, 0))
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+
+        tk.Label(win, text="Six things a real hiring process actually checks. "
+                 "Score yourself 0-4 — cold honesty beats a pretty number. "
+                 "The meter and your next move update as you slide.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=w - 40, justify=tk.LEFT, padx=14).pack(
+                     fill=tk.X, pady=(6, 4))
+
+        # bottom save row reserved first (same trick as Daily 10 Goals)
+        srow = tk.Frame(win, bg=BG_DARK, padx=12)
+        srow.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 10))
+        history_var = tk.StringVar()
+        tk.Label(win, textvariable=history_var, bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 9), padx=14, anchor="w").pack(
+                     side=tk.BOTTOM, fill=tk.X, pady=(0, 2))
+
+        # meter: the number needs a picture — a bar filled to pct, band colour
+        meter_wrap = tk.Frame(win, bg=BG_DARK, padx=14)
+        meter_wrap.pack(fill=tk.X, pady=(2, 2))
+        meter = tk.Canvas(meter_wrap, height=22, bg=BG_INPUT,
+                          highlightthickness=0)
+        meter.pack(fill=tk.X)
+        move_var = tk.StringVar()
+        tk.Label(win, textvariable=move_var, bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold"), wraplength=w - 40,
+                 justify=tk.LEFT, padx=14, anchor="w").pack(
+                     fill=tk.X, pady=(2, 4))
+
+        # scrollable pillar rows
+        outer = tk.Frame(win, bg=BG_DARK)
+        outer.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+        canvas = tk.Canvas(outer, bg=BG_DARK, highlightthickness=0)
+        vsb = tk.Scrollbar(outer, command=canvas.yview, width=16)
+        inner = tk.Frame(canvas, bg=BG_DARK)
+        inner.bind("<Configure>",
+                   lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw", width=w - 56)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scales = {}          # pillar key -> tk.Scale
+        rubric_vars = {}     # pillar key -> StringVar with the level text
+
+        def _current_scores():
+            return {k: int(s.get()) for k, s in scales.items()}
+
+        def _redraw(_e=None):
+            sc = _current_scores()
+            pct, band, badge = _jr.readiness(sc)
+            color = _BAND_COLOR.get(band, ACCENT_GOLD)
+            badge_var.set(f"{badge} · {pct}%")
+            badge_lbl.configure(fg=color)
+            mw = max(1, meter.winfo_width())
+            meter.delete("all")
+            meter.create_rectangle(0, 0, mw * pct / 100, 22,
+                                   fill=color, width=0)
+            meter.create_text(mw // 2, 11, text=f"{pct}% ready",
+                              fill=FG_TEXT, font=("Segoe UI", 10, "bold"))
+            moves = _jr.next_moves(sc, k=1)
+            if moves:
+                _key, label, _s, action = moves[0]
+                move_var.set(f"👉 Next move ({label}): {action}")
+            else:
+                move_var.set("🏆 Every pillar maxed — go get the offer.")
+            for key, var in rubric_vars.items():
+                var.set(_jr.RUBRIC[key][int(scales[key].get())])
+        meter.bind("<Configure>", _redraw)
+
+        for key, label, question in _jr.PILLARS:
+            row = tk.Frame(inner, bg=BG_PANEL, padx=10, pady=6,
+                           highlightthickness=1, highlightbackground="#334155")
+            row.pack(fill=tk.X, pady=3)
+            top = tk.Frame(row, bg=BG_PANEL); top.pack(fill=tk.X)
+            tk.Label(top, text=label, bg=BG_PANEL, fg=FG_TEXT,
+                     font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+            tk.Label(top, text=question, bg=BG_PANEL, fg=FG_MUTED,
+                     font=("Segoe UI", 9), wraplength=w - 200,
+                     justify=tk.LEFT).pack(side=tk.LEFT, padx=(10, 0))
+            mid = tk.Frame(row, bg=BG_PANEL); mid.pack(fill=tk.X)
+            sc = tk.Scale(mid, from_=0, to=_jr.MAX_SCORE, orient=tk.HORIZONTAL,
+                          bg=BG_PANEL, fg=FG_TEXT, troughcolor=BG_INPUT,
+                          highlightthickness=0, length=180, showvalue=True,
+                          command=lambda _v: _redraw())
+            sc.pack(side=tk.LEFT)
+            scales[key] = sc
+            rubric_vars[key] = tk.StringVar()
+            tk.Label(mid, textvariable=rubric_vars[key], bg=BG_PANEL,
+                     fg=ACCENT_GOLD, font=("Segoe UI", 9, "italic"),
+                     wraplength=w - 280, justify=tk.LEFT).pack(
+                         side=tk.LEFT, padx=(10, 0))
+
+        def _refresh_history():
+            try:
+                rows = self._db_query(
+                    "SELECT check_date, pct FROM job_readiness_checks "
+                    "ORDER BY check_date DESC LIMIT 4")
+            except Exception:
+                rows = []
+            if rows:
+                history_var.set("📈 History: " + "   ".join(
+                    f"{d} · {p}%" for d, p in rows))
+            else:
+                history_var.set("📈 No check-ins yet — save the first honest "
+                                "look and the history starts here.")
+
+        # prefill from the most recent check-in — the audit continues, it
+        # doesn't restart from zero every time the window opens
+        last = self._job_ready_last_check()
+        if last:
+            for key, val in _jr.decode_scores(last[1]).items():
+                scales[key].set(val)
+
+        saved_var = tk.StringVar(value="")
+        tk.Label(srow, textvariable=saved_var, bg=BG_DARK, fg=ACCENT_GREEN,
+                 font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+
+        def _save():
+            sc = _current_scores()
+            pct = _jr.readiness(sc)[0]
+            today = date.today().strftime("%Y-%m-%d")
+            prev = self._job_ready_last_check(before_date=today)
+            now = datetime.now().isoformat()
+            try:
+                # one honest look per day: a same-day save replaces the row
+                self._db_exec(
+                    "INSERT INTO job_readiness_checks "
+                    "(check_date, scores, pct, note, created_at) "
+                    "VALUES (?,?,?,?,?) "
+                    "ON CONFLICT(check_date) DO UPDATE SET "
+                    "scores=excluded.scores, pct=excluded.pct, "
+                    "created_at=excluded.created_at",
+                    (today, _jr.encode_scores(sc), pct, "", now))
+            except Exception as e:
+                messagebox.showerror("Could not save check-in", str(e),
+                                     parent=win)
+                return
+            msg = f"✓ Saved — {pct}% ready"
+            if prev:
+                delta, _imp, _slip = _jr.compare(
+                    _jr.decode_scores(prev[1]), sc)
+                arrow = "▲ +" if delta > 0 else ("▼ " if delta < 0 else "= ")
+                msg += f"  ({arrow}{delta} since {prev[0]})"
+            saved_var.set(msg)
+            _refresh_history()
+            self.set_status(f"💼 Job-readiness check-in saved: {pct}% ready.")
+
+        tk.Button(srow, text="💾 Save check-in", command=_save,
+                  font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN, fg="white",
+                  activebackground=ACCENT_GREEN, relief=tk.FLAT, padx=16,
+                  pady=6, cursor="hand2", borderwidth=0).pack(side=tk.RIGHT)
+
+        _refresh_history()
+        win.after(50, _redraw)
 
     # ---- ABZ Systems & Checklist Builder (Clear / Tracy) --------------
     def _systems_all(self):
@@ -12023,8 +12236,8 @@ class BookReader:
     # ---- Planning hub (all the planning tools in one panel) -----------
     def open_planning_hub(self):
         """One panel that holds every planning tool — Ideas, Launch, Focus, Why,
-        10 Goals, Systems, Roles, Habits, Backplan, Vision — isolated from the
-        main dashboard. Push a tool to open it."""
+        10 Goals, Systems, Roles, Habits, Backplan, Vision, Job Ready —
+        isolated from the main dashboard. Push a tool to open it."""
         existing = getattr(self, "_planning_win", None)
         if existing is not None:
             try:
@@ -12090,6 +12303,8 @@ class BookReader:
              "Back-from-the-future PERT"),
             ("🌤 Vision", self.open_vision_board, ACCENT_SKY,
              "Vision-board slideshow"),
+            ("💼 Job Ready", self.open_job_readiness, ACCENT_EMERALD,
+             "Six-pillar real-world job audit"),
         ]
 
         grid = tk.Frame(win, bg=BG_DARK, padx=12, pady=4)

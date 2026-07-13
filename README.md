@@ -12,6 +12,26 @@
 
 ---
 
+## ⚑ For the desktop coding assistant (Claude, by Anthropic) — start here
+
+Your working orders live in
+[`docs/DESKTOP_ASSISTANT_HANDOFF.md`](docs/DESKTOP_ASSISTANT_HANDOFF.md).
+Summary of the standing guardrails, set by the owner:
+
+1. **Strict Clinical Science 2026.** Nothing enters this repo without a
+   verified, real citation — fabricated references have already been caught
+   in supplied research material, so check every one yourself. Trade-book
+   ideas are labeled honestly, never called "proven".
+2. **Classroom textbook computer science.** Every feature goes through the
+   [`/sentinel-sprint`](.claude/skills/sentinel-sprint/SKILL.md) pipeline:
+   pure kernel → headless tests green → wire with visible feedback → smoke
+   under a real `mainloop()` → design-law linter → paperwork (CHANGELOG,
+   wiki, whitepaper notes) → merge to `main` → delete the session branch →
+   mirror both clones (Desktop + OneDrive) as exact clones.
+3. **Functional code only.** A button that does nothing is a defect. Before
+   coding anything new, re-derive the queued sprint blueprints
+   (handoff §2) in your own pseudocode, reconcile differences, then build.
+
 ## Engineering & SDLC status
 
 This project follows an **iterative / incremental** software life cycle
@@ -36,7 +56,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-326 automated tests cover the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+341 automated tests cover the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, the FSRS spaced-repetition core, the study-panel
@@ -80,18 +100,22 @@ Beyond reading, the app is a study and focus workstation:
   across sessions.
 - **🌤 Blue-Sky Vision Board** — upload images of the life you want (the exact
   car, the house, the diploma), add captions, and play the **60-second slideshow**
-  — optionally set to your own **WAV music** — to vividly program your reticular
-  activating system (Tracy, Robbins). A daily nudge reminds you to watch it
+  — optionally set to your own **WAV music** — to keep your goals primed and
+  vivid each morning. (Tracy and Robbins call this "programming the reticular
+  activating system"; the measured mechanism is goal-priming and motivation —
+  Oettingen, 2014 — not neural reprogramming.) A daily nudge reminds you to watch it
   before the day begins; play/pause, prev/next, and a countdown included.
 - **🧭 V2MOM "Why" Engine** — knowing *why* beats knowing *how* (Sinek, Robbins).
-  Every major goal is captured through the V2MOM intake — **Vision, Values
+  Every major goal is captured through the V2MOM intake (Marc Benioff's
+  Salesforce planning method) — **Vision, Values
   (your Why), Methods, Obstacles, Measurement** — and the app **won't let you
   save** until you've written your **Why** and named the **Obstacles** in the
   way. Goals you can't justify don't get made.
 - **✍ Daily 10 Goals (spiral notebook)** — Brian Tracy's exercise: each morning
   the app gives you a **blank, numbered list** and you rewrite your top 10 goals
   **from memory, in the present tense** (*"I earn $80,000 as a software
-  engineer."*). Writing them daily programs them into the subconscious; a
+  engineer."*). Daily recall from memory strengthens the goals' hold on your
+  attention — the retrieval-practice effect (Roediger & Karpicke, 2006); a
   🔥 **day-streak** rewards the habit, and it nudges you each morning until it's
   done. (Blank each day on purpose — recalling them is the point.)
 - **🪜 Systems & Checklists (A→B→Z)** — goals set the direction; *systems* get
@@ -159,13 +183,16 @@ Beyond reading, the app is a study and focus workstation:
   *"Do it now!"*: when starting feels impossible, hit it and the screen
   counts down **5 – 4 – 3 – 2 – 1 – GO!** with a beat per second, then drops
   you straight into **Focus Mode** on your #1 task — the activation energy to
-  *move* before your brain talks you out of it.
+  *move* before your brain talks you out of it. (Trade-book technique — no
+  direct trials of the countdown itself; the mechanism matches
+  implementation-intention research, Gollwitzer, 1999.)
 - **💰 Pay Yourself First** — Clason's first law of wealth: *a part of all you
   earn is yours to keep.* Enter a paycheck and the app deducts your savings
   **first** (10%, or start at 1% if money's tight), **locks** it into a
   Financial Independence balance you can't budget away, and only lets you
   allocate the **spendable remainder** across rent, gas, food, etc. — it
-  refuses any budget line that would dip into your savings.
+  refuses any budget line that would dip into your savings — a deliberate
+  pre-commitment device (Thaler & Benartzi's *Save More Tomorrow*, 2004).
 - **🛡 Core Four (Defense Mode)** — when money's tight, strip the budget down
   to the four survival numbers: **Rent · Utilities · Food · Transportation**.
   A bold 2×2 grid checks them against the cash you have — each box turns
@@ -243,12 +270,15 @@ Beyond reading, the app is a study and focus workstation:
   equities, real estate), and **✨ Dream** (strategic splurges). Each bucket shows
   its total and **% of your portfolio** with a share bar; move any holding
   between buckets with → to tune the balance of safety and growth.
-- **🌦 All Seasons Portfolio (Ray Dalio)** — a robo-advisor pre-programmed with
-  Dalio's exact **All-Weather** allocation (**30%** stocks · **40%** long-term
-  bonds · **15%** intermediate bonds · **7.5%** gold · **7.5%** commodities).
-  Enter an amount and it splits it across the mix in a pie chart with dollar
-  figures — a portfolio built to make money in any economic season (historically
-  positive ~85% of years; only −3.93% in the 2008 crash).
+- **🌦 All Seasons Portfolio (Ray Dalio)** — a calculator pre-programmed with
+  the simplified public **All-Weather** mix Robbins published from his Dalio
+  interview (**30%** stocks · **40%** long-term bonds · **15%** intermediate
+  bonds · **7.5%** gold · **7.5%** commodities). Enter an amount and it splits
+  it across the mix in a pie chart with dollar figures. Honest label: this is
+  a **fixed target allocation**, not risk parity — the actual All-Weather
+  fund's weights are proprietary and use leverage; the historical record
+  (positive ~85% of years; −3.93% in 2008) belongs to backtests of the
+  simplified mix.
 - **🏁 Critical Mass (decumulation simulator)** — accumulating is only half the
   climb; you must not outlive your money. It finds your **Critical Mass** (income
   to replace ÷ safe-withdrawal rate — e.g. $40k ÷ 4% = **$1M**, the point where
