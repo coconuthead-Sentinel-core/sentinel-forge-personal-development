@@ -311,6 +311,16 @@ dashboards.
   have only a due DAY; the planner feed (user-in-the-loop "📅 To planner")
   covers the cue instead. Revisit if Shannon wants timed reminders.
   Suite **379**. *(done)*
+- ✅ 2026-07-13 — **`scope-first` skill built and installed** (Shannon's
+  order: "you gotta have a blueprint" — anti-churn guardrail #4). Rule: at
+  project onset, WHILE paperwork is being filled out, a four-part scope
+  statement (in / explicit OUT / acceptance criteria / lifecycle target) +
+  blueprint must exist before any code; scope changes = explicit logged
+  one-liners here in §5. Installed to `.claude/skills/scope-first/` and
+  user-level. Retroactive clause executed: **`docs/SCOPE.md`** baselines
+  THIS project (5–10-yr lifecycle, stdlib-first stack rationale, named
+  structural risk + seam). README guardrail #5 added. Docs-only change;
+  suite re-run green. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
