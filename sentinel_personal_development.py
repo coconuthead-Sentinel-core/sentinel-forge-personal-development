@@ -1451,13 +1451,13 @@ class BookReader:
              "words sound rushed or garbled — slower is also clearer. "
              "Changing it mid-read takes effect from the next sentence."),
             (dec_btn, "A−  Smaller text",
-             "Shrinks the reading text in the Topics, Commentary, and Glossary "
-             "panels one step. It and A+ are one toggle — whichever you pressed "
-             "last is white."),
+             "Shrinks the reading text one step — Topics, Glossary, "
+             "Commentary, Study Notes, and Journal all change together. It "
+             "and A+ are one toggle — whichever you pressed last is white."),
             (inc_btn, "A+  Bigger text",
-             "Enlarges the reading text in those three panels. Press it a few "
-             "times if the words are hard to see; your choice is remembered "
-             "next time you open the app."),
+             "Enlarges the reading text in those same five panels. Press it "
+             "a few times if the words are hard to see; your choice is "
+             "remembered next time you open the app."),
             (_ftb_fmt, "🅰 Formatting preset",
              "Reformats the study panels for how you read best: "
              "OpenDyslexic and extra line spacing for dyslexia, generous "
@@ -3070,7 +3070,12 @@ class BookReader:
         # left out — kept fixed and compact like the Journal list. Scaling the
         # indexes is exactly what blew the Topics/Glossary/Commentary lists up
         # until their text clipped off-screen. Index stays legible; content scales.
-        for attr in ("_glossary_definition_widget", "commentary_area"):
+        # Every prose READING/WRITING surface in the Study workspace scales —
+        # Glossary, Commentary, Study Notes editor, Journal body. (The user
+        # clicked A+ while viewing Study Notes/Journal and saw nothing move:
+        # invisible success reads as broken. Navigation LISTS stay fixed.)
+        for attr in ("_glossary_definition_widget", "commentary_area",
+                     "_study_notes_widget", "_journal_body"):
             w = getattr(self, attr, None)
             if w is not None:
                 try:
