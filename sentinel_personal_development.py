@@ -7113,6 +7113,254 @@ class BookReader:
         _recompute()
         (price_ent if wage0 else wage_ent).focus_set()
 
+    # ---- Bill Sentinel (Sprint F): bills as external memory -------------
+    def _bills_all(self):
+        try:
+            return self._db_query(
+                "SELECT id, name, amount_cents, due_day, autopay, last_paid "
+                "FROM bills WHERE archived=0 ORDER BY autopay, due_day")
+        except Exception:
+            return []
+
+    def _bill_rows_classified(self):
+        """(row, classification) pairs for today, via the pure kernel."""
+        from lyceum import bills as _bills
+        from datetime import date as _date
+        today = _date.today()
+        out = []
+        for (bid, name, cents, due_day, autopay, last_paid) in self._bills_all():
+            lp = None
+            if last_paid:
+                try:
+                    lp = _date.fromisoformat(last_paid[:10])
+                except ValueError:
+                    lp = None
+            b = {"name": name, "autopay": bool(autopay),
+                 "due_day": int(due_day), "last_paid": lp}
+            out.append(((bid, name, cents, due_day, autopay, last_paid),
+                        _bills.classify(b, today), b))
+        return out
+
+    def open_bill_sentinel(self) -> None:
+        """🧾 Bill Sentinel — prospective-memory scaffolding for bills.
+        Goal state: every bill on autopay (green) so the app goes quiet.
+        Honesty: it cannot pay anything; it tracks automation and cues
+        what still depends on memory."""
+        from lyceum import bills as _bills
+        from datetime import date as _date
+        try:
+            self._init_study_db()
+        except Exception:
+            pass
+        existing = getattr(self, "_bills_win", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.lift(); existing.focus_force(); return
+            except tk.TclError:
+                pass
+        win = tk.Toplevel(self.root)
+        self._bills_win = win
+        win.title("🧾 Bill Sentinel")
+        self._fit_dialog(win, 640, 560)
+        win.configure(bg=BG_DARK)
+
+        def _close():
+            self._bills_win = None
+            try:
+                win.destroy()
+            except tk.TclError:
+                pass
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        head = tk.Frame(win, bg=BG_PANEL, padx=14, pady=10); head.pack(fill=tk.X)
+        tk.Label(head, text="🧾 Bill Sentinel", bg=BG_PANEL, fg=FG_TEXT,
+                 font=("Segoe UI", 15, "bold")).pack(side=tk.LEFT)
+        tk.Button(head, text="✕ Close", command=_close,
+                  font=("Segoe UI", 10, "bold"), bg=BG_PANEL, fg=FG_MUTED,
+                  activebackground=ACCENT_RED, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=3, cursor="hand2",
+                  borderwidth=0).pack(side=tk.RIGHT)
+        tk.Label(win, text="This app cannot pay bills — it tracks what is "
+                 "automated and cues what still depends on memory. The goal: "
+                 "every bill green (autopay), so this page goes quiet.",
+                 bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9, "italic"),
+                 wraplength=560, justify=tk.LEFT, padx=14).pack(fill=tk.X,
+                                                                pady=(6, 2))
+        # THE one next action — the single primary line of the whole panel.
+        act_var = tk.StringVar(value="")
+        act_lbl = tk.Label(win, textvariable=act_var, bg=BG_DARK, fg=FG_TEXT,
+                           font=("Segoe UI", 12, "bold"), wraplength=560,
+                           justify=tk.LEFT, padx=14, pady=6)
+        act_lbl.pack(fill=tk.X)
+
+        lb = tk.Listbox(win, bg=BG_INPUT, fg=FG_TEXT,
+                        selectbackground=ACCENT_CYAN, selectforeground="white",
+                        font=("Segoe UI", 11), relief=tk.FLAT, bd=0,
+                        highlightthickness=0, activestyle="none", height=10)
+        lb.pack(fill=tk.BOTH, expand=True, padx=14, pady=(2, 4))
+        self._bills_listbox = lb
+
+        level_fg = {_bills.GREEN: "#22c55e", _bills.OK: FG_MUTED,
+                    _bills.AMBER: "#fbbf24", _bills.RED: "#f87171"}
+
+        def _refresh():
+            rows = self._bill_rows_classified()
+            self._bills_rows = rows
+            lb.delete(0, tk.END)
+            for (row, cls, _b) in rows:
+                amt = f"  (${row[2] / 100:,.2f})" if row[2] else ""
+                lb.insert(tk.END, f" {cls['message']}{amt}")
+            today = _date.today()
+            plain = [b for (_r, _c, b) in rows]
+            action = _bills.next_action(plain, today)
+            act_var.set(f"➡ {action}")
+            reds = sum(1 for (_r, c, _b) in rows if c["level"] == _bills.RED)
+            ambers = sum(1 for (_r, c, _b) in rows if c["level"] == _bills.AMBER)
+            act_lbl.configure(fg=("#f87171" if reds else
+                                  "#fbbf24" if ambers else "#22c55e"))
+
+        def _selected():
+            sel = lb.curselection()
+            if not sel or sel[0] >= len(self._bills_rows):
+                self.set_status("🧾 Select a bill first.")
+                return None
+            return self._bills_rows[sel[0]]
+
+        def _add():
+            dlg = tk.Toplevel(win)
+            dlg.title("➕ Add bill")
+            dlg.configure(bg=BG_DARK)
+            self._fit_dialog(dlg, 420, 300)
+            fields = {}
+            for key, label in (("name", "Bill name:"),
+                               ("amount", "Amount in dollars (optional):"),
+                               ("due", "Due day of the month (1–31):")):
+                tk.Label(dlg, text=label, bg=BG_DARK, fg=FG_TEXT,
+                         font=("Segoe UI", 10, "bold"), anchor=tk.W
+                         ).pack(fill=tk.X, padx=14, pady=(8, 0))
+                e = tk.Entry(dlg, bg=BG_INPUT, fg=FG_TEXT,
+                             insertbackground=FG_TEXT, font=("Segoe UI", 11),
+                             relief=tk.FLAT, bd=0)
+                e.pack(fill=tk.X, padx=14, ipady=4)
+                self._attach_clipboard_menu(e)
+                fields[key] = e
+            auto_var = tk.IntVar(value=0)
+            tk.Checkbutton(dlg, text="⚙ Already on autopay (automated)",
+                           variable=auto_var, bg=BG_DARK, fg=FG_TEXT,
+                           selectcolor=BG_INPUT, activebackground=BG_DARK,
+                           activeforeground=FG_TEXT,
+                           font=("Segoe UI", 10)).pack(anchor=tk.W, padx=14,
+                                                       pady=(8, 0))
+
+            def _save():
+                name = fields["name"].get().strip()
+                if not name:
+                    messagebox.showwarning("Name needed",
+                                           "Give the bill a name first.")
+                    return
+                try:
+                    cents = int(round(float(
+                        fields["amount"].get().strip() or "0") * 100))
+                except ValueError:
+                    cents = 0
+                try:
+                    due = max(1, min(31, int(fields["due"].get().strip())))
+                except ValueError:
+                    messagebox.showwarning("Due day needed",
+                                           "Due day must be a number 1–31.")
+                    return
+                self._db_exec(
+                    "INSERT INTO bills (name, amount_cents, due_day, autopay, "
+                    "created_at) VALUES (?,?,?,?,?)",
+                    (name, cents, due, auto_var.get(),
+                     datetime.now().isoformat()))
+                dlg.destroy()
+                _refresh()
+                self.set_status(f"🧾 ✓ Added bill “{name}”.")
+            tk.Button(dlg, text="💾 Save bill", command=_save,
+                      font=("Segoe UI", 11, "bold"), bg=ACCENT_GREEN,
+                      fg="white", activebackground=ACCENT_GREEN,
+                      relief=tk.FLAT, padx=14, pady=6, cursor="hand2",
+                      borderwidth=0).pack(pady=12)
+            fields["name"].focus_set()
+
+        def _mark_paid():
+            got = _selected()
+            if not got:
+                return
+            (bid, name, *_rest), _cls, _b = got
+            self._db_exec("UPDATE bills SET last_paid=? WHERE id=?",
+                          (date.today().isoformat(), bid))
+            _refresh()
+            self.set_status(f"🧾 ✓ Marked “{name}” paid today.")
+
+        def _toggle_autopay():
+            got = _selected()
+            if not got:
+                return
+            (bid, name, _c, _d, autopay, _lp), _cls, _b = got
+            self._db_exec("UPDATE bills SET autopay=? WHERE id=?",
+                          (0 if autopay else 1, bid))
+            _refresh()
+            self.set_status(f"🧾 ✓ “{name}” autopay "
+                            f"{'OFF' if autopay else 'ON — automated'}.")
+
+        def _to_planner():
+            got = _selected()
+            if not got:
+                return
+            (bid, name, cents, _d, _a, _lp), cls, _b = got
+            if cls["level"] not in ("AMBER", "RED"):
+                self.set_status("🧾 That bill isn't due soon — nothing to plan.")
+                return
+            dstr = date.today().isoformat()
+            title = f"💸 Pay {name}" + (f" (${cents / 100:,.2f})" if cents else "")
+            now = datetime.now().isoformat()
+            try:
+                nxt = self._db_query(
+                    "SELECT COALESCE(MAX(sort_order),-1)+1 FROM planner_tasks "
+                    "WHERE day=?", (dstr,))[0][0]
+                self._db_exec(
+                    "INSERT INTO planner_tasks "
+                    "(day,title,minutes,done,sort_order,created_at,updated_at) "
+                    "VALUES (?,?,?,0,?,?,?)", (dstr, title, 0, nxt, now, now))
+            except Exception as e:
+                messagebox.showerror("Could not add to planner", str(e))
+                return
+            self.set_status(f"📅 ✓ “{title}” added to today's planner.")
+
+        def _archive():
+            got = _selected()
+            if not got:
+                return
+            (bid, name, *_rest), _cls, _b = got
+            if not messagebox.askyesno("Archive bill?",
+                                       f"Archive “{name}”? (Kept in the "
+                                       "database — never deleted.)"):
+                return
+            self._db_exec("UPDATE bills SET archived=1 WHERE id=?", (bid,))
+            _refresh()
+            self.set_status(f"🧾 ✓ Archived “{name}”.")
+
+        btns = tk.Frame(win, bg=BG_DARK, padx=14, pady=8)
+        btns.pack(fill=tk.X, side=tk.BOTTOM)
+
+        def bbtn(text, cmd, color, ink="white"):
+            return tk.Button(btns, text=text, command=cmd,
+                             font=("Segoe UI", 10, "bold"), bg=color, fg=ink,
+                             activebackground=color, relief=tk.FLAT,
+                             padx=10, pady=5, cursor="hand2", borderwidth=0)
+        bbtn("➕ Add bill", _add, ACCENT_GREEN).pack(side=tk.LEFT, padx=(0, 4))
+        bbtn("✓ Mark paid", _mark_paid, ACCENT_CYAN).pack(side=tk.LEFT, padx=4)
+        bbtn("⚙ Autopay on/off", _toggle_autopay,
+             ACCENT_SLATE).pack(side=tk.LEFT, padx=4)
+        bbtn("📅 To planner", _to_planner, ACCENT_AMBER).pack(side=tk.LEFT,
+                                                              padx=4)
+        bbtn("🗄 Archive", _archive, ACCENT_RED).pack(side=tk.LEFT, padx=4)
+
+        _refresh()
+
     # ---- Money Hub (at-a-glance summary of all the money tools) --------
     def _money_snapshot(self) -> dict:
         """Roll up the key numbers from every money tool, for the hub card."""
@@ -7254,6 +7502,16 @@ class BookReader:
             cfv = "Set your survival numbers"
         card("🛡", ACCENT_GREEN, "CORE FOUR (Rent·Utilities·Food·Gas)", cfv,
              self.open_core_four)
+        # 🧾 Bill Sentinel — THE one next action from the pure kernel
+        try:
+            from lyceum import bills as _bills_k
+            from datetime import date as _date
+            plain = [b for (_r, _c, b) in self._bill_rows_classified()]
+            bv = _bills_k.next_action(plain, _date.today())
+        except Exception:
+            bv = "Track your bills — automate them one by one"
+        card("🧾", ACCENT_ORANGE, "BILL SENTINEL (automation beats memory)",
+             bv, self.open_bill_sentinel)
         # ☕ latte
         card("☕", ACCENT_AMBER, "LATTE FACTOR (small leaks this week)",
              f"{_finance.money_fmt(s['latte'])}  →  {_finance.money_fmt(s['latte']*52)}/yr",

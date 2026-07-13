@@ -62,7 +62,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-362 automated tests cover the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+379 automated tests cover the **Bill Sentinel kernel**, the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, the FSRS spaced-repetition core, the study-panel
@@ -251,6 +251,14 @@ Beyond reading, the app is a study and focus workstation:
   run-rate months, Core Four status, this week's leaks, your nearest Dream
   Bucket, and the cooling-off Wishlist — each on a card with a one-tap jump to
   the full tool, so you don't have to open every window to check in.
+- **🧾 Bill Sentinel** — prospective-memory scaffolding for bills: every bill
+  shows **🟢 automated / 🟡 due soon / 🔴 overdue**, and ONE next-action line
+  leads the panel (first red, else first amber, else "set up autopay for …").
+  The goal state is every bill green (autopay) so the page goes **quiet** —
+  automation and defaults beat remembering (Thaler & Benartzi, 2004). Mark
+  paid, toggle autopay, send a due bill to today's planner, archive (never
+  delete). Honesty on its face: the app can't pay bills — it tracks what's
+  automated and cues what isn't.
 - **📈 Save More Tomorrow (raise auto-escalator)** — we hate giving up money we
   have but happily commit *future* money. Sign a one-time contract and, by the
   **Wedge Theory**, **half of every future raise is swept into savings** before
