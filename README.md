@@ -37,6 +37,12 @@ Summary of the standing guardrails, set by the owner:
    never the known neuromyths (learning-styles matching, the 10,000-hour
    rule). Access accommodations are legitimate as access; they are not
    claimed as learning efficacy.
+5. **Scope first — no blueprint, no build.** Per the
+   [`scope-first`](.claude/skills/scope-first/SKILL.md) skill: every project
+   starts with a written scope statement (in-scope, OUT-of-scope, acceptance
+   criteria, lifecycle target) and a blueprint before any code; scope changes
+   are explicit logged decisions, never drift. This project's baseline lives
+   in [`docs/SCOPE.md`](docs/SCOPE.md).
 
 ## Engineering & SDLC status
 

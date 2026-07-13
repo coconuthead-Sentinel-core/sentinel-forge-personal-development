@@ -11,6 +11,17 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`scope-first` skill — the fourth permanent guardrail** (owner's order,
+  2026-07-13): no code until a four-part scope statement (in-scope,
+  explicit OUT-of-scope, acceptance criteria, lifecycle target) and a
+  blueprint exist at project onset; scope changes are explicit logged
+  decisions, never drift ("churn code" is the named failure mode).
+  Anchored to ISO/IEC/IEEE 12207, SWEBOK, IEEE 29148, and Boehm's
+  cost-of-change (1981). Installed project-level and user-level. Per the
+  skill's own retroactive clause, this project's baseline was written:
+  **`docs/SCOPE.md`** — including the 5–10-year lifecycle target, the
+  stdlib-first stack rationale, and the named structural risk (single-file
+  Tk shell) with its documented decomposition seam.
 - **🧾 Bill Sentinel (Sprint F — the owner's own ask)** — prospective-memory
   scaffolding for bills. Pure kernel `lyceum/bills.py` (`next_due` with
   month-end clamping, `classify`, `next_action`) + a Money-hub card and
