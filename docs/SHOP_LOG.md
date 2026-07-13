@@ -31,6 +31,47 @@ Decision: draft | ready_for_review | approved | blocked
 
 ---
 
+### 2026-07-13 (evening) — session close + WORK ORDER filed
+
+- **Proprietor's direction:** vet an external TTS diagnosis (done — half
+  wrong about our code, real defect underneath fixed); make the breadcrumb
+  method standing practice (done); establish the shop log (done); review
+  the December-era `Claude AI` folder for employment relevance (done —
+  read-only); then his call: the next body of work is a **full top-down
+  README audit of every GitHub repo** through the new guardrails — review,
+  don't rebuild — before anything is "handed to the professor."
+- **Evidence:** suite 385 green · mirrors `f9e0e5c`+ · `tts-norm`
+  breadcrumb live · Claude-AI-folder findings logged in session record.
+- **Safety flag raised:** the proprietor's old work-history file contains
+  SSN/DL/references — keep local, never in any repo or synced page.
+  December-era resume language ("5 years hands-on development", personal
+  FastAPI/DevOps skill claims) FAILS the science gate — do not reuse; the
+  honest "designed/directed/validated, AI-assisted" framing stands.
+- **📋 WORK ORDER — PORTFOLIO README AUDIT (queued, opens next session):**
+  - **Scope:** all ~26 GitHub repos. Per repo: top-down README review →
+    clear name, honest claims (science gate), current state, and a
+    **"Skills demonstrated"** framing that is interview-defensible.
+    Review only — NO rebuilding, no feature work.
+  - **Out of scope:** code changes beyond README/docs; renaming
+    `Sentinel-of-sentinel-s-Forge` without the owner's explicit call
+    (hands-off list); any new dashboards.
+  - **Order:** batch 1 = the strong four (Sentinel Forge, Imprint, EARP,
+    strata-console) — these carry the résumé; batch 2 = the reference
+    implementations; batch 3 = concept/template packs (label honestly as
+    concept work). Estimate: 2–3 sessions.
+  - **Acceptance:** each README passes the professor test; portfolio
+    reads truthfully to a hiring manager in under a minute.
+- **Sentinel status:** shakeout continues (proprietor on night shift);
+  v1.0 forecast unchanged (pickup last week of July). WCAG decision still
+  pending (owner, ~10 min).
+- **Next session opens with:** proprietor's shakeout report, then
+  "start the audit" → batch 1.
+
+Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
+Brian Kelley (proprietor)** · Decision: **ready_for_review**
+
+---
+
 ### 2026-07-13 — session close
 
 - **Proprietor's direction today:** pick up the cloud handoff verbatim;
