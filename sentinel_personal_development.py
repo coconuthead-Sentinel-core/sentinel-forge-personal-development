@@ -8327,28 +8327,32 @@ class BookReader:
     def _v2mom_load(self, gid):
         try:
             r = self._db_query(
-                "SELECT vision,values_why,methods,obstacles,measurement,status "
-                "FROM v2mom_goals WHERE id=?", (gid,))
+                "SELECT vision,values_why,methods,obstacles,measurement,status,"
+                "if_then FROM v2mom_goals WHERE id=?", (gid,))
         except Exception:
             r = []
         return r[0] if r else None
 
-    def _v2mom_save(self, gid, vision, why, methods, obstacles, measurement):
+    def _v2mom_save(self, gid, vision, why, methods, obstacles, measurement,
+                    if_then=""):
         now = datetime.now().isoformat()
         if gid:
             try:
                 self._db_exec(
                     "UPDATE v2mom_goals SET vision=?,values_why=?,methods=?,"
-                    "obstacles=?,measurement=?,updated_at=? WHERE id=?",
-                    (vision, why, methods, obstacles, measurement, now, gid))
+                    "obstacles=?,measurement=?,if_then=?,updated_at=? WHERE id=?",
+                    (vision, why, methods, obstacles, measurement, if_then,
+                     now, gid))
             except Exception:
                 pass
             return gid
         try:
             return self._db_exec(
                 "INSERT INTO v2mom_goals (vision,values_why,methods,obstacles,"
-                "measurement,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
-                (vision, why, methods, obstacles, measurement, now, now))
+                "measurement,if_then,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (vision, why, methods, obstacles, measurement, if_then,
+                 now, now))
         except Exception:
             return 0
 
@@ -8461,6 +8465,12 @@ class BookReader:
         _field("methods", "Methods — how will you get there?", height=2)
         _field("obstacles", "Obstacles — what's stopping you right now? (required)",
                required=True, height=2)
+        # Implementation intention (Gollwitzer & Sheeran 2006, d≈0.65):
+        # ENCOURAGED, never required — Shannon's flow stays exactly as loose.
+        _field("if_then",
+               "If-Then plan — “If <your obstacle> happens, then I will …” "
+               "(optional, but a written if-then roughly doubles follow-through)",
+               height=2)
         _field("measurement", "Measurement — how will you know you've arrived?",
                height=2)
 
@@ -8491,6 +8501,7 @@ class BookReader:
             self._v2mom_current_id = gid
             _set("vision", row[0]); _set("why", row[1]); _set("methods", row[2])
             _set("obstacles", row[3]); _set("measurement", row[4])
+            _set("if_then", row[6] if len(row) > 6 else "")
 
         def _new():
             self._v2mom_current_id = None
@@ -8510,7 +8521,8 @@ class BookReader:
                 boxes["why" if not why else "obstacles"].focus_set()
                 return
             gid = self._v2mom_save(self._v2mom_current_id, _get("vision"), why,
-                                   _get("methods"), obstacles, _get("measurement"))
+                                   _get("methods"), obstacles, _get("measurement"),
+                                   if_then=_get("if_then"))
             self._v2mom_current_id = gid
             self.set_status("🧭 Goal saved — anchored to your Why.")
             _refresh_list(select_id=gid)

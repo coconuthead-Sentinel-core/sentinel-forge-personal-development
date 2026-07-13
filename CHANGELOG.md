@@ -11,6 +11,12 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **V2MOM if-then line (Sprint D)** — the goal intake gains one **optional**
+  field under Obstacles: *"If <your obstacle> happens, then I will …"*
+  (implementation intentions roughly double follow-through — Gollwitzer &
+  Sheeran 2006, meta-analytic d≈0.65). Stored in an **additive**
+  `v2mom_goals.if_then` column (old tables migrate in place, data intact);
+  the required fields are unchanged — the flow is not stiffened. 3 tests.
 - **WCAG contrast kernel (Sprint C)** — `lyceum/wcag.py`: the W3C
   relative-luminance and contrast-ratio formulas with the AA thresholds
   (4.5:1 normal / 3:1 large) and an `audit_pairs` findings helper; 9 tests

@@ -292,6 +292,13 @@ dashboards.
   ACCENT_CYAN #0891b2 (3.68 → **#0e7490**), ACCENT_MIC #0ea5e9
   (2.77 → **#0369a1**), ACCENT_AMBER #d97706 (3.19 → **#b45309**).
   All proposals keep the hue, just darker. Suite **359**. *(done)*
+- ✅ 2026-07-13 — **Sprint D shipped**: V2MOM if-then line. Additive
+  `v2mom_goals.if_then` column (PRAGMA-guarded ALTER, old rows intact) +
+  one OPTIONAL field under Obstacles in the intake ("If <obstacle> happens,
+  then I will …"); required fields unchanged. Deviation from blueprint
+  noted per classroom-code: used the window's `_field` ScrolledText idiom
+  (with the mic hook) instead of a bare Entry — house style. 3 tests
+  (old-schema migration, round-trip, optionality). Suite **362**. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
