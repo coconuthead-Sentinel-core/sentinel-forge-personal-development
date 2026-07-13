@@ -244,6 +244,13 @@ dashboards.
   /sentinel-sprint pipeline; §4 dead-button audit on real hardware
   (Shannon reports non-working buttons — find, log here, fix). Mirror both
   clones after every merge.
+- ✅ 2026-07-13 (later) — Shannon's guardrails made PERMANENT as skills:
+  `.claude/skills/clinical-science-gate/` (evidence admission rule) +
+  `.claude/skills/classroom-code/` (textbook-CS/functional-code rule),
+  project-agnostic by design. `docs/HANDOFF_MEMO_2026-07-13.md` created
+  from the session accounting; handoff §6 added — the desktop assistant
+  must install BOTH as user-level mirror skills (all projects) before any
+  other work. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

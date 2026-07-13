@@ -278,3 +278,13 @@
   queued the same way: prospective-memory scaffolding (automation-tracking +
   timed cues) specified as evidence first, kernel pseudocode second, code
   deliberately last.
+- **Guardrails promoted from prose to skills (2026-07-13).** Shannon ordered
+  the two standing rules — Strict Clinical Science 2026 and classroom
+  textbook CS — turned into permanent, project-agnostic assistant skills
+  (`clinical-science-gate`, `classroom-code`), with the desktop assistant
+  instructed to mirror them as user-level skills across all projects.
+  Thesis for the paper: a rule that lives in a README is advice; a rule
+  that loads into every assistant session as a skill is POLICY — the owner
+  encoded his acceptance bar ("would a CS professor bound by a code of
+  ethics sign this?") into the tooling itself, so it survives assistant
+  handoffs, new projects, and context loss.

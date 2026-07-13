@@ -11,6 +11,18 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Permanent guardrail skills** — `.claude/skills/clinical-science-gate/`
+  (the Strict Clinical Science 2026 evidence admission rule: verify every
+  citation, label by evidence tier, no clinical claims) and
+  `.claude/skills/classroom-code/` (textbook-CS SDLC in order, pseudocode
+  first, tests before UI, functional code only, honest reporting). Written
+  project-agnostic — Shannon's standing rules for ALL projects. The desktop
+  handoff (§6) instructs the desktop assistant to install them as
+  user-level mirror skills so they load everywhere.
+- **Handoff memo** (`docs/HANDOFF_MEMO_2026-07-13.md`) — the state-of-the-
+  world accounting: what merged in PR #50, and the six open items that only
+  the desktop machine can finish (branch delete, both mirrors, mirror
+  skills, dead-button audit, sprint queue, vetting the ~202 research files).
 - **Desktop-assistant handoff** (`docs/DESKTOP_ASSISTANT_HANDOFF.md`) — the
   third reference, distilled from the vetted improvement audit and the
   2026-07-13 neurodivergence-research check-in: the "Strict Clinical Science
