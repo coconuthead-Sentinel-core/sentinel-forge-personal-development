@@ -44,7 +44,7 @@ exactly as it was — no orphaned children, no half-deleted records. This is the
 Four parent/child delete units now use it: `budget_items`+`paychecks`,
 `system_steps`+`systems`, `habit_marks`+`habits`, `pert_steps`+`pert_plans`.
 
-## Table catalog (37 tables)
+## Table catalog (54 tables)
 
 Grouped by subsystem. `created_at`/`updated_at` are ISO-8601 text throughout
 (SQLite has no native datetime type — dates are stored as `TEXT`, a deliberate,
@@ -76,6 +76,7 @@ conventional choice).
 | `goals` (+ `baseline`,`target_level`) | Ziglar goal worksheet; tied to a Wheel life-area; `progress` 0–100. |
 | `goal_checkins` | Timestamped 1–10 self-ratings → honest measured progress (not estimated). |
 | `goal_journal` | Daily "rewrite your 10 goals from memory"; one row per day (`entry_date` UNIQUE). |
+| `job_readiness_checks` | Six-pillar job-readiness audit; one check-in per day (`check_date` UNIQUE — same-day save replaces), `scores` JSON 0–4 per pillar, derived `pct`. |
 | `wheel_of_life` | Dated 7-spoke self-assessment snapshots (mental…social, each 1–10). |
 | `systems` / `system_steps` | A→B→Z checklists; steps ordered, `done` flag. |
 | `lead_measures` / `lead_measure_marks` | 4DX lead measures + per-day check-offs (PK = measure+day → streaks). |

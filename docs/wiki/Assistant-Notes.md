@@ -8,7 +8,7 @@
 > assistant FOR the assistant; Shannon may drop instructions into §5
 > at any time.
 
-_Last updated: 2026-07-12 (Study-panel uniformity + reading sliders; then DB-isolation guard, design-law linter, /sentinel-sprint skill) · updated by: Claude (Opus 4.8)_
+_Last updated: 2026-07-13 (💼 Job Readiness audit — six-pillar real-world job self-examination, kernel + Planning-hub window) · updated by: Claude_
 
 ---
 
@@ -194,6 +194,20 @@ dashboards.
   (`%LOCALAPPDATA%\SentinelForge\fontsize_debug.log`) so a future "nothing
   happens" report is verifiable on-machine, not guessed. `_ftb_make_font_marker`
   / `_round_rect` left as dead code. Suite 326. *(done)*
+- ✅ 2026-07-13 — Shannon's ask ("what's gonna be real world for a human to get
+  a real world job? … additive, no teardown") → **💼 Job Readiness audit**
+  BUILT via /sentinel-sprint. Pure kernel `lyceum/job_readiness.py` (six
+  pillars: Story/Proof/Skills/People/Pipeline/Interview, 0–4 rubric each;
+  `readiness` → pct+band+badge, `next_moves` weakest-first with foundational
+  tie-break, `compare` deltas, tolerant encode/decode). Additive
+  `job_readiness_checks` table (UNIQUE check_date; same-day save REPLACES —
+  one honest look per day; never deleted). Shell: `open_job_readiness` in the
+  Planning hub (💼 Job Ready, ACCENT_EMERALD) — live meter canvas + band
+  badge, rubric text follows each slider, "👉 Next move" line, save shows
+  delta vs previous check, sliders prefill from last check. Sprint 1: 15
+  tests incl. temp_study_db round-trip; Sprint 2: xvfb mainloop smoke
+  (open → slide → save → resave-replaces → reopen-prefills). Suite 341.
+  Design-law linter green. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

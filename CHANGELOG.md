@@ -11,6 +11,18 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **💼 Job Readiness audit** — the real-world job self-examination. A pure
+  kernel (`lyceum/job_readiness.py`) scores six pillars a hiring process
+  actually checks (Story, Proof, Skills, People, Pipeline, Interview) 0–4
+  against plain-language rubrics; readiness is the share of the 24 rubric
+  points, and the **next move** is always the concrete step above the lowest
+  pillar (foundational order breaks ties). Wired into the Planning hub as
+  **💼 Job Ready**: live meter + band badge (🔴 COLD START → 🏆 OFFER READY),
+  per-pillar rubric text that follows the slider, one saved check-in per day
+  (same-day saves replace, history is never deleted), delta vs the previous
+  check-in on save, and slider prefill from the last check. New
+  `job_readiness_checks` table (additive). 15 new tests incl. a
+  `temp_study_db()` round-trip; smoke-tested under a real `mainloop()`.
 - **Continuous Integration** — a GitHub Actions workflow (`.github/workflows/ci.yml`)
   runs `py_compile` and the unit-test suite on every push and pull request to
   `main`, on Python 3.11 and 3.13 (Windows). Automated Verification & Validation

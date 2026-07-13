@@ -38,6 +38,7 @@ it persists to. Reviewed 2026-06-27 against `aea48c8`. Search the `open_*` /
 | Blue-Sky Vision Board + slideshow | `open_vision_board`, `_play_vision` | `vision_images` |
 | V2MOM "Why" engine (Why+Obstacles required) | `open_v2mom`, `_v2mom_save` | `v2mom_goals` |
 | Daily 10 Goals (rewrite from memory) | `open_ten_goals`, `_ten_goals_streak` | `goal_journal` |
+| 💼 Job Readiness audit (six-pillar rubric, next-move engine) | `open_job_readiness`, `_job_ready_last_check`, `lyceum/job_readiness.py` | `job_readiness_checks` |
 | Systems & Checklists (A→B→Z) | `open_systems`, `_system_progress`, `_system_next_step` | `systems`, `system_steps` |
 | Back-From-The-Future PERT planner | `open_pert`, `_pert_schedule`, `_draw_pert_timeline` | `pert_plans`, `pert_steps` |
 | Lead vs. Lag (4DX) | `open_lead_lag` | `lead_measures`, `lag_measures`, `lead_measure_marks` |

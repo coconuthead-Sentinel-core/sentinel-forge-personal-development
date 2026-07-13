@@ -668,6 +668,23 @@ CREATE TABLE IF NOT EXISTS goal_checkins (
 );
 CREATE INDEX IF NOT EXISTS idx_goal_checkins ON goal_checkins(goal_id, logged_at);
 
+-- Job-readiness check-ins: one honest self-audit per day across the six
+-- pillars hiring actually checks (lyceum/job_readiness.py). scores is the
+-- kernel's JSON encoding {pillar: 0-4}; pct is the derived 0-100 readiness so
+-- history can be listed without re-deriving. Same-day saves REPLACE the day's
+-- row (one honest look per day); rows are never deleted — the history is the
+-- point.
+CREATE TABLE IF NOT EXISTS job_readiness_checks (
+    id INTEGER PRIMARY KEY,
+    check_date TEXT NOT NULL UNIQUE,   -- YYYY-MM-DD
+    scores TEXT NOT NULL,              -- JSON {pillar_key: 0-4}
+    pct INTEGER NOT NULL,              -- derived readiness 0-100
+    note TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_job_readiness_date
+    ON job_readiness_checks(check_date);
+
 -- ── Spaced-repetition memory training (RELAY-SRS-001, Sprint 1) ────────────
 -- Additive only. Scheduling is delegated to py-fsrs (MIT); lyceum/srs.py is
 -- the sole writer. fsrs_card_json is the single source of truth for scheduler
