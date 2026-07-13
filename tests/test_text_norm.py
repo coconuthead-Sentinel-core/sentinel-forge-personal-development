@@ -68,5 +68,37 @@ class YearReadingTest(unittest.TestCase):
         self.assertEqual(normalize_for_speech("$2000"), "two thousand dollars")
 
 
+class CodeSpanTest(unittest.TestCase):
+    """Backtick code spans are atomic: exempt from English normalization,
+    spoken with the minimal code-reading form (underscore/slash named)."""
+
+    def test_number_inside_code_not_year_expanded(self):
+        # Without protection, 1024 reads as the year "ten twenty-four".
+        self.assertEqual(normalize_for_speech("`1024`"), "1024")
+
+    def test_path_gets_separator_names_only(self):
+        self.assertEqual(normalize_for_speech("`lyceum/text_norm.py`"),
+                         "lyceum slash text underscore norm.py")
+
+    def test_abbrev_not_expanded_inside_code(self):
+        # 'St.' is an abbreviation in prose, a literal token in code.
+        self.assertEqual(normalize_for_speech("`St.py`"), "St.py")
+
+    def test_prose_around_code_still_normalizes(self):
+        self.assertEqual(
+            normalize_for_speech("Dr. Smith wrote `run_all()` in 1999."),
+            "Doctor Smith wrote run underscore all() in nineteen "
+            "ninety-nine.")
+
+    def test_multiple_spans(self):
+        self.assertEqual(normalize_for_speech("`a_b` and `c/d`"),
+                         "a underscore b and c slash d")
+
+    def test_unpaired_backtick_left_alone(self):
+        # An odd backtick is not a span; prose rules apply as before.
+        self.assertEqual(normalize_for_speech("a ` 2nd try"),
+                         "a ` second try")
+
+
 if __name__ == "__main__":
     unittest.main()
