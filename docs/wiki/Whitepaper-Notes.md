@@ -327,3 +327,22 @@
   KPI is how little the user must attend to it. Also a small honesty
   artifact: the panel states on its face that the app cannot pay bills —
   scaffolding, not agency.
+
+- **2026-07-13 — The owner's mission statement (for the paper's opening).**
+  Shannon articulated the project's "why" through a story he watched — a
+  young man written off by public school (autism + case-specific learning
+  disorders), taught by his mother in his safe place at his own pace, GED
+  at 18, now a science professor in Canada. Labeled honestly: an ANECDOTE
+  (n=1), proof of possibility, not a method. But its mechanisms map
+  one-to-one onto the dashboard's evidence-backed machinery: a
+  predictable low-load environment (the fixed toolbar "home base"),
+  fit-the-tool-to-the-brain (the design laws), self-paced multimodal
+  access (TTS/dictation/legibility), spacing and retrieval over years
+  (FSRS), and recovery-first tone (the two-lapse protocol). The paper's
+  claim, in the owner's calibration: software cannot do what that mother
+  did and must never claim to — it can be the safe place that is always
+  available. Scaffolding: glasses for executive function. He also stated
+  the boundary rule in his own words: clinically diagnosed ADHD /
+  dyslexia / dysgraphia / dyscalculia; autism monitored "within reason,
+  within scope, within human limits" — calibrated watching without
+  self-diagnosis, the same posture the science gate enforces in code.
