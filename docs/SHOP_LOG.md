@@ -69,5 +69,14 @@ Decision: draft | ready_for_review | approved | blocked
   stamp. Delivery-readiness estimate at close: ~92% (construction 100%
   of scope; remaining: quiet road test + final paperwork).
 
+**Foreman's forecast (filed 2026-07-13, computed via the dashboard's own
+logic — PERT backward from the v1.0 stamp; exit gate = 5 consecutive
+quiet shakeout days; defect cost ≈ 1 day each, per this week's measured
+turnaround):** best case **~Jul 20** · expected **~Jul 24–27** ·
+conservative **no later than ~Aug 1**, else re-baseline. Customer-facing
+promise: **pickup last week of July.** Sole item waiting on the
+proprietor: the WCAG color decision (~10 min). Sole item waiting on the
+calendar: quiet days.
+
 Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
 Brian Kelley (proprietor)** · Decision: **ready_for_review**
