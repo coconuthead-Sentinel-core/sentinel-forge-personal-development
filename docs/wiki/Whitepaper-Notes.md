@@ -288,3 +288,15 @@
   encoded his acceptance bar ("would a CS professor bound by a code of
   ethics sign this?") into the tooling itself, so it survives assistant
   handoffs, new projects, and context loss.
+- **The middle ground as method (2026-07-13, evening).** A second external
+  framework proposal arrived (six guardrails, four packaging options);
+  review-before-action found it ~70% convergent with the two skills already
+  shipped — independent convergence being itself evidence the rules are
+  real — plus one genuinely new domain. The adopted middle ground: a third
+  skill (learning-science: retrieval practice, spacing, worked examples
+  with fading, expertise reversal, delayed JOL; neuromyths blocked with
+  their debunking citations) and interview-ownership language in Job
+  Readiness. The rejected mechanism matters for the paper: paste-in
+  charters and per-session bootstrap prompts were declined BECAUSE they
+  impose the prospective-memory burden this project exists to remove —
+  the accessibility lens applied to the development process itself.

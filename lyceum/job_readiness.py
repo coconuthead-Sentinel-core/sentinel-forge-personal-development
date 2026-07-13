@@ -85,7 +85,8 @@ NEXT_STEP = {
         "Write 3 sentences: who I am, what I do, what job I want.",
         "Trim the pitch to 30 seconds — cut every apology.",
         "Say the pitch out loud 5 times today.",
-        "Tailor the pitch to one real listener and try it on them.",
+        "Tailor the pitch to one listener — own the work out loud "
+        "('I built…', 'I designed…') and try it on them.",
     ),
     "proof": (
         "Open a blank page and list every job, project, and result you have.",
@@ -113,9 +114,11 @@ NEXT_STEP = {
     ),
     "interview": (
         "Answer 'tell me about yourself' out loud, once, now.",
-        "Answer the top 5 common questions out loud, alone.",
+        "Answer the top 5 common questions out loud, alone — shape each "
+        "as situation → action → result (the STAR format).",
         "Book a mock interview with a real person.",
-        "Do another mock; write down and fix what stung.",
+        "Do another mock; fix what stung. Say 'I implemented…', 'I "
+        "designed…' — answers you can defend without notes.",
     ),
 }
 

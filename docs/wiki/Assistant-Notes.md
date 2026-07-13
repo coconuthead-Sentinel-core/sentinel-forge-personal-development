@@ -251,6 +251,22 @@ dashboards.
   from the session accounting; handoff §6 added — the desktop assistant
   must install BOTH as user-level mirror skills (all projects) before any
   other work. *(done)*
+- ✅ 2026-07-13 (evening) — External "Guardrail Framework" proposal
+  reviewed at Shannon's request (planning first, no action), then the
+  approved middle ground built verbatim: (1) **`learning-science` skill**
+  — third permanent guardrail; admitted techniques with verified canonical
+  citations (Kalyuga 2003 and Macnamara 2014 re-verified by search this
+  session), neuromyths blocked, access-vs-efficacy distinction encoded;
+  (2) **Job Readiness Story/Interview steps** now teach ownership language
+  + STAR framing (kernel text only; rubric-shape tests unchanged, suite
+  339 green); (3) handoff §6 mirrors all three skills + verbatim-
+  concatenation fallback for surfaces without skills (single source of
+  truth, no drift); README guardrail #4 added. REJECTED from the
+  proposal, on the record: paste-in charters / per-session bootstrap
+  prompts as the primary mechanism (prospective-memory burden — skills
+  load automatically), six vague guardrails over three enforceable ones,
+  and unverifiable claims ("interview-safe", "Microsoft's expectations").
+  *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

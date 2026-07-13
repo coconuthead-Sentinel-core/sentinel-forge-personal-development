@@ -31,6 +31,12 @@ Summary of the standing guardrails, set by the owner:
 3. **Functional code only.** A button that does nothing is a defect. Before
    coding anything new, re-derive the queued sprint blueprints
    (handoff §2) in your own pseudocode, reconcile differences, then build.
+4. **Evidence-based learning only.** Study/review features and teaching use
+   the [`learning-science`](.claude/skills/learning-science/SKILL.md) skill:
+   retrieval practice, spacing (FSRS), worked examples with fading — and
+   never the known neuromyths (learning-styles matching, the 10,000-hour
+   rule). Access accommodations are legitimate as access; they are not
+   claimed as learning efficacy.
 
 ## Engineering & SDLC status
 
