@@ -10,6 +10,15 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **A− / A+ looked like "nonfunctional plugs" — they were working invisibly.**
+  The breadcrumb log proved every click fired (16→32pt), but only three
+  surfaces scaled (Glossary / Commentary / Topics pane) — a user watching
+  Study Notes or the Journal saw nothing move, and the size silently pinned
+  at the 32pt ceiling. Fix: **Study Notes editor and Journal body now scale
+  too** (all five prose surfaces move together; navigation lists stay
+  fixed), tour text updated, and the stuck persisted size was reset.
+
 ### Added
 - **`scope-first` skill — the fourth permanent guardrail** (owner's order,
   2026-07-13): no code until a four-part scope statement (in-scope,

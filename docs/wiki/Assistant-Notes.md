@@ -321,6 +321,15 @@ dashboards.
   THIS project (5–10-yr lifecycle, stdlib-first stack rationale, named
   structural risk + seam). README guardrail #5 added. Docs-only change;
   suite re-run green. *(done)*
+- ✅ 2026-07-13 — A−/A+ "dead plugs" report RESOLVED by the breadcrumb log
+  (fontsize_debug.log): every click fired, 16→32pt, pane font really
+  changed — but only Glossary/Commentary/Topics-pane scaled, so watching
+  Study Notes/Journal showed nothing (invisible success = broken), and the
+  size pinned at the 32pt ceiling. Fix: `_study_notes_widget` +
+  `_journal_body` added to `_apply_study_legibility` (5 prose surfaces
+  scale together; lists stay fixed); tour updated; persisted size reset
+  28→16. LESSON: a scaling control must visibly affect the surface the
+  user is LOOKING AT, or scope the control to the active tab. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
