@@ -340,6 +340,16 @@ dashboards.
   slash named). Citation check: Sproat 2001 + Jurafsky & Martin real; the
   proposal's "WCAG 2.2 non-visual readability guidelines" is not a real
   section name. +6 tests (21 in module). Suite **385**. *(done)*
+- ✅ 2026-07-13 — **Shop Log established** (`docs/SHOP_LOG.md`): a daily
+  open/close engineering logbook with both parties' input + signoff,
+  adapted from the Codex `08_BUILD_EVIDENCE_AND_SIGNOFF_CHECKLIST` per the
+  Template Library Policy (filled copies live in the PROJECT, never the
+  Codex). Vetted as academically correct (engineering-notebook practice;
+  ISO/IEC/IEEE 12207 records-keeping). HONEST FINDING: the Paperwork
+  folder contains NO daily-session template — the signoff checklist is the
+  closest ancestor; the daily cadence was created here, in-project.
+  First close-of-session entry written for 2026-07-13. Standing duty: the
+  engineer writes a close entry each working session. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
