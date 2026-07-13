@@ -12,6 +12,12 @@ Evidence base (the presets are not arbitrary):
     plain sans-serif faces at a larger size with increased spacing
     measurably improve dyslexic reading; OpenDyslexic is the owner's
     stated preference and is demoted-to-fallback only when absent.
+    Later controlled studies found NO objective reading benefit for
+    specialized dyslexia fonts over spacing-matched standard fonts —
+    Wery & Diliberto (Annals of Dyslexia, 2017, OpenDyslexic) and
+    Kuster et al. (Annals of Dyslexia, 2017, Dyslexie) — so the size
+    and spacing levers below carry the evidence; the font choice is
+    honored as personal comfort, which is its own valid outcome.
   * British Dyslexia Association *Dyslexia Style Guide* (2023): 12–14pt
     minimum, 1.5× line spacing, avoid dense blocks — encoded as
     line-leading (Tk ``spacing1``/``spacing3``) and ``wrap=word``.

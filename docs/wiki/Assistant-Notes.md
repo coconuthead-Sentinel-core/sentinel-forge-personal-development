@@ -208,6 +208,25 @@ dashboards.
   tests incl. temp_study_db round-trip; Sprint 2: xvfb mainloop smoke
   (open → slide → save → resave-replaces → reopen-prefills). Suite 341.
   Design-law linter green. *(done)*
+- ✅ 2026-07-13 — External improvement audit vetted (see
+  `Review-ImprovementAudit.md`): citations fact-checked (2 fabricated, kept
+  out), premises checked against the real code (2 false), per-item verdicts
+  recorded. **Sprint A shipped**: README evidence-honesty pass (RAS →
+  goal-priming; subconscious → retrieval practice; savings-refusal →
+  pre-commitment; All Seasons → honest "fixed target allocation, simplified
+  public mix"; 5-4-3-2-1 → trade-book + implementation-intention mechanism;
+  V2MOM → Benioff attribution) + legibility.py real font-null-result
+  citations. *(done)*
+- ⏳ 2026-07-13 — QUEUED from the vetted audit (pseudocode ready in
+  `Review-ImprovementAudit.md` §4; run each as a /sentinel-sprint):
+  **Sprint B** two-lapse streak protocol (`lyceum/streaks.py`: first miss =
+  amber self-compassion, second consecutive = red fresh-start prompt; wire
+  into the Never-Miss-Twice banner). **Sprint C** WCAG contrast kernel
+  (`lyceum/wcag.py`) + palette AA test gate — probe the current palette
+  FIRST and show Shannon any failing pair before recoloring anything.
+  **Sprint D** V2MOM "If ⟨obstacle⟩, then I will ⟨action⟩" field (additive
+  column; encouraged, not required). Sprint E (inverse-volatility All
+  Seasons view) is PARKED unless Shannon asks.
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

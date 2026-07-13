@@ -66,6 +66,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
   even for entering text.
 
 ### Changed
+- **Evidence-honesty pass on the README** (from the vetted July 2026 external
+  improvement audit — see the new wiki page
+  `Review-ImprovementAudit.md` for the full fact-check, per-item verdicts,
+  and the Sprint B/C/D pseudocode blueprint). Claims now name their real
+  mechanisms and citations: Vision Board "RAS programming" → goal-priming
+  (Oettingen 2014); 10-Goals "subconscious" → retrieval practice (Roediger &
+  Karpicke 2006); Pay-Yourself-First "refuses" labeled a pre-commitment
+  device (Thaler & Benartzi 2004); All Seasons relabeled the simplified
+  public Robbins mix, a fixed target allocation — not risk parity, not
+  "Dalio's exact"; 5-4-3-2-1 labeled trade-book origin with an
+  implementation-intention mechanism (Gollwitzer 1999); V2MOM attributed to
+  Benioff/Salesforce. `lyceum/legibility.py` docstring adds the real
+  specialized-font null results (Wery & Diliberto 2017; Kuster et al. 2017).
+  Two citations in the source audit were found fabricated and kept OUT.
 - **A− / A+ are real Buttons again (they were dead "empty plugs").** The
   road-marker **Canvas** version did not receive real clicks in the flow-layout
   toolbar — while the traffic-light **Buttons** in the same bar always did. A−/A+

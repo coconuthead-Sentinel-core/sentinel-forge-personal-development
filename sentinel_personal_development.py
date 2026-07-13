@@ -8380,9 +8380,10 @@ class BookReader:
 
     def open_v2mom(self):
         """The 'Why' engine: a goal isn't real until you can say WHY it matters
-        and name what's stopping you. Robbins' V2MOM — Vision, Values, Methods,
-        Obstacles, Measurement — won't let you save until the Why and Obstacles
-        are filled in. Knowing why beats knowing how."""
+        and name what's stopping you. Benioff's V2MOM (the Salesforce planning
+        method) — Vision, Values, Methods, Obstacles, Measurement — won't let
+        you save until the Why and Obstacles are filled in. Knowing why beats
+        knowing how."""
         try:
             self._init_study_db()
         except Exception:
