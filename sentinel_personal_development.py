@@ -10103,21 +10103,30 @@ class BookReader:
                              if s.startswith(m.strftime("%Y-%m")))
             stat_var.set(f"🔥 {cur}-day streak   ·   🏆 best {best}   ·   "
                          f"{month_done} this month")
+            # Two-lapse protocol (lyceum.streaks): ONE missed day is an amber
+            # rest-day encouragement, never shame; only a SECOND consecutive
+            # miss escalates to the red fresh-start prompt with an exact time.
+            from lyceum import streaks as _streaks
             done_today = today.isoformat() in dates
             yest = (today - timedelta(days=1))
+            dby = (today - timedelta(days=2))
             yest_miss = (yest >= created and yest.isoformat() not in dates)
-            if done_today:
-                banner.configure(text="✅ Done today. The chain grows.", fg="#22c55e")
+            dby_miss = (dby >= created and dby.isoformat() not in dates)
+            state = _streaks.classify_lapse(done_today, yest_miss, dby_miss)
+            text, level = _streaks.lapse_message(state, cur, best)
+            level_fg = {_streaks.GREEN: "#22c55e", _streaks.OK: FG_MUTED,
+                        _streaks.AMBER: "#fbbf24", _streaks.RED: "#f87171"}
+            banner.configure(text=text, fg=level_fg.get(level, FG_MUTED))
+            if state == "done_today":
                 btn_today.configure(text="✓ Done — undo today",
                                     bg=ACCENT_SLATE, activebackground=ACCENT_SLATE)
-            elif yest_miss:
-                banner.configure(text="⚠ You missed yesterday — NEVER MISS TWICE. "
-                                 "Do it today and save the chain.", fg="#f87171")
-                btn_today.configure(text="✅ Don't miss twice — do it!",
+            elif state == "first_miss":
+                btn_today.configure(text="✅ Do it today — chain continues",
+                                    bg="#d97706", activebackground="#d97706")
+            elif state == "recovery":
+                btn_today.configure(text="✅ Fresh start — I did it today!",
                                     bg=ACCENT_RED, activebackground=ACCENT_RED)
             else:
-                banner.configure(text="Keep the chain alive — green dot today.",
-                                 fg=FG_MUTED)
                 btn_today.configure(text="✅ I did it today!",
                                     bg=ACCENT_GREEN, activebackground=ACCENT_GREEN)
             btn_today.configure(
