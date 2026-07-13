@@ -11,6 +11,39 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`learning-science` skill** (`.claude/skills/learning-science/`) — the
+  third permanent guardrail, from the vetted middle ground of the external
+  framework proposal: study/review features and teaching use only
+  techniques with real empirical support — retrieval practice (Roediger &
+  Karpicke 2006; Dunlosky et al. 2013), spacing via FSRS (Cepeda et al.
+  2006), worked examples with fading (Atkinson et al. 2000), expertise
+  reversal (Kalyuga et al. 2003), delayed judgment-of-learning (Nelson &
+  Narens 1990) — and known neuromyths are blocked with their debunking
+  citations (learning-styles matching, Pashler et al. 2008; the
+  10,000-hour rule, Macnamara et al. 2014). Includes the
+  access-vs-efficacy distinction: accommodations are legitimate as access
+  and are never claimed as learning outcomes. Handoff §6 now mirrors all
+  THREE skills and specifies the no-drift fallback (bootstrap prompts are
+  generated verbatim from the SKILL.md files, never re-summarized).
+- **Interview-ownership framing in Job Readiness** — the Story and
+  Interview pillar next-steps now teach defensible ownership language
+  ("I built…", "I implemented…", answers in situation → action → result
+  form) so practice matches what a candidate must say in the room.
+  Adopted from the same proposal's career guardrail; the rejected parts
+  (paste-in charters, per-session bootstrap prompts as the primary
+  mechanism) are on the record in the session notes.
+- **Permanent guardrail skills** — `.claude/skills/clinical-science-gate/`
+  (the Strict Clinical Science 2026 evidence admission rule: verify every
+  citation, label by evidence tier, no clinical claims) and
+  `.claude/skills/classroom-code/` (textbook-CS SDLC in order, pseudocode
+  first, tests before UI, functional code only, honest reporting). Written
+  project-agnostic — Shannon's standing rules for ALL projects. The desktop
+  handoff (§6) instructs the desktop assistant to install them as
+  user-level mirror skills so they load everywhere.
+- **Handoff memo** (`docs/HANDOFF_MEMO_2026-07-13.md`) — the state-of-the-
+  world accounting: what merged in PR #50, and the six open items that only
+  the desktop machine can finish (branch delete, both mirrors, mirror
+  skills, dead-button audit, sprint queue, vetting the ~202 research files).
 - **Desktop-assistant handoff** (`docs/DESKTOP_ASSISTANT_HANDOFF.md`) — the
   third reference, distilled from the vetted improvement audit and the
   2026-07-13 neurodivergence-research check-in: the "Strict Clinical Science
