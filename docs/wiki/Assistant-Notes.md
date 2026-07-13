@@ -267,6 +267,21 @@ dashboards.
   load automatically), six vague guardrails over three enforceable ones,
   and unverifiable claims ("interview-safe", "Microsoft's expectations").
   *(done)*
+- ✅ 2026-07-13 — Desktop pickup of the cloud handoff. PR #52 (memo) merged
+  (CI green both Pythons); session branch `claude/…-j10gax` confirmed deleted;
+  all three copies at parity; **three guardrail skills mirrored user-level**
+  (`~/.claude/skills/`: clinical-science-gate, classroom-code,
+  learning-science) and confirmed loading. **Dead-button audit (headless
+  half): 0 Buttons without a command or click binding** across the dashboard
+  + study workspace (static probe); real-display half awaits Shannon's
+  reports. *(done)*
+- ✅ 2026-07-13 — **Sprint B shipped**: two-lapse streak protocol.
+  `lyceum/streaks.py` (classify_lapse + lapse_message) + 9 tests incl. a
+  shame-free-language gate; Never-Miss-Twice banner rewired (one miss →
+  AMBER encouragement; two consecutive → RED fresh-start + exact-time ask).
+  Pseudocode re-derived per classroom-code before building; smoke probe
+  showed the live RED banner on a seeded two-miss habit. Suite **350**.
+  *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

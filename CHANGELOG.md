@@ -11,6 +11,15 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Two-lapse streak protocol (Sprint B)** — `lyceum/streaks.py`, a pure
+  kernel behind the 📅 Never Miss Twice banner. ONE missed day is now an
+  **amber rest-day encouragement** ("a rest day, not a broken chain" —
+  self-compassion speeds lapse recovery, Neff 2003); only a **second
+  consecutive miss** escalates to the **red fresh-start prompt** that asks
+  for an exact time (fresh-start effect, Dai/Milkman/Riis 2014;
+  implementation intentions, Gollwitzer & Sheeran 2006). Previously the
+  banner went red on ANY yesterday-miss. 9 tests incl. a shame-free-language
+  gate on the amber message.
 - **`learning-science` skill** (`.claude/skills/learning-science/`) — the
   third permanent guardrail, from the vetted middle ground of the external
   framework proposal: study/review features and teaching use only

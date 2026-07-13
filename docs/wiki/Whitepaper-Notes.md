@@ -300,3 +300,12 @@
   charters and per-session bootstrap prompts were declined BECAUSE they
   impose the prospective-memory burden this project exists to remove —
   the accessibility lens applied to the development process itself.
+
+- **2026-07-13 — Two-lapse protocol: tone as an engineering artifact.** The
+  Never-Miss-Twice banner was rewired through a pure kernel
+  (lyceum/streaks.py) so ONE missed day speaks compassion (amber) and only
+  two consecutive misses trigger the red fresh-start-plus-exact-time
+  prompt — with a UNIT TEST that gates the amber message for shame-free
+  language. For the paper: when the evidence says self-compassion speeds
+  lapse recovery (Neff 2003), message TONE becomes a testable requirement,
+  not copywriting — the first test in the codebase that asserts kindness.
