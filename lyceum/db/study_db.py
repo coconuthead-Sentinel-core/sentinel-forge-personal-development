@@ -489,6 +489,7 @@ CREATE TABLE IF NOT EXISTS v2mom_goals (
     values_why TEXT NOT NULL DEFAULT '',     -- the WHY (required to save)
     methods TEXT NOT NULL DEFAULT '',
     obstacles TEXT NOT NULL DEFAULT '',      -- required to save
+    if_then TEXT NOT NULL DEFAULT '',        -- optional implementation intention
     measurement TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active',    -- active | done | parked
     created_at TEXT NOT NULL,
@@ -779,6 +780,16 @@ def init_study_db() -> None:
                     con.execute(
                         f"ALTER TABLE goals ADD COLUMN {col} "
                         "INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.Error:
+            pass
+        # Additive migration: V2MOM if-then plan line (implementation
+        # intentions — Gollwitzer & Sheeran 2006). Optional, never required.
+        try:
+            have = {r[1] for r in con.execute(
+                "PRAGMA table_info(v2mom_goals)").fetchall()}
+            if "if_then" not in have:
+                con.execute("ALTER TABLE v2mom_goals ADD COLUMN if_then "
+                            "TEXT NOT NULL DEFAULT ''")
         except sqlite3.Error:
             pass
         con.commit()
