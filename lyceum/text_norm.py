@@ -113,34 +113,64 @@ def _year_to_words(y: int) -> str:
     return _int_to_words(hi) + " " + _int_to_words(lo)
 
 
+# Backtick-delimited inline code spans. Code is NOT English prose: running
+# the abbreviation/number/year rules over `lyceum/text_norm.py` or `1024`
+# garbles it ("ten twenty-four"). Standard TTS text-analysis practice is to
+# treat code spans as atomic tokens exempt from linguistic normalization
+# (Sproat et al. 2001, "Normalization of non-standard words"; Jurafsky &
+# Martin, ch. on speech synthesis front ends).
+_CODE_SPAN = re.compile(r"`([^`\n]+)`")
+
+
+def _normalize_code_span(code: str) -> str:
+    """Minimal, stable spoken form for an inline code span: name the two
+    separators a listener can't hear, leave everything else verbatim, and
+    skip ALL English expansion (no abbreviations, numbers, or years)."""
+    return (code.replace("_", " underscore ")
+                .replace("/", " slash ")
+                .strip())
+
+
+def _normalize_prose(s: str) -> str:
+    """The English-text pipeline (abbrev/money/percent/ordinal/year/number)."""
+    for abbr, full in _ABBREV.items():
+        s = s.replace(abbr, full)
+    # $1,234.50  ->  dollars (and cents).  Do money before bare numbers.
+    s = re.sub(r"\$(\d[\d,]*)(\.\d{1,2})?", _money, s)
+    # 50%  ->  fifty percent
+    s = re.sub(r"(\d[\d,]*(?:\.\d+)?)\s*%",
+               lambda m: _decimal_to_words(m.group(1)) + " percent", s)
+    # 1st / 2nd / 21st  ->  ordinals
+    s = re.sub(r"\b(\d+)(?:st|nd|rd|th)\b",
+               lambda m: _ordinalize(_int_to_words(int(m.group(1)))), s)
+    # Four-digit calendar years read naturally (1999 -> "nineteen ninety-
+    # nine", not "one thousand nine hundred ninety-nine"). Bounded 1000-2099
+    # to limit false positives — a standard TTS normalization trade-off.
+    s = re.sub(r"\b(1\d{3}|20\d{2})\b",
+               lambda m: _year_to_words(int(m.group(1))), s)
+    # remaining bare numbers / decimals
+    s = re.sub(r"\b\d[\d,]*(?:\.\d+)?\b",
+               lambda m: _decimal_to_words(m.group(0)), s)
+    return s
+
+
 def normalize_for_speech(text: str) -> str:
     """Expand numbers/currency/percents/ordinals/abbreviations for TTS.
 
-    Returns a speakable version of ``text``. Never raises: any unexpected input
+    Backtick code spans are treated as ATOMIC: exempt from the English
+    rules, spoken with a minimal code-reading form instead. Returns a
+    speakable version of ``text``. Never raises: any unexpected input
     yields the original string so a reading session is never interrupted.
     """
     try:
         if not text:
             return text or ""
-        s = text
-        for abbr, full in _ABBREV.items():
-            s = s.replace(abbr, full)
-        # $1,234.50  ->  dollars (and cents).  Do money before bare numbers.
-        s = re.sub(r"\$(\d[\d,]*)(\.\d{1,2})?", _money, s)
-        # 50%  ->  fifty percent
-        s = re.sub(r"(\d[\d,]*(?:\.\d+)?)\s*%",
-                   lambda m: _decimal_to_words(m.group(1)) + " percent", s)
-        # 1st / 2nd / 21st  ->  ordinals
-        s = re.sub(r"\b(\d+)(?:st|nd|rd|th)\b",
-                   lambda m: _ordinalize(_int_to_words(int(m.group(1)))), s)
-        # Four-digit calendar years read naturally (1999 -> "nineteen ninety-
-        # nine", not "one thousand nine hundred ninety-nine"). Bounded 1000-2099
-        # to limit false positives — a standard TTS normalization trade-off.
-        s = re.sub(r"\b(1\d{3}|20\d{2})\b",
-                   lambda m: _year_to_words(int(m.group(1))), s)
-        # remaining bare numbers / decimals
-        s = re.sub(r"\b\d[\d,]*(?:\.\d+)?\b",
-                   lambda m: _decimal_to_words(m.group(0)), s)
-        return s
+        parts = _CODE_SPAN.split(text)
+        # re.split with one capture group alternates prose / code / prose ...
+        out = []
+        for i, seg in enumerate(parts):
+            out.append(_normalize_code_span(seg) if i % 2
+                       else _normalize_prose(seg))
+        return "".join(out)
     except Exception:
         return text

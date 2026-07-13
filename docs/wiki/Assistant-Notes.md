@@ -330,6 +330,16 @@ dashboards.
   scale together; lists stay fixed); tour updated; persisted size reset
   28→16. LESSON: a scaling control must visibly affect the surface the
   user is LOOKING AT, or scope the control to the active tab. *(done)*
+- ✅ 2026-07-13 — TTS code-span patch (external proposal, VERIFIED before
+  applying): the report claimed our normalizer expands `/`, `_`, and file
+  extensions — those rules do NOT exist in `text_norm.py` (diagnosis of
+  someone else's pipeline). What WAS real: English rules ran over backtick
+  spans (`1024` → "ten twenty-four" via the year rule; plain-replace
+  abbreviations could corrupt path tokens). Fix: `_CODE_SPAN` split; code
+  spans exempt from all expansion, minimal code-reading form (underscore/
+  slash named). Citation check: Sproat 2001 + Jurafsky & Martin real; the
+  proposal's "WCAG 2.2 non-visual readability guidelines" is not a real
+  section name. +6 tests (21 in module). Suite **385**. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

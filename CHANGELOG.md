@@ -11,6 +11,16 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **Read-aloud garbled backtick code spans — now atomic.** The normalizer ran
+  its English rules over inline code, so `` `1024` `` was read as the year
+  "ten twenty-four" and abbreviation replacement could corrupt tokens inside
+  paths. Code spans are now exempt from ALL linguistic expansion and use a
+  minimal code-reading form instead (`_` → "underscore", `/` → "slash",
+  everything else verbatim) — standard TTS text-analysis practice (Sproat
+  et al. 2001; Jurafsky & Martin). Externally proposed; **verified against
+  the real code first** — the report's specific mechanism (slash/underscore/
+  extension expansion rules) did not exist here, but the underlying defect
+  and fix direction were real. +6 tests.
 - **A− / A+ looked like "nonfunctional plugs" — they were working invisibly.**
   The breadcrumb log proved every click fired (16→32pt), but only three
   surfaces scaled (Glossary / Commentary / Topics pane) — a user watching
