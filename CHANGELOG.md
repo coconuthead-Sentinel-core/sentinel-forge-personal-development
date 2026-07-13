@@ -11,6 +11,14 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **WCAG contrast kernel (Sprint C)** — `lyceum/wcag.py`: the W3C
+  relative-luminance and contrast-ratio formulas with the AA thresholds
+  (4.5:1 normal / 3:1 large) and an `audit_pairs` findings helper; 9 tests
+  anchored to published W3C values. First palette audit: **all reading
+  pairs pass AA (5.7–17.1)**; four white-label button colors fall short of
+  AA-normal and are logged as **findings with proposed same-hue
+  replacements** in `Assistant-Notes.md` §5 — the owner decides; nothing
+  was recolored.
 - **Two-lapse streak protocol (Sprint B)** — `lyceum/streaks.py`, a pure
   kernel behind the 📅 Never Miss Twice banner. ONE missed day is now an
   **amber rest-day encouragement** ("a rest day, not a broken chain" —
