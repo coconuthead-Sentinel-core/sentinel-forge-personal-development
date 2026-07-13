@@ -282,6 +282,16 @@ dashboards.
   Pseudocode re-derived per classroom-code before building; smoke probe
   showed the live RED banner on a seeded two-miss habit. Suite **350**.
   *(done)*
+- ✅ 2026-07-13 — **Sprint C shipped**: WCAG contrast kernel.
+  `lyceum/wcag.py` (W3C relative-luminance + contrast-ratio + AA
+  thresholds + `audit_pairs`) + 9 tests anchored to W3C values
+  (b/w=21.0, the #767676/#777777 AA boundary). Palette audited.
+  **FINDINGS for Shannon (his call — no silent recolor):** every READING
+  pair passes AA comfortably (5.7–17.1); four white-label BUTTON colors
+  fail AA-normal: ACCENT_GREEN #16a34a (3.30 → propose **#15803d**),
+  ACCENT_CYAN #0891b2 (3.68 → **#0e7490**), ACCENT_MIC #0ea5e9
+  (2.77 → **#0369a1**), ACCENT_AMBER #d97706 (3.19 → **#b45309**).
+  All proposals keep the hue, just darker. Suite **359**. *(done)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

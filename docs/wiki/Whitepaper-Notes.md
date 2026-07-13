@@ -309,3 +309,12 @@
   language. For the paper: when the evidence says self-compassion speeds
   lapse recovery (Neff 2003), message TONE becomes a testable requirement,
   not copywriting — the first test in the codebase that asserts kindness.
+
+- **2026-07-13 — Contrast as a measurable, not an opinion.** A WCAG kernel
+  (lyceum/wcag.py, the W3C formulas verbatim) turned "is this readable?"
+  into arithmetic: every reading surface passed AA with headroom, and four
+  button colors measured short — filed as findings with proposed same-hue
+  hexes for the owner's decision, per the never-silently-recolor rule.
+  Method note for the paper: accessibility review of a shipped UI can be a
+  PURE-FUNCTION audit — no screenshots, no judgment calls, just published
+  math over the palette constants.
