@@ -11,6 +11,19 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Desktop-assistant handoff** (`docs/DESKTOP_ASSISTANT_HANDOFF.md`) — the
+  third reference, distilled from the vetted improvement audit and the
+  2026-07-13 neurodivergence-research check-in: the "Strict Clinical Science
+  2026" admission rule, the sprint queue in pseudocode (two-lapse streak
+  protocol, WCAG contrast gate, V2MOM if-then line, **Bill Sentinel** —
+  prospective-memory scaffolding for bills), the per-sprint paperwork duty,
+  and the real-hardware dead-button audit. README now opens with the
+  guardrails and points the desktop assistant at it.
+
+### Removed
+- Dead code: `_round_rect` / `_ftb_make_font_marker` (the Canvas road-marker
+  A−/A+ that never received clicks; reverted to Buttons on 2026-07-12 and
+  left as dead code since). Pseudocode preserved in `Rebuild-Blueprint.md` §10.
 - **💼 Job Readiness audit** — the real-world job self-examination. A pure
   kernel (`lyceum/job_readiness.py`) scores six pillars a hiring process
   actually checks (Story, Proof, Skills, People, Pipeline, Interview) 0–4

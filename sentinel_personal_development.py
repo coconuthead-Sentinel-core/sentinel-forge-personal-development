@@ -1968,30 +1968,10 @@ class BookReader:
         self.set_status("💾 ✓ Study notes saved.")
         return True
 
-    def _round_rect(self, cv, x1, y1, x2, y2, r, **kw):
-        """Draw a rounded rectangle on a Canvas (smooth polygon); returns the
-        item id. Gives the A−/A+ markers their road-sign plate shape."""
-        pts = [x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r,
-               x2, y2, x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r,
-               x1, y1 + r, x1, y1]
-        return cv.create_polygon(pts, smooth=True, **kw)
-
-    def _ftb_make_font_marker(self, parent, text: str, direction: int):
-        """One A−/A+ control drawn as a ROAD-MARKER sign: a rounded plate on a
-        Canvas with a big, dyslexia-legible letter. Clicking steps the Study
-        text size and flips the black/white toggle. Returns
-        (canvas, plate_id, text_id)."""
-        W, H = 52, 40
-        cv = tk.Canvas(parent, width=W, height=H, bg=BG_PANEL,
-                       highlightthickness=0, bd=0, cursor="hand2")
-        plate = self._round_rect(cv, 4, 3, W - 4, H - 3, 9,
-                                 fill="#f8fafc", outline="#0f172a", width=2)
-        label = cv.create_text(W // 2, H // 2, text=text,
-                               font=("Segoe UI", 15, "bold"), fill="#0f172a")
-        cv.bind("<Button-1>", lambda _e, d=direction: (
-            self._study_font_step(d),
-            self._ftb_set_font_toggle("dec" if d < 0 else "inc")))
-        return cv, plate, label
+    # (_round_rect / _ftb_make_font_marker removed 2026-07-13: the Canvas
+    #  road-marker A−/A+ never received clicks in the flow toolbar and was
+    #  reverted to real Buttons; the helpers sat as dead code since. The
+    #  pseudocode survives in Rebuild-Blueprint.md §10 if ever wanted back.)
 
     def _ftb_set_font_toggle(self, active: str) -> None:
         """A−/A+ are one black/white toggle: the last-pressed BUTTON is WHITE

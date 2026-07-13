@@ -267,3 +267,14 @@
   research claims. Outcome: a docs honesty pass shipped same-day and three
   evidence-backed sprints blueprinted in pseudocode (two-lapse streak
   protocol, WCAG contrast gate, V2MOM if-then line).
+- **The handoff as a deliverable (2026-07-13).** Shannon's consolidation
+  order turned two vetted references (the fact-checked improvement audit and
+  the neurodivergence check-in review) into a third: a desktop-assistant
+  handoff whose first instruction is "re-derive the pseudocode yourself
+  before coding." Thesis for the paper: in a multi-assistant workflow the
+  artifact that transfers is not code but VERIFIED REASONING — pseudocode
+  plus admission rules ("Strict Clinical Science 2026") — so each assistant
+  re-proves the design instead of trusting the last one. Bill Sentinel was
+  queued the same way: prospective-memory scaffolding (automation-tracking +
+  timed cues) specified as evidence first, kernel pseudocode second, code
+  deliberately last.

@@ -227,6 +227,23 @@ dashboards.
   **Sprint D** V2MOM "If ⟨obstacle⟩, then I will ⟨action⟩" field (additive
   column; encouraged, not required). Sprint E (inverse-volatility All
   Seasons view) is PARKED unless Shannon asks.
+- ✅ 2026-07-13 — Shannon's consolidation order executed: (1) dead code
+  removed (`_round_rect`/`_ftb_make_font_marker`); no empty/stub files
+  found; (2) **`docs/DESKTOP_ASSISTANT_HANDOFF.md` created** — the third
+  reference distilled from Review-ImprovementAudit.md + the check-in
+  review, carrying the "Strict Clinical Science 2026" admission rule, the
+  sprint queue (B streaks / C WCAG / D if-then / **F Bill Sentinel**, all
+  in pseudocode), paperwork duties, and the real-hardware dead-button
+  audit; (3) README opens with the desktop-assistant guardrails;
+  (4) everything merged to `main`, session branch deleted. OneDrive +
+  Desktop mirrors are the DESKTOP assistant's first mechanical step (cloud
+  session cannot reach them). *(done)*
+- ⏳ 2026-07-13 — FOR THE DESKTOP ASSISTANT: follow
+  `docs/DESKTOP_ASSISTANT_HANDOFF.md` §2 — re-derive each queued sprint in
+  your own pseudocode BEFORE coding, then B → C → D → F through the full
+  /sentinel-sprint pipeline; §4 dead-button audit on real hardware
+  (Shannon reports non-working buttons — find, log here, fix). Mirror both
+  clones after every merge.
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

@@ -12,6 +12,26 @@
 
 ---
 
+## ⚑ For the desktop coding assistant (Claude, by Anthropic) — start here
+
+Your working orders live in
+[`docs/DESKTOP_ASSISTANT_HANDOFF.md`](docs/DESKTOP_ASSISTANT_HANDOFF.md).
+Summary of the standing guardrails, set by the owner:
+
+1. **Strict Clinical Science 2026.** Nothing enters this repo without a
+   verified, real citation — fabricated references have already been caught
+   in supplied research material, so check every one yourself. Trade-book
+   ideas are labeled honestly, never called "proven".
+2. **Classroom textbook computer science.** Every feature goes through the
+   [`/sentinel-sprint`](.claude/skills/sentinel-sprint/SKILL.md) pipeline:
+   pure kernel → headless tests green → wire with visible feedback → smoke
+   under a real `mainloop()` → design-law linter → paperwork (CHANGELOG,
+   wiki, whitepaper notes) → merge to `main` → delete the session branch →
+   mirror both clones (Desktop + OneDrive) as exact clones.
+3. **Functional code only.** A button that does nothing is a defect. Before
+   coding anything new, re-derive the queued sprint blueprints
+   (handoff §2) in your own pseudocode, reconcile differences, then build.
+
 ## Engineering & SDLC status
 
 This project follows an **iterative / incremental** software life cycle
