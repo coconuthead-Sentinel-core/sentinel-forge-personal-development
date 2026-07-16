@@ -31,6 +31,29 @@ Decision: draft | ready_for_review | approved | blocked
 
 ---
 
+### 2026-07-16 (late) — field report from the road test → fixed same night
+
+- **Proprietor's field report (QA on the real screen):** "floating
+  microphone toolbar is not available in After-Action Review." Verified
+  in code: correct — the earlier fix wired the AAR into the traffic
+  light's *dispatch chain*, but the window was never added to the
+  toolbar's **dock map**, so the bar (with its mic) had nowhere to live
+  there. Two different mechanisms; QA caught the second one.
+- **Fix (engineer, house pattern):** `"review"` added to the dock
+  `window_map` · "Dock to After-Action Review" added to the dock menu ·
+  Study-window re-dock-on-open precedent applied to the AAR. Closed
+  window falls back to main.
+- **Evidence:** smoke 3/3 under real mainloop (dock host created inside
+  the AAR window; re-dock to main; safe fallback when closed) · linter
+  8/8 · suite **410** green · shipped to main + both mirrors same night.
+- **Next:** proprietor re-tests on the laptop — open the AAR, undock the
+  bar (or use the dock menu), confirm the mic dictates into both boxes.
+
+Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
+Brian Kelley (proprietor)** · Decision: **ready_for_review**
+
+---
+
 ### 2026-07-16 — session close (Reward-Draw sprint)
 
 - **Proprietor's direction:** verify all mirrors ("go for a home run" —

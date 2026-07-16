@@ -1532,7 +1532,11 @@ class BookReader:
             "session_end": getattr(self, "_session_end_win", None),
             "library": getattr(self, "_library_win", None),
             "planning": getattr(self, "_planning_win", None),
-            "prompt_library": getattr(self, "_prompt_lib_win", None)
+            "prompt_library": getattr(self, "_prompt_lib_win", None),
+            # owner QA find #2 (2026-07-16): the AAR window was missing
+            # from the dock map, so the bar (and its mic) could never
+            # live there even though its dispatch handlers were wired.
+            "review": getattr(self, "_review_win", None)
         }
         
         target_win = window_map.get(target_host, self.root)
@@ -1656,9 +1660,10 @@ class BookReader:
                 "Session End": "_session_end_win",
                 "Library": "_library_win",
                 "Planning Hub": "_planning_win",
-                "Prompt Library": "_prompt_lib_win"
+                "Prompt Library": "_prompt_lib_win",
+                "After-Action Review": "_review_win"
             }
-            
+
             for label, attr in panels.items():
                 win_obj = getattr(self, attr, None)
                 if win_obj is not None and win_obj.winfo_exists():
@@ -1668,6 +1673,7 @@ class BookReader:
                     elif label == "Study Workspace": target_key = "study"
                     elif label == "Planning Hub": target_key = "planning"
                     elif label == "Library": target_key = "library"
+                    elif label == "After-Action Review": target_key = "review"
                     
                     menu.add_command(label=f"Dock to {label}", command=lambda tk=target_key: self._floating_toolbar_dock_to(tk))
                 
@@ -5321,6 +5327,17 @@ class BookReader:
 
         self._review_hooks = {"save": _save, "today": _goto_today,
                               "clear_today": _clear_today}
+
+        # The floating toolbar can dock HERE too (owner QA find #2): the
+        # window is registered in the dock map as "review". If the bar
+        # lived here last time, bring it home once the window is up —
+        # the same re-dock precedent the Study window uses.
+        if getattr(self, "_ftb_is_docked", False):
+            st = self._load_handoff_state() or {}
+            saved = st.get("floating_toolbar") or {}
+            if saved.get("host") == "review":
+                self.root.after(
+                    50, lambda: self._floating_toolbar_dock_to("review"))
 
         _refresh_list()
         _load(today_str)

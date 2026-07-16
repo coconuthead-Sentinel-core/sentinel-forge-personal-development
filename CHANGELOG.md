@@ -10,6 +10,19 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Floating toolbar (and its mic) couldn't live in the After-Action
+  Review window** (owner QA field report, found on the real screen).
+  The AAR's traffic-light *dispatch* was wired, but the window was
+  missing from the toolbar's dock map — so the bar itself had nowhere
+  to dock there. Fix in the house pattern, three parts: `"review"`
+  added to the dock `window_map`, "Dock to After-Action Review" added
+  to the dock menu (shown while the window is open), and the Study
+  window's re-dock-on-open precedent applied (the bar comes home to the
+  AAR if it lived there last time). Closed AAR falls back to main
+  safely. Runtime-proven: 3/3 smoke checkpoints under a real
+  `mainloop()`.
+
 ### Added
 - **🪞 After-Action Review joins the floating-toolbar dispatch chain**
   (owner QA find). The traffic light now works inside the AAR window:
