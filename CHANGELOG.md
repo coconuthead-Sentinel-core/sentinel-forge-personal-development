@@ -10,6 +10,24 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **🎁 Reward-Draw — variable-ratio reward engine** (`lyceum/reward_engine.py`,
+  +15 tests). Finishing a Focus Mode block now draws from a weighted reward
+  pool (70/25/5 STANDARD/UNCOMMON/RARE): a quiet green status dot, a quote
+  card from the owner's library, or a rare gold flash + chime. Engineering
+  honesty built in: a **pity guarantee** (a RARE can never be more than 12
+  draws away — pure slot-machine math allows cruel droughts; this engine
+  doesn't), an **honesty gate** (every pool payload carries a named library
+  source; unsourced payloads are refused at write time — no fabricated
+  quotes), **no reward without work** (blank events refused), and an
+  **append-only `reward_log`** that doubles as the pity counter's memory
+  across restarts. Mechanism labeled honestly: variable-ratio reinforcement
+  (Ferster & Skinner, 1957) — anticipation, not magic. Two additive tables
+  (`reward_pool`, `reward_log`); kernel is Tk-free and fully headless-tested;
+  smoke-tested under a real `mainloop()`. Distilled from the NotebookLM
+  BrainTrust review (2026-07-16) — the one proposal of four that cleared all
+  intake gates on the first pass.
+
 ### Fixed
 - **Read-aloud garbled backtick code spans — now atomic.** The normalizer ran
   its English rules over inline code, so `` `1024` `` was read as the year

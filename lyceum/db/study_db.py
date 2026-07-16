@@ -765,6 +765,37 @@ CREATE TABLE IF NOT EXISTS memory_review_log (
 
 CREATE INDEX IF NOT EXISTS idx_review_log_card ON memory_review_log (card_id);
 CREATE INDEX IF NOT EXISTS idx_review_log_time ON memory_review_log (reviewed_at);
+
+-- ── Reward-Draw: variable-ratio reward engine (Sprint: Reward-Draw v1) ──────
+-- Additive only. lyceum/reward_engine.py is the sole writer. The pool holds
+-- unlockable payloads; every entry MUST carry a named source from the owner's
+-- library (the engine refuses unsourced payloads — honesty gate). The log is
+-- append-only: it is the pity-guarantee's memory and the audit trail; never
+-- UPDATE or DELETE.
+
+CREATE TABLE IF NOT EXISTS reward_pool (
+    pool_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    tier        TEXT NOT NULL
+                CHECK (tier IN ('STANDARD','UNCOMMON','RARE')),
+    payload     TEXT NOT NULL,                 -- what the user sees (quote, flourish)
+    source      TEXT NOT NULL,                 -- named library source; never blank
+    retired     INTEGER NOT NULL DEFAULT 0,    -- 0/1; soft retire, never hard-delete
+    created_at  TEXT NOT NULL                  -- ISO 8601 UTC
+);
+
+CREATE INDEX IF NOT EXISTS idx_reward_pool_tier ON reward_pool (retired, tier);
+
+CREATE TABLE IF NOT EXISTS reward_log (
+    reward_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    event       TEXT NOT NULL,                 -- the completion that earned it
+    tier        TEXT NOT NULL
+                CHECK (tier IN ('STANDARD','UNCOMMON','RARE')),
+    payload     TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    created_at  TEXT NOT NULL                  -- ISO 8601 UTC
+);
+
+CREATE INDEX IF NOT EXISTS idx_reward_log_time ON reward_log (created_at);
 """
 
 

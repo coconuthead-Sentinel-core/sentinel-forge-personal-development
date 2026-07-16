@@ -346,3 +346,13 @@
   dyslexia / dysgraphia / dyscalculia; autism monitored "within reason,
   within scope, within human limits" — calibrated watching without
   self-diagnosis, the same posture the science gate enforces in code.
+
+- **2026-07-16 — Reward-Draw (variable-ratio rewards, honestly engineered).**
+  The dashboard's first variable-reward mechanic: Focus-block completions
+  draw from a 70/25/5 tier pool — quiet green dot, a quote card sourced
+  from the owner's own library, or a rare gold flash. The kernel keeps the
+  operant-conditioning mechanism (variable-ratio schedules; Ferster &
+  Skinner, 1957) while deliberately removing the casino's cruelty: a
+  12-draw pity guarantee bounds every drought, blank events earn nothing,
+  unsourced quotes are refused at write time, and the append-only
+  reward_log is both audit trail and the pity counter's memory.

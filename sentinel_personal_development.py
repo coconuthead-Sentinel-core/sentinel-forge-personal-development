@@ -19743,6 +19743,127 @@ class BookReader:
                     f"🤖 Rule: you focused {mins} min — open 🏆 Scoreboard "
                     "and mark your 'studied' win for today.")
 
+    # ---- 🎁 Reward-Draw (Sprint: Reward-Draw v1) -----------------------
+    # Thin imperative shell over lyceum/reward_engine.py. The kernel
+    # decides WHAT was won (variable-ratio tier, pity-limited, library-
+    # sourced payload); this shell only decides how the win LOOKS and
+    # SOUNDS: STANDARD = quiet status dot, UNCOMMON = quote card,
+    # RARE = gold flash + chime. Quiet default, loud rares — the
+    # contrast IS the variable-reward design.
+
+    def _reward_service(self):
+        """Lazy singleton RewardService; None (with _reward_err set)
+        when construction fails — a broken reward path must never
+        break Focus Mode."""
+        if getattr(self, "_reward_svc", None) is not None:
+            return self._reward_svc
+        try:
+            from lyceum import reward_engine as _rw_mod
+            from lyceum.db import study_db as _sdb
+            svc = _rw_mod.RewardService(_sdb)
+            svc.seed_default_pool()      # no-op unless the pool is empty
+            self._reward_svc = svc
+        except Exception as e:
+            self._reward_svc = None
+            self._reward_err = str(e)
+        return self._reward_svc
+
+    def _reward_draw_and_show(self, event: str) -> None:
+        """Draw a reward for a REAL completion and surface it with
+        tier-distinct feedback. Never raises."""
+        try:
+            svc = self._reward_service()
+            if svc is None:
+                return
+            reward = svc.draw(event)
+        except Exception:
+            return
+        if reward.tier == "STANDARD":
+            # The quiet green dot — visible, but it stays out of the way.
+            self.set_status(f"🟢 {reward.payload}")
+            return
+        try:
+            self._show_reward_toast(reward)
+        except Exception:
+            # Toast failed? The win still shows — invisible success
+            # reads as broken.
+            self.set_status(f"🎁 {reward.payload} — {reward.source}")
+
+    def _show_reward_toast(self, reward) -> None:
+        """Bottom-right toast for UNCOMMON / RARE pulls. Click anywhere
+        to dismiss; auto-closes. Sized from the screen (design law B);
+        tuple padding only in .pack() (design law A)."""
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        w = max(320, int(sw * 0.30))
+        styles = {
+            "UNCOMMON": {"bg": "#1E2B45", "accent": "#7FB4FF",
+                         "fg": "#F4F1E8", "ms": 6500,
+                         "title": "✨ From your library"},
+            "RARE": {"bg": "#3A2E05", "accent": "#FFD24A",
+                     "fg": "#FFF6D9", "ms": 8000,
+                     "title": "🏆 GOLD — rare pull"},
+        }
+        st = styles.get(reward.tier, styles["UNCOMMON"])
+        toast = tk.Toplevel(self.root)
+        toast.withdraw()
+        toast.overrideredirect(True)
+        try:
+            toast.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        toast.configure(bg=st["bg"], highlightthickness=2,
+                        highlightbackground=st["accent"])
+        head = tk.Label(toast, text=st["title"], bg=st["bg"],
+                        fg=st["accent"], font=("Segoe UI", 13, "bold"),
+                        anchor="w")
+        head.pack(fill="x", padx=14, pady=(10, 2))
+        body = tk.Label(toast, text=reward.payload, bg=st["bg"],
+                        fg=st["fg"], font=("Segoe UI", 15, "italic"),
+                        wraplength=w - 40, justify="left", anchor="w")
+        body.pack(fill="x", padx=14, pady=(0, 2))
+        src = tk.Label(toast, text=f"— {reward.source}", bg=st["bg"],
+                       fg=st["accent"], font=("Segoe UI", 10),
+                       wraplength=w - 40, justify="left", anchor="w")
+        src.pack(fill="x", padx=14, pady=(0, 10))
+        toast.update_idletasks()
+        h = toast.winfo_reqheight()
+        x = sw - w - int(sw * 0.015)
+        y = sh - h - int(sh * 0.09)
+        toast.geometry(f"{w}x{h}+{x}+{y}")
+        toast.deiconify()
+
+        def _dismiss(_e=None):
+            try:
+                toast.destroy()
+            except tk.TclError:
+                pass
+
+        for widget in (toast, head, body, src):
+            widget.bind("<Button-1>", _dismiss)
+        toast.after(st["ms"], _dismiss)
+
+        if reward.tier == "RARE":
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            except Exception:
+                pass
+            golds = ("#3A2E05", "#5C4A08")
+
+            def _pulse(i=0):
+                if i >= 6:
+                    return
+                try:
+                    toast.configure(bg=golds[i % 2])
+                    for widget in (head, body, src):
+                        widget.configure(bg=golds[i % 2])
+                    toast.after(220, _pulse, i + 1)
+                except tk.TclError:
+                    pass
+
+            _pulse()
+
     def _srs_mark_scoreboard(self) -> None:
         """First review of the day auto-marks the '🧠 Reviewed my
         flashcards' lead measure on the 🏆 Scoreboard — the Sprint 2
@@ -24890,6 +25011,12 @@ class BookReader:
                 self._run_automation(
                     "focus_completed",
                     {"minutes": int(getattr(self, "_focus_block_minutes", 0))})
+                # 🎁 Reward-Draw (lyceum/reward_engine.py): the block was
+                # real work, so draw from the variable-ratio pool — quiet
+                # green dot, a library quote card, or the rare gold flash.
+                self._reward_draw_and_show(
+                    "focus block "
+                    f"{int(getattr(self, '_focus_block_minutes', 0))} min")
             elif was:
                 dnd_var.set("")
 

@@ -350,6 +350,18 @@ dashboards.
   closest ancestor; the daily cadence was created here, in-project.
   First close-of-session entry written for 2026-07-13. Standing duty: the
   engineer writes a close entry each working session. *(done)*
+- ✅ 2026-07-16 — NotebookLM BrainTrust review (262-file "Google stamp"
+  gamification transcript) gated through clinical-science + learning-science:
+  one of four proposals cleared on the first pass → **Reward-Draw BUILT**
+  (`lyceum/reward_engine.py`: variable-ratio 70/25/5, 12-draw pity
+  guarantee, named-source honesty gate, no-work-no-reward, append-only
+  `reward_log`) + wired to `focus_completed` (quiet dot / library quote
+  card / rare gold flash + chime). Rejected from the same transcript:
+  "85% of happiness" (no source), "top 1% fitness" (real guideline is WHO
+  150–300 min/wk), auto-email accountability (needs consent design).
+  Sprint: 15 tests + mainloop smoke; suite **400**. README count fixed
+  379→400. Owner laptop test PENDING before merge to main + mirror. *(this
+  session)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

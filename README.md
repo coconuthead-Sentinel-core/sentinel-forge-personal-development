@@ -68,7 +68,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-379 automated tests cover the **Bill Sentinel kernel**, the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+400 automated tests cover the **Bill Sentinel kernel**, the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the **variable-ratio reward engine (Reward-Draw)**, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, the FSRS spaced-repetition core, the study-panel
@@ -506,6 +506,13 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 - ✅ 🧠 Knowledge Harvester — mine any Library book for term/definition
   pairs (checkbox preview, human-approved) straight into the Glossary,
   where the FSRS review deck picks them up: read → harvest → remember
+- ✅ 🎁 Reward-Draw (`lyceum/reward_engine.py`) — a variable-ratio reward
+  for every finished Focus Mode block: a quiet green dot, a quote card
+  drawn from your own library, or a rare gold flash + chime. Honestly
+  engineered: a 12-draw **pity guarantee** bounds every drought, blank
+  events earn nothing, every quote carries a **named library source**
+  (unsourced payloads are refused), and the append-only `reward_log` is
+  the audit trail (variable-ratio reinforcement — Ferster & Skinner, 1957)
 - ✅ 🚦 Accessibility toolbar cluster — traffic-light **Add/Save/Delete** +
   road-marker **A−/A+**, all context-dispatched; text inputs are non-modal and
   toolbar-driven (right-click clipboard menu, Enter/Save to commit)

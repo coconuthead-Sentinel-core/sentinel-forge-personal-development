@@ -31,6 +31,44 @@ Decision: draft | ready_for_review | approved | blocked
 
 ---
 
+### 2026-07-16 — session close (Reward-Draw sprint)
+
+- **Proprietor's direction:** verify all mirrors ("go for a home run" —
+  done: GitHub = OneDrive = Desktop = backup at `861aea0`, Desktop
+  fast-forwarded 126 commits); build the pseudocode-display skill (done,
+  user-level); gate the NotebookLM BrainTrust gamification transcript
+  (done — 1 of 4 proposals passed); then his call: **"let's build this
+  thing"** — the Reward-Draw sprint, paperwork after, owner laptop test
+  to follow.
+- **Work completed (engineer):** `lyceum/reward_engine.py` (variable-ratio
+  70/25/5, 12-draw pity guarantee, named-source honesty gate, no-work-no-
+  reward, append-only `reward_log`) + 2 additive tables in `study_db` +
+  15 headless tests + Focus-Mode wiring (quiet dot / library quote card /
+  rare gold flash + chime) + mainloop smoke (4/4 checkpoints). Paperwork:
+  CHANGELOG, Whitepaper-Notes, Assistant-Notes §5, README (test count
+  379→400 fixed; roadmap ✅ added).
+- **Evidence:** suite **400** green (14 skips, standard) · design-law
+  linter 8/8 · smoke `SMOKE PASS` · work on session branch
+  `claude/sentinel-personal-dev-7cd21f`.
+- **Defects found / fixed:** README test-count claim was stale (379 vs
+  385 actual at session open; 400 at close — fixed at close).
+- **Decisions made (and by whom):** pity limit 12, sourced-payloads law,
+  kernel/shell split — proposed by engineer, approved by proprietor
+  ("let's build this thing"). Rejected from the BrainTrust transcript
+  (engineer, science gate): "85% of happiness" stat, "top 1% fitness"
+  claim, auto-email accountability (consent design needed first).
+- **Decisions PENDING (owner's call):** laptop road test of the reward
+  toasts (all three tiers) BEFORE merge to main + mirror; curate the
+  starter quote pool (8 seeded entries — add/retire via the service).
+- **Next session opens with:** proprietor's laptop verdict on Reward-Draw;
+  if green → merge to main, mirror both clones, delete session branch.
+  Portfolio README-audit work order still queued.
+
+Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
+Brian Kelley (proprietor)** · Decision: **ready_for_review**
+
+---
+
 ### 2026-07-13 (evening) — session close + WORK ORDER filed
 
 - **Proprietor's direction:** vet an external TTS diagnosis (done — half
