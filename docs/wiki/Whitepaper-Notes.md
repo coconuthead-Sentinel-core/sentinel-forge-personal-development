@@ -356,3 +356,14 @@
   12-draw pity guarantee bounds every drought, blank events earn nothing,
   unsourced quotes are refused at write time, and the append-only
   reward_log is both audit trail and the pity counter's memory.
+
+- **2026-07-16 — Ambience (comfort bed, honestly labeled).** A Library
+  button plays a locally-synthesized quiet loop (wind/rain/ocean/
+  binaural) under the read-aloud voice on its own output stream. The
+  science gate did its job twice here: the "Superlearning/Lozanov
+  hemisphere-synchronization" framing from the source transcript was
+  rejected as a neuromyth, and the binaural option ships labeled "NOT
+  proven to improve learning" — the mixed entrainment literature does
+  not support an efficacy claim. The owner's "hear it twice at once"
+  idea was redirected to sequential re-listening: simultaneous
+  duplicate speech streams interfere rather than reinforce.

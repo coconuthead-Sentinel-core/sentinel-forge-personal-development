@@ -57,11 +57,25 @@ Decision: draft | ready_for_review | approved | blocked
   ("let's build this thing"). Rejected from the BrainTrust transcript
   (engineer, science gate): "85% of happiness" stat, "top 1% fitness"
   claim, auto-email accountability (consent design needed first).
-- **Decisions PENDING (owner's call):** laptop road test of the reward
-  toasts (all three tiers) BEFORE merge to main + mirror; curate the
-  starter quote pool (8 seeded entries — add/retire via the service).
-- **Next session opens with:** proprietor's laptop verdict on Reward-Draw;
-  if green → merge to main, mirror both clones, delete session branch.
+- **Second build same session — 🌧 Ambience:** proprietor asked for a
+  Library button playing background sound (wind + binaural beats) under
+  the read-aloud voice. Science gate applied: binaural-beats-for-learning
+  labeled honestly UNPROVEN (mixed literature); "same material twice
+  simultaneously" vetoed (speech-stream interference) in favor of
+  sequential re-listen. Built: `lyceum/ambience.py` (pure synthesis,
+  seamless loops, AmbiencePlayer on the existing sounddevice dep) + 🌧
+  Library chooser with verbatim honesty labels. 10 tests; suite **410**;
+  linter green; chooser + degrade path smoke-passed. NOTE: real audio-out
+  NOT verifiable on this bench (worktree python lacks sounddevice) —
+  laptop must verify sound on the metal.
+- **Decisions PENDING (owner's call):** laptop road test of BOTH sprints
+  — Reward-Draw toasts (all three tiers) and Ambience audio on real
+  speakers/headphones — BEFORE merge to main + mirror; curate the starter
+  quote pool (8 seeded entries — add/retire via the service).
+- **Next session opens with:** proprietor's laptop verdict on Reward-Draw
+  + Ambience; if green → merge to main, mirror both clones, delete
+  session branch. Queued next: Audio Review Track (export WAV,
+  question→pause→answer retrieval format — boarded 2026-07-16).
   Portfolio README-audit work order still queued.
 
 Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon

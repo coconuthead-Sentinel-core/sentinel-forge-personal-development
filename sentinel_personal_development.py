@@ -13443,6 +13443,14 @@ class BookReader:
         # up. Read → harvest → remember.
         lbtn(btn_row, "🧠 Harvest terms", self._library_harvest_selected,
              ACCENT_INDIGO).pack(side=tk.LEFT, padx=(0, 6))
+        # 🌧 Ambience (Sprint: Ambience v1, Shannon 2026-07-16): a quiet
+        # comfort bed (wind/rain/ocean/binaural) UNDER the read-aloud
+        # voice. Comfort/preference only — honest labels come verbatim
+        # from lyceum.ambience.KINDS (binaural: NOT proven for learning).
+        self._ambience_btn = lbtn(btn_row, "🌧 Ambience",
+                                  self._library_ambience_menu, ACCENT_SLATE)
+        self._ambience_btn.pack(side=tk.LEFT, padx=(0, 6))
+        self._ambience_sync_button()
         # Study-tool buttons (Shannon 2026-07-11): the Study workspace
         # TABS, mirrored here as buttons so the Library is the one study
         # hub — each jumps straight to its tool.
@@ -19863,6 +19871,125 @@ class BookReader:
                     pass
 
             _pulse()
+
+    # ---- 🌧 Ambience (Sprint: Ambience v1) ------------------------------
+    # Thin imperative shell over lyceum/ambience.py. The kernel owns
+    # synthesis + its own audio stream (sounddevice, already a dictation
+    # dependency); Windows mixes it WITH the TTS voice, never instead of
+    # it. All claim labels render verbatim from ambience.KINDS — the
+    # binaural option carries its "NOT proven to improve learning" label
+    # on its face, per the science gate.
+
+    def _ambience_player(self):
+        """Lazy singleton AmbiencePlayer; construction never fails (the
+        heavy imports happen inside start(), which degrades loudly-but-
+        gracefully via AmbienceUnavailableError)."""
+        if getattr(self, "_ambience_p", None) is None:
+            from lyceum.ambience import AmbiencePlayer
+            self._ambience_p = AmbiencePlayer()
+        return self._ambience_p
+
+    def _ambience_sync_button(self) -> None:
+        """The button always tells the truth about what's playing."""
+        btn = getattr(self, "_ambience_btn", None)
+        if btn is None:
+            return
+        try:
+            if not btn.winfo_exists():
+                return
+            player = getattr(self, "_ambience_p", None)
+            if player is not None and player.playing:
+                from lyceum.ambience import KINDS
+                label = KINDS.get(player.kind, {}).get("label", player.kind)
+                btn.configure(text=f"🌧 Ambience: {label} ●")
+            else:
+                btn.configure(text="🌧 Ambience")
+        except tk.TclError:
+            pass
+
+    def _library_ambience_menu(self) -> None:
+        """Small chooser: pick a bed (starts immediately) or Off. One
+        primary action per row; quiet by default."""
+        from lyceum.ambience import (KINDS, AmbienceUnavailableError)
+        win = tk.Toplevel(self.root)
+        win.title("🌧 Ambience")
+        win.configure(bg=BG_DARK, padx=14, pady=12)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        tk.Label(win, text="A comfort sound under the voice — quiet on "
+                           "purpose.\nPick one, or turn it off.",
+                 bg=BG_DARK, fg=FG_TEXT, font=("Segoe UI", 11, "bold"),
+                 justify=tk.LEFT, anchor="w").pack(fill=tk.X, pady=(0, 8))
+
+        vol_var = tk.StringVar(
+            value=getattr(self, "_ambience_vol_choice", "Quiet"))
+        vol_row = tk.Frame(win, bg=BG_DARK)
+        vol_row.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(vol_row, text="Volume:", bg=BG_DARK, fg=FG_MUTED,
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(0, 8))
+        for choice in ("Quiet", "Medium"):
+            tk.Radiobutton(vol_row, text=choice, value=choice,
+                           variable=vol_var, bg=BG_DARK, fg=FG_TEXT,
+                           selectcolor=BG_INPUT, activebackground=BG_DARK,
+                           activeforeground=FG_TEXT,
+                           font=("Segoe UI", 10)).pack(side=tk.LEFT,
+                                                       padx=(0, 10))
+
+        def _pick(kind: str) -> None:
+            volume = 0.18 if vol_var.get() == "Quiet" else 0.35
+            try:
+                self._ambience_player().start(kind, volume=volume)
+            except AmbienceUnavailableError as e:
+                self.set_status(f"🌧 Ambience unavailable: {e}")
+                win.destroy()
+                return
+            except Exception as e:
+                self.set_status(f"🌧 Ambience could not start: {e}")
+                win.destroy()
+                return
+            self._ambience_vol_choice = vol_var.get()
+            self.set_status(f"{KINDS[kind]['label']} on "
+                            f"({vol_var.get().lower()}) — "
+                            f"{KINDS[kind]['claim']}.")
+            self._ambience_sync_button()
+            win.destroy()
+
+        def _off() -> None:
+            player = getattr(self, "_ambience_p", None)
+            if player is not None:
+                player.stop()
+            self.set_status("🌧 Ambience off.")
+            self._ambience_sync_button()
+            win.destroy()
+
+        for kind, meta in KINDS.items():
+            row = tk.Frame(win, bg=BG_DARK)
+            row.pack(fill=tk.X, pady=(0, 6))
+            tk.Button(row, text=meta["label"],
+                      command=lambda k=kind: _pick(k),
+                      font=("Segoe UI", 11, "bold"), bg=BG_INPUT,
+                      fg=FG_TEXT, activebackground=ACCENT_SLATE,
+                      activeforeground="white", relief=tk.FLAT,
+                      padx=10, pady=4, cursor="hand2", borderwidth=0,
+                      anchor="w").pack(fill=tk.X)
+            tk.Label(row, text=meta["claim"], bg=BG_DARK, fg=FG_MUTED,
+                     font=("Segoe UI", 9), justify=tk.LEFT,
+                     anchor="w", wraplength=340).pack(fill=tk.X)
+        tk.Button(win, text="■ Off", command=_off,
+                  font=("Segoe UI", 11, "bold"), bg=BG_INPUT, fg=FG_TEXT,
+                  activebackground=ACCENT_SLATE, activeforeground="white",
+                  relief=tk.FLAT, padx=10, pady=4, cursor="hand2",
+                  borderwidth=0).pack(fill=tk.X, pady=(6, 0))
+        # Position near the pointer, sized by its own content (no fixed
+        # geometry — design law B).
+        win.update_idletasks()
+        x = min(self.root.winfo_pointerx(),
+                self.root.winfo_screenwidth() - win.winfo_reqwidth() - 24)
+        y = min(self.root.winfo_pointery(),
+                self.root.winfo_screenheight() - win.winfo_reqheight() - 48)
+        win.geometry(f"+{max(0, x)}+{max(0, y)}")
 
     def _srs_mark_scoreboard(self) -> None:
         """First review of the day auto-marks the '🧠 Reviewed my

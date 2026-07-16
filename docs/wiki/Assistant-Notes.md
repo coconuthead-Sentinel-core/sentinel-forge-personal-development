@@ -362,6 +362,21 @@ dashboards.
   Sprint: 15 tests + mainloop smoke; suite **400**. README count fixed
   379→400. Owner laptop test PENDING before merge to main + mirror. *(this
   session)*
+- ✅ 2026-07-16 (later) — NotebookLM "Superlearning Audio Engine" proposal
+  gated: Lozanov/hemisphere-sync framing REJECTED (neuromyth; never
+  replicated), subliminal-tape lineage REJECTED (debunked), simultaneous
+  duplicate-voice "hear it twice" REJECTED (stream interference) →
+  **Ambience BUILT instead** (`lyceum/ambience.py`: pure synthesis of
+  wind/rain/ocean/binaural seamless loops + AmbiencePlayer on
+  sounddevice, its own stream, mixes WITH the voice) + 🌧 Library button
+  with chooser (Quiet/Medium; claims rendered verbatim from KINDS;
+  binaural labeled "NOT proven to improve learning — needs headphones").
+  10 tests incl. label-honesty tests; mainloop smoke (chooser + graceful
+  degrade proven; REAL audio-out could not be verified on this bench —
+  no sounddevice in the worktree python — verify on the laptop, where
+  dictation already uses it). Suite **410**; README 400→410. Queued
+  honest follow-up: Audio Review Track (export WAV, question→pause→
+  answer retrieval format) — boarded, not yet built. *(this session)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

@@ -68,7 +68,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-400 automated tests cover the **Bill Sentinel kernel**, the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the **variable-ratio reward engine (Reward-Draw)**, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+410 automated tests cover the **Bill Sentinel kernel**, the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the **variable-ratio reward engine (Reward-Draw)**, the **ambience synthesis kernel**, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, the FSRS spaced-repetition core, the study-panel
@@ -506,6 +506,11 @@ powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -NoTTS
 - ✅ 🧠 Knowledge Harvester — mine any Library book for term/definition
   pairs (checkbox preview, human-approved) straight into the Glossary,
   where the FSRS review deck picks them up: read → harvest → remember
+- ✅ 🌧 Ambience (`lyceum/ambience.py`) — a Library button that plays a
+  quiet, locally-synthesized comfort bed (wind / rain / ocean / binaural
+  10 Hz) UNDER the read-aloud voice, on its own audio stream. Honest
+  labels on their face: comfort/preference only, and binaural is marked
+  "NOT proven to improve learning — needs headphones"
 - ✅ 🎁 Reward-Draw (`lyceum/reward_engine.py`) — a variable-ratio reward
   for every finished Focus Mode block: a quiet green dot, a quote card
   drawn from your own library, or a rare gold flash + chime. Honestly

@@ -11,6 +11,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **🌧 Ambience — a quiet comfort bed under the read-aloud voice**
+  (`lyceum/ambience.py`, +10 tests). New Library button opens a chooser:
+  wind, rain, ocean, or a binaural 10 Hz tone, at Quiet/Medium volume, on
+  its own audio stream so it mixes WITH the voice (sounddevice — already a
+  dictation dependency; zero new packages). All sound is synthesized
+  locally as seamless loops (crossfaded noise beds; whole-cycle binaural
+  seam). Honesty labels ship in the kernel and render verbatim in the UI:
+  every bed is a **comfort/preference feature**, and the binaural option
+  carries "**NOT proven to improve learning** — needs headphones" on its
+  face (the science gate's verdict on the entrainment literature). The
+  proposal's "hear the same material twice simultaneously" idea was
+  rejected — competing speech streams interfere; sequential re-listening
+  is the honest alternative. Degrades gracefully when audio deps are
+  missing; the button always shows what's playing.
 - **🎁 Reward-Draw — variable-ratio reward engine** (`lyceum/reward_engine.py`,
   +15 tests). Finishing a Focus Mode block now draws from a weighted reward
   pool (70/25/5 STANDARD/UNCOMMON/RARE): a quiet green status dot, a quote
