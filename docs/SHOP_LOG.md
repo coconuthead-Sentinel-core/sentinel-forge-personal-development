@@ -85,8 +85,15 @@ Decision: draft | ready_for_review | approved | blocked
   question→pause→answer retrieval format — boarded 2026-07-16).
   Portfolio README-audit work order still queued.
 
+**SHIPPED (proprietor's order, same evening):** "Yes. Do that now." —
+merged to main at `3f68103`, pushed to GitHub, both mirrors pulled;
+Mirror-Verify pass: 3 clones + origin/main identical (commit + file
+hashes), status clean everywhere. Laptop road test of the three
+features (Reward-Draw toasts · 🌧 Ambience audio · AAR traffic light)
+now happens ON main — defects found there open the next work order.
+
 Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
-Brian Kelley (proprietor)** · Decision: **ready_for_review**
+Brian Kelley (proprietor)** · Decision: **approved**
 
 ---
 
