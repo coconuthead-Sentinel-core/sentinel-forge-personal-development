@@ -1903,6 +1903,8 @@ class BookReader:
             return
         if self._journal_add_entry_from_toolbar():
             return
+        if self._review_add_from_toolbar():
+            return
         if self._ftb_generate_bound_event("<Return>"):
             return
         if self._ftb_invoke_context_button(("add", "new", "create", "upload")):
@@ -1931,6 +1933,8 @@ class BookReader:
             return
         if self._commentary_remove_from_toolbar():
             return
+        if self._review_remove_from_toolbar():
+            return
         if self._ftb_invoke_context_button(("remove", "delete", "clear", "🗑")):
             return
         if self._ftb_generate_bound_event("<Delete>"):
@@ -1953,6 +1957,8 @@ class BookReader:
         if self._study_notes_save_from_toolbar():
             return
         if self._topics_save_from_toolbar():
+            return
+        if self._review_save_from_toolbar():
             return
         if self._ftb_invoke_context_button(("save", "💾")):
             return
@@ -1978,6 +1984,77 @@ class BookReader:
         except Exception:
             return False
         self.set_status("💾 ✓ Study notes saved.")
+        return True
+
+    # ---- 🪞 After-Action Review ← floating toolbar (owner QA, 2026-07-16)
+    # The AAR window joins the traffic-light dispatch chain like every
+    # other panel: a context test + one handler per lamp. Delete obeys
+    # the archive law — it clears only TODAY's draft, never history.
+
+    def _review_context_active(self) -> bool:
+        """True when the AAR window is open and the user's focus target
+        lives inside it — the same context test the other panels use."""
+        win = getattr(self, "_review_win", None)
+        if win is None:
+            return False
+        try:
+            if not win.winfo_exists():
+                return False
+        except tk.TclError:
+            return False
+        for target in self._ftb_action_targets():
+            if self._ftb_widget_is_descendant(target, win):
+                return True
+        return False
+
+    def _review_save_from_toolbar(self) -> bool:
+        """Yellow Save → commit the day currently shown."""
+        if not self._review_context_active():
+            return False
+        hooks = getattr(self, "_review_hooks", None)
+        if not hooks:
+            return False
+        try:
+            ok = hooks["save"]()
+        except Exception:
+            ok = False
+        if not ok:
+            self.set_status("🪞 Review could not be saved — check the window.")
+        return True
+
+    def _review_add_from_toolbar(self) -> bool:
+        """Green Add → start (or return to) TODAY's reflection — the AAR
+        is one entry per day, so 'add' means 'today, ready to type'."""
+        if not self._review_context_active():
+            return False
+        hooks = getattr(self, "_review_hooks", None)
+        if not hooks:
+            return False
+        try:
+            hooks["today"]()
+        except Exception:
+            return False
+        self.set_status("🪞 Today's review — type, then the yellow Save.")
+        return True
+
+    def _review_remove_from_toolbar(self) -> bool:
+        """Red Delete → clear TODAY's draft boxes only. Past reviews are
+        history: never deleted (the archive law)."""
+        if not self._review_context_active():
+            return False
+        hooks = getattr(self, "_review_hooks", None)
+        if not hooks:
+            return False
+        try:
+            cleared = hooks["clear_today"]()
+        except Exception:
+            return False
+        if cleared:
+            self.set_status("🪞 Today's draft cleared — yellow Save commits "
+                            "the blank, or click the date to reload it.")
+        else:
+            self.set_status("🪞 Past reviews are history — never deleted. "
+                            "(Delete clears only TODAY's draft.)")
         return True
 
     # (_round_rect / _ftb_make_font_marker removed 2026-07-13: the Canvas
@@ -5133,6 +5210,7 @@ class BookReader:
             try: _save(silent=True)
             except Exception: pass
             self._review_win = None
+            self._review_hooks = None
             try: win.destroy()
             except tk.TclError: pass
         win.protocol("WM_DELETE_WINDOW", _close)
@@ -5219,6 +5297,30 @@ class BookReader:
         box1 = _q_box("✅  What did I do right today?")
         box2 = _q_box("🔄  What would I do differently next time?")
         paned.add(right)
+
+        # Floating-toolbar hooks (owner QA find, 2026-07-16): the traffic
+        # light context-dispatches here whenever focus is inside this
+        # window — green Add → jump to today's reflection, yellow Save →
+        # commit the shown day, red Delete → clear TODAY's draft only
+        # (past reviews are history; the archive law says never delete).
+        def _goto_today():
+            _save(silent=True)
+            _load(today_str)
+            try:
+                box1.focus_set()
+            except tk.TclError:
+                pass
+
+        def _clear_today():
+            if self._review_current_day != today_str:
+                return False
+            box1.delete("1.0", tk.END)
+            box2.delete("1.0", tk.END)
+            rating_var.set("—")
+            return True
+
+        self._review_hooks = {"save": _save, "today": _goto_today,
+                              "clear_today": _clear_today}
 
         _refresh_list()
         _load(today_str)

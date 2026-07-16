@@ -377,6 +377,13 @@ dashboards.
   dictation already uses it). Suite **410**; README 400→410. Queued
   honest follow-up: Audio Review Track (export WAV, question→pause→
   answer retrieval format) — boarded, not yet built. *(this session)*
+- ✅ 2026-07-16 (QA) — Shannon, as human-in-the-loop QA, found the AAR
+  window outside the floating-toolbar dispatch → wired in the house
+  pattern (`_review_context_active` + 3 handlers + 3 chain lines +
+  window hooks). Delete obeys the archive law (today's draft only; past
+  days refused). Smoke 6/6 under mainloop w/ temp DB; suite 410 green;
+  no new unit tests (wiring-only; runtime proof is the smoke). *(this
+  session)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

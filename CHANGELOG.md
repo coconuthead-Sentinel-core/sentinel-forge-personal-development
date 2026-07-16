@@ -11,6 +11,15 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **🪞 After-Action Review joins the floating-toolbar dispatch chain**
+  (owner QA find). The traffic light now works inside the AAR window:
+  **green Add** jumps to today's reflection (one entry per day, so "add"
+  means "today, ready to type"), **yellow Save** commits the day shown,
+  and **red Delete** clears TODAY's draft only — a past day is refused
+  with "past reviews are history — never deleted" (the archive law).
+  Same context-test pattern as every other panel; handlers step aside
+  when focus is elsewhere. Runtime-proven under a real `mainloop()`
+  (6/6 smoke checkpoints, temp DB).
 - **🌧 Ambience — a quiet comfort bed under the read-aloud voice**
   (`lyceum/ambience.py`, +10 tests). New Library button opens a chooser:
   wind, rain, ocean, or a binaural 10 Hz tone, at Quiet/Medium volume, on

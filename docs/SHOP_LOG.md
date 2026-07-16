@@ -68,6 +68,13 @@ Decision: draft | ready_for_review | approved | blocked
   linter green; chooser + degrade path smoke-passed. NOTE: real audio-out
   NOT verifiable on this bench (worktree python lacks sounddevice) —
   laptop must verify sound on the metal.
+- **Third build same session — 🪞 AAR joins the toolbar (proprietor's QA
+  find):** Shannon, working as human-in-the-loop QA, spotted that the
+  After-Action Review window sat outside the floating-toolbar dispatch.
+  Wired in the house pattern: green Add → today's entry, yellow Save →
+  commit shown day, red Delete → clears TODAY's draft only and REFUSES
+  past days (archive law: history is never deleted). Smoke 6/6 under a
+  real mainloop with a temp DB; suite 410 green.
 - **Decisions PENDING (owner's call):** laptop road test of BOTH sprints
   — Reward-Draw toasts (all three tiers) and Ambience audio on real
   speakers/headphones — BEFORE merge to main + mirror; curate the starter
