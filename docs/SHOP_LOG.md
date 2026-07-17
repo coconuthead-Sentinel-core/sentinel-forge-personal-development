@@ -46,6 +46,11 @@ Decision: draft | ready_for_review | approved | blocked
 - **Evidence:** smoke 3/3 under real mainloop (dock host created inside
   the AAR window; re-dock to main; safe fallback when closed) · linter
   8/8 · suite **410** green · shipped to main + both mirrors same night.
+- **Breadcrumbs for QA (proprietor's order, same night):** the standing
+  method extended — new `qa_debug.log` records toolbar dispatch claims
+  and fallthroughs, dock moves, reward draws (tier + drought), and
+  ambience events; method + field-report workflow documented in
+  Testing-and-QA.md. Verified live: smokes re-run, trail read back.
 - **Next:** proprietor re-tests on the laptop — open the AAR, undock the
   bar (or use the dock menu), confirm the mic dictates into both boxes.
 

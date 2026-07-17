@@ -10,6 +10,18 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **QA breadcrumb trail (`qa_debug.log`)** — the standing breadcrumb
+  method (voice_debug.log, fontsize_debug.log) extended to everything
+  the proprietor road-tests: floating-toolbar dispatch (which panel
+  claimed Add/Save/Delete, or that a click fell through), every dock
+  move (target → resolved window), every reward draw (event → tier +
+  drought counter), and ambience start/stop/unavailable. One timestamped
+  line per real event, append-only, git-ignored, never raises. Method
+  documented in `docs/wiki/Testing-and-QA.md` — a field report now
+  resolves to "never fired / wrong values / fired invisibly" in one log
+  read.
+
 ### Fixed
 - **Floating toolbar (and its mic) couldn't live in the After-Action
   Review window** (owner QA field report, found on the real screen).

@@ -98,3 +98,34 @@ test files, all still headless (no Tkinter, throwaway temp DBs):
 Verification practice for UI work: **headless smoke scripts** driving
 the real app under a genuine `mainloop()` (worker threads deliver via
 `after()`, which silently fails without one — a lesson learned twice).
+
+## The breadcrumb method (standing QA practice — formalized 2026-07-16)
+
+When the proprietor road-tests on the real screen and something
+"doesn't work," the first move is a **log read, not a guess**. Every
+QA-sensitive seam writes one timestamped line to an append-only local
+log the moment it fires, so a field report can be answered with
+evidence: did the handler run, with what values, and what did it decide?
+
+| Log (all `*.log`, git-ignored, live next to the app) | What it proves |
+| --- | --- |
+| `voice_debug.log` | every voice change, read-aloud, TTS subprocess, and normalization change (before → after) |
+| `%LOCALAPPDATA%\SentinelForge\fontsize_debug.log` | every A−/A+ click with old → new pt (the log that solved the "dead plugs" report) |
+| `qa_debug.log` | **the QA trail**: floating-toolbar dispatch — which panel CLAIMED Add/Save/Delete, or that the click fell through; every dock move (requested target → resolved window); every reward draw (event → tier, drought counter); ambience start/stop/unavailable |
+
+Rules of the method:
+1. **One line per real event**, timestamped, `pid`-stamped — appended,
+   never rewritten.
+2. **Logging never raises** — every write is wrapped; a broken log must
+   never break the app.
+3. **Log decisions, not chatter** — the line records what was decided
+   and the values that decided it (e.g. `ftb-review: DELETE claimed,
+   day=2026-07-01, cleared=False (past day refused, archive law)`).
+4. New feature → new breadcrumbs at its QA seams **in the same sprint**,
+   so the proprietor's first road test is diagnosable from day one.
+
+Field-report workflow: proprietor reports what he clicked and what he
+saw → engineer reads the tail of the relevant log → the report resolves
+to "never fired" (wiring defect), "fired with wrong values" (logic
+defect), or "fired correctly but invisibly" (feedback defect) — three
+different fixes, one log read apart.

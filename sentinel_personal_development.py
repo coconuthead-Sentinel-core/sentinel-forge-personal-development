@@ -217,6 +217,25 @@ def _norm_speech_logged(raw: str) -> str:
         _vlog(f"tts-norm: {raw[:100]!r} -> {normalized[:130]!r}")
     return normalized
 
+
+# --- QA breadcrumb log (standing method, extended 2026-07-16) -------------
+# The proprietor's QA breadcrumb trail — same discipline as
+# voice_debug.log and fontsize_debug.log, for everything he road-tests:
+# floating-toolbar dispatch claims and fallthroughs, dock moves, reward
+# draws, ambience starts/stops. A "doesn't work" field report becomes
+# ONE log read (which seam fired, with what values) instead of a
+# guessing cycle. Logging must never break the app.
+_QA_DEBUG_LOG = os.path.join(_BR_BASE, "qa_debug.log")
+def _qlog(msg: str) -> None:
+    try:
+        import datetime
+        line = (f"{datetime.datetime.now().isoformat(timespec='milliseconds')} "
+                f"pid={os.getpid()} {msg}\n")
+        with open(_QA_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass  # logging must never break the app
+
 # Audit rubric grade vocabulary (Walkenbach / A1 course pattern).
 AUDIT_GRADES = ("A+", "A", "A−", "B+", "B", "B−",
                 "C+", "C", "C−", "D", "F", "n/a", "")
@@ -1576,6 +1595,8 @@ class BookReader:
         self._ftb_dock_target = target_host
         self._build_floating_toolbar_widgets(self._ftb_current_host)
         self._save_floating_toolbar_state(target_host=target_host)
+        _qlog(f"ftb-dock: -> {target_host!r} "
+              f"(host window: {type(target_win).__name__})")
 
     def _floating_toolbar_dock(self) -> None:
         """Default dock action (goes to the last used host or main)."""
@@ -1915,6 +1936,7 @@ class BookReader:
             return
         if self._ftb_invoke_context_button(("add", "new", "create", "upload")):
             return
+        _qlog("ftb-add: fell through — no panel claimed the click")
         self.set_status("Click into an add field or list, then use Add.")
 
     def _ftb_action_remove(self) -> None:
@@ -1945,6 +1967,7 @@ class BookReader:
             return
         if self._ftb_generate_bound_event("<Delete>"):
             return
+        _qlog("ftb-remove: fell through — no panel claimed the click")
         self.set_status("Click or select something removable, then use Remove.")
 
     def _ftb_action_save(self) -> None:
@@ -1970,6 +1993,7 @@ class BookReader:
             return
         if self._ftb_generate_bound_event("<Control-s>"):
             return
+        _qlog("ftb-save: fell through — no panel claimed the click")
         self.set_status("💾 Nothing to save here — open an entry or field first.")
 
     def _journal_save_from_toolbar(self) -> bool:
@@ -2024,6 +2048,8 @@ class BookReader:
             ok = hooks["save"]()
         except Exception:
             ok = False
+        _qlog(f"ftb-review: SAVE claimed, day={self._review_current_day}, "
+              f"ok={ok}")
         if not ok:
             self.set_status("🪞 Review could not be saved — check the window.")
         return True
@@ -2040,6 +2066,7 @@ class BookReader:
             hooks["today"]()
         except Exception:
             return False
+        _qlog("ftb-review: ADD claimed -> jumped to today")
         self.set_status("🪞 Today's review — type, then the yellow Save.")
         return True
 
@@ -2055,6 +2082,8 @@ class BookReader:
             cleared = hooks["clear_today"]()
         except Exception:
             return False
+        _qlog(f"ftb-review: DELETE claimed, day={self._review_current_day}, "
+              f"cleared={cleared} (False = past day refused, archive law)")
         if cleared:
             self.set_status("🪞 Today's draft cleared — yellow Save commits "
                             "the blank, or click the date to reload it.")
@@ -19901,10 +19930,15 @@ class BookReader:
         try:
             svc = self._reward_service()
             if svc is None:
+                _qlog("reward: service unavailable: "
+                      f"{getattr(self, '_reward_err', '?')}")
                 return
             reward = svc.draw(event)
-        except Exception:
+        except Exception as e:
+            _qlog(f"reward: draw FAILED for {event!r}: {e}")
             return
+        _qlog(f"reward: {event!r} -> {reward.tier} "
+              f"(drought now {svc.drought()})")
         if reward.tier == "STANDARD":
             # The quiet green dot — visible, but it stays out of the way.
             self.set_status(f"🟢 {reward.payload}")
@@ -20061,13 +20095,16 @@ class BookReader:
             try:
                 self._ambience_player().start(kind, volume=volume)
             except AmbienceUnavailableError as e:
+                _qlog(f"ambience: UNAVAILABLE ({e})")
                 self.set_status(f"🌧 Ambience unavailable: {e}")
                 win.destroy()
                 return
             except Exception as e:
+                _qlog(f"ambience: start FAILED kind={kind}: {e}")
                 self.set_status(f"🌧 Ambience could not start: {e}")
                 win.destroy()
                 return
+            _qlog(f"ambience: started kind={kind} vol={volume}")
             self._ambience_vol_choice = vol_var.get()
             self.set_status(f"{KINDS[kind]['label']} on "
                             f"({vol_var.get().lower()}) — "
@@ -20079,6 +20116,7 @@ class BookReader:
             player = getattr(self, "_ambience_p", None)
             if player is not None:
                 player.stop()
+            _qlog("ambience: off")
             self.set_status("🌧 Ambience off.")
             self._ambience_sync_button()
             win.destroy()
