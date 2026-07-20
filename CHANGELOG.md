@@ -10,6 +10,25 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Prompt Library: Save didn't work, Delete destroyed, and the toolbar
+  never came** (owner QA field report, 2026-07-20 — found on the real
+  screen while filing a live job-search exchange). Three defects, one
+  repair in the house pattern: (1) the yellow Save lamp had no Prompt
+  Library handler in the dispatch chain — `_prompt_lib_save_from_toolbar`
+  added with visible "saved" confirmation; (2) the red lamp hard-deleted
+  ("This can't be undone") against the archive-never-delete law — it now
+  ARCHIVES: the row stays in the DB (`archived_at` additive migration,
+  NULL = active) and a Markdown copy with YAML front-matter is written
+  to a **Prompt Archive** folder beside Books on the OneDrive-synced
+  Desktop — file written FIRST, DB updated second, so a failed write
+  never loses the only copy; (3) the floating toolbar now auto-docks to
+  the window on open (AAR/Study precedent) and goes home to the
+  dashboard on close. New pure kernel `lyceum/prompt_archive.py`
+  (Markdown render + Windows-safe filenames), 12 headless tests on a
+  temp DB; suite 410→422; smoke 5/5 under a real `mainloop()`; the ❓
+  toolbar tour cards updated to tell the truth about archiving.
+
 ### Added
 - **QA breadcrumb trail (`qa_debug.log`)** — the standing breadcrumb
   method (voice_debug.log, fontsize_debug.log) extended to everything

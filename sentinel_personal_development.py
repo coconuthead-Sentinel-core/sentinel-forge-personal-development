@@ -1502,13 +1502,16 @@ class BookReader:
              "Also works on the Planner, Matrix, Journal, and more."),
             (save_btn, "💾 Save",
              "The yellow lamp — middle of the traffic light (green Add · "
-             "yellow Save · red Delete). Saves whatever you're editing — your "
-             "Journal entry, Study Notes, or the open Add/Edit box in Topics, "
-             "Glossary, and Commentary — and tells you it saved."),
+             "yellow Save · red Delete). Saves whatever you're editing — the "
+             "selected Prompt Library entry, your Journal entry, Study Notes, "
+             "or the open Add/Edit box in Topics, Glossary, and Commentary — "
+             "and tells you it saved."),
             (rem_btn, "🗑 Delete",
-             "The red lamp. Deletes what's selected — in the Prompt Library "
-             "the selected entry; in the 📚 Library it archives the selected "
-             "book. It always asks first. Select something, then Delete."),
+             "The red lamp. Nothing is destroyed: in the Prompt Library it "
+             "ARCHIVES the selected entry (kept in the database, plus a "
+             "Markdown copy in the Prompt Archive folder OneDrive backs up); "
+             "in the 📚 Library it archives the selected book. It always "
+             "asks first."),
             (self._ftb_dock_btn, "⇱ / ⇲ Dock",
              "⇱ Undock pops the bar out so it floats. While floating, "
              "⇲ Dock ▼ opens a menu of your open windows — including "
@@ -1980,6 +1983,8 @@ class BookReader:
         inline = getattr(self, "_ftb_inline_input", None)
         if inline is not None:
             inline()
+            return
+        if self._prompt_lib_save_from_toolbar():
             return
         if self._journal_save_from_toolbar():
             return
@@ -16696,7 +16701,8 @@ class BookReader:
                             activeforeground="white")
         list_menu.add_command(label="➕  New entry",
                               command=self._prompt_lib_new)
-        # (🗑 Delete this entry menu item removed — Delete/Remove widgets were taken out.)
+        list_menu.add_command(label="🗃  Archive this entry",
+                              command=self._prompt_lib_archive_current)
 
         def _pl_list_rclick(event):
             idx = lb.nearest(event.y)
@@ -16798,6 +16804,13 @@ class BookReader:
 
         win.protocol("WM_DELETE_WINDOW", _close)
         self._prompt_lib_refresh(select_id=select_id)
+        # Owner QA find (2026-07-20): the safe spot must BE here when the
+        # window opens — dock the traffic-light bar to it, don't make the
+        # owner go find it. Closing the window sends the bar home (above).
+        try:
+            self._floating_toolbar_dock_to("prompt_library")
+        except tk.TclError:
+            pass
 
     def _prompt_lib_refresh(self, select_id: int | None = None) -> None:
         lb = self._prompt_lib_listbox
@@ -16805,6 +16818,7 @@ class BookReader:
             return
         rows = self._db_query(
             "SELECT id, title, created_at FROM prompt_library "
+            "WHERE archived_at IS NULL "
             "ORDER BY updated_at DESC, id DESC")
         self._prompt_lib_items = rows
         lb.delete(0, tk.END)
@@ -16947,18 +16961,58 @@ class BookReader:
         self._prompt_lib_refresh(select_id=new_id)
         self.set_status(f"🗒 Recorded: {title}")
 
-    def _prompt_lib_delete_current(self) -> None:
+    def _prompt_lib_archive_current(self) -> None:
+        """Red lamp in the Prompt Library: ARCHIVE the selected entry —
+        never delete (design law; owner QA find 2026-07-20, replacing a
+        hard DELETE). The row stays in the DB with archived_at set, and
+        a Markdown copy is written to the 'Prompt Archive' folder next
+        to the Books folder — the OneDrive-synced Desktop — so the
+        local file IS the cloud backup."""
+        from lyceum import prompt_archive
         if self._prompt_lib_current_id is None:
             return
-        if not messagebox.askyesno(
-                "Delete entry?",
-                "Delete this Prompt Library entry? This can't be undone."):
+        self._prompt_lib_save_current(silent=True)   # archive what's on screen
+        rows = self._db_query(
+            "SELECT id, title, prompt, response, source, created_at "
+            "FROM prompt_library WHERE id=?", (self._prompt_lib_current_id,))
+        if not rows:
             return
-        self._db_exec("DELETE FROM prompt_library WHERE id=?",
-                      (self._prompt_lib_current_id,))
+        rid, title, prompt, response, source, created = rows[0]
+        if not messagebox.askyesno(
+                "Archive entry?",
+                "Move this entry out of the Prompt Library?\n\n"
+                "Nothing is deleted: the entry is kept in the database and "
+                "saved as a Markdown file in the 'Prompt Archive' folder "
+                "(backed up by OneDrive sync).",
+                parent=self._prompt_lib_win or self.root):
+            return
+        now = datetime.now().isoformat(timespec="seconds")
+        entry = {"id": rid, "title": title, "prompt": prompt,
+                 "response": response, "source": source,
+                 "created_at": created, "archived_at": now}
+        arch_dir = os.path.join(
+            os.path.dirname(LIBRARY_DIR.rstrip("\\/")), "Prompt Archive")
+        fname = prompt_archive.archive_filename(rid, title, now)
+        try:
+            os.makedirs(arch_dir, exist_ok=True)
+            with open(os.path.join(arch_dir, fname), "w",
+                      encoding="utf-8") as fh:
+                fh.write(prompt_archive.entry_to_markdown(entry))
+        except OSError as e:
+            # File first, DB second: if the copy can't be written the
+            # entry stays on the active list — never lose the only copy.
+            messagebox.showerror(
+                "Archive failed",
+                "Couldn't write the archive file, so the entry was NOT "
+                f"removed from the list:\n\n{e}",
+                parent=self._prompt_lib_win or self.root)
+            return
+        self._db_exec(
+            "UPDATE prompt_library SET archived_at=? WHERE id=?", (now, rid))
         self._prompt_lib_current_id = None
         self._prompt_lib_clear_detail()
         self._prompt_lib_refresh()
+        self.set_status(f"🗃 Archived to Prompt Archive: {fname}")
 
     def _prompt_lib_toolbar_should_act(self) -> bool:
         return self._ftb_should_act_on(self._prompt_lib_win,
@@ -16976,9 +17030,22 @@ class BookReader:
         if not self._prompt_lib_toolbar_should_act():
             return False
         if self._prompt_lib_current_id is None:
-            self.set_status("Select a Prompt Library entry to remove.")
+            self.set_status("Select a Prompt Library entry to archive.")
             return True
-        self._prompt_lib_delete_current()
+        self._prompt_lib_archive_current()
+        return True
+
+    def _prompt_lib_save_from_toolbar(self) -> bool:
+        """Toolbar 💾 in the Prompt Library (owner QA find 2026-07-20:
+        Save was missing from the dispatch chain, so edits never
+        committed). Saves the selected entry with visible confirmation."""
+        if not self._prompt_lib_toolbar_should_act():
+            return False
+        if self._prompt_lib_current_id is None:
+            self.set_status("🗒 No entry selected — fill the boxes and "
+                            "press ➕ Add to record a new one.")
+            return True
+        self._prompt_lib_save_current()
         return True
 
     def _prompt_lib_paste_response(self) -> None:

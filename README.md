@@ -68,7 +68,7 @@ lives in the `lyceum/` package and is unit-tested in isolation:
 python -m unittest discover -s tests
 ```
 
-410 automated tests cover the **Bill Sentinel kernel**, the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the **variable-ratio reward engine (Reward-Draw)**, the **ambience synthesis kernel**, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
+422 automated tests cover the **Prompt Library archive kernel**, the **Bill Sentinel kernel**, the **WCAG contrast kernel**, the **two-lapse streak protocol**, the **job-readiness audit kernel**, the password-strength estimator, the ECA automation engine, the **variable-ratio reward engine (Reward-Draw)**, the **ambience synthesis kernel**, the prompt coach, the readability analyzer, the spreadsheet formula engine, the knowledge harvester, the Commentary store, the progress kernels, database atomicity
 (commit + rollback), the speech normalizer, the hands-free
 dictation-command parser, local retrieval (RAG), the document writer,
 the cached file indexer, the FSRS spaced-repetition core, the study-panel

@@ -222,7 +222,8 @@ CREATE TABLE IF NOT EXISTS prompt_library (
     response TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    archived_at TEXT                      -- NULL = active; set = archived, row kept
 );
 
 -- Daily Planner (Sunsama-style): one row per task, assigned to a day,
@@ -836,6 +837,16 @@ def init_study_db() -> None:
             if "if_then" not in have:
                 con.execute("ALTER TABLE v2mom_goals ADD COLUMN if_then "
                             "TEXT NOT NULL DEFAULT ''")
+        except sqlite3.Error:
+            pass
+        # Additive migration: prompt_library.archived_at — entries archive,
+        # never delete (owner QA find 2026-07-20). NULL = active.
+        try:
+            have = {r[1] for r in con.execute(
+                "PRAGMA table_info(prompt_library)").fetchall()}
+            if "archived_at" not in have:
+                con.execute("ALTER TABLE prompt_library "
+                            "ADD COLUMN archived_at TEXT")
         except sqlite3.Error:
             pass
         con.commit()

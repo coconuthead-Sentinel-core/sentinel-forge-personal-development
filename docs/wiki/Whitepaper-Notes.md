@@ -367,3 +367,16 @@
   not support an efficacy claim. The owner's "hear it twice at once"
   idea was redirected to sequential re-listening: simultaneous
   duplicate speech streams interfere rather than reinforce.
+
+- **2026-07-20 — Prompt Library archive repair (owner-led QA).** A field
+  test with real content — the owner filing a job-search exchange —
+  surfaced that the Prompt Library's Save lamp was unwired and its
+  Delete lamp hard-deleted, the project's only remaining destructive
+  path. The repair generalizes the archive-never-delete law to a second
+  surface: rows take an `archived_at` tombstone while a Markdown copy
+  with YAML front-matter lands in an OneDrive-synced folder — the local
+  file IS the cloud backup, with no cloud service claimed. Notable for
+  the paper: the defect was found by human-in-the-loop QA against the
+  design laws, not by the automated suite, and the fix ordering (file
+  written before the database row is tombstoned) encodes a
+  never-lose-the-only-copy invariant.

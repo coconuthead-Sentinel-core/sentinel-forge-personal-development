@@ -384,6 +384,17 @@ dashboards.
   days refused). Smoke 6/6 under mainloop w/ temp DB; suite 410 green;
   no new unit tests (wiring-only; runtime proof is the smoke). *(this
   session)*
+- ✅ 2026-07-20 (QA) — Shannon field-tested the Prompt Library by filing
+  a real job-search exchange: yellow Save had NO handler in the dispatch
+  chain, red Delete hard-deleted (archive-law violation), and the bar
+  wasn't there on open. Repair: `lyceum/prompt_archive.py` kernel
+  (Markdown render + Windows-safe filenames), `archived_at` additive
+  migration (NULL = active), `_prompt_lib_save_from_toolbar` in the Save
+  chain, Delete → archive (file written FIRST, row tombstoned second,
+  .md lands in "Prompt Archive" beside Books = OneDrive-backed), auto-
+  dock-on-open, tour cards updated. 12 tests on temp DB; suite 422
+  green; smoke 5/5 under a real mainloop. Pseudocode boarded + filed in
+  the commit message. *(this session)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 
