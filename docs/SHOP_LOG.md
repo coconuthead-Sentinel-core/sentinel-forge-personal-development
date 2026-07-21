@@ -48,6 +48,12 @@ Decision: draft | ready_for_review | approved | blocked
 - **Weekly receipt readiness:** time_log (both parties' punches) +
   CHANGELOG + field sheet + this log = compile-ready; formatting job is
   Imprint's first work order (field sheet §D).
+- **Proprietor's update (later same day):** Prompt Library CLOSE-OUT
+  scheduled, not clear yet — one 25-min Pomodoro, three checks on the
+  real screen: (1) A+ grows the letters, (2) mic dictates a Title,
+  (3) red lamp archives an entry → `.md` appears in `Prompt Archive\`.
+  Three ✅ = section clear → next field-sheet line. Gate filed on the
+  field sheet (Testing-and-QA.md).
 
 Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
 Brian Kelley (proprietor)** · Decision: **ready_for_review**

@@ -146,6 +146,17 @@ the Prompt Library find is the model). Breadcrumbs are your witness:
 "Field QA session," and run the session inside a 🔥 Do Now 25-minute
 block — the timer under test is also the timer timing the test.
 
+**Prompt Library CLOSE-OUT gate (proprietor, 2026-07-21 — NOT clear
+yet).** One 25-min Pomodoro, three checks, all on the real screen:
+1. 🔡 **A+** → Title/Prompt/Response letters visibly grow
+2. 🎤 toolbar mic → a dictated **Title** lands in the box
+3. 🔴 red lamp archives an entry → `.md` file appears in
+   `Desktop\Prompt Archive\`
+
+Three checkmarks = section clear → move to the next field-sheet line.
+(The three span §A line 4 and the two §B re-test lines below — bundled
+here as one gate by the proprietor's order.)
+
 ### A. Today's ship — Prompt Library repair (step 7 still open)
 - [ ] Open 🗒 Prompt Library → traffic-light toolbar is docked at the top on arrival
 - [ ] Edit a selected entry → yellow **Save** → status shows "entry saved"

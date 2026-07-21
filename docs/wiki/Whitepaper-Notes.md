@@ -399,3 +399,12 @@
   paper: enrollment-by-registration UIs (dock maps, mic targets, scaling
   loops) need a checklist item per new surface, or the fourth instance of
   this class will not be the last.
+
+- **2026-07-21 — Owner-defined acceptance gates.** The proprietor now
+  writes his own close-out criteria before re-testing: the Prompt
+  Library section clears only on three observable proofs in one
+  Pomodoro (font growth on screen, dictated text landing, an archive
+  file appearing on disk). For the paper: UAT maturity showed up as the
+  stakeholder converting vague "re-test it" into binary, sensory
+  acceptance checks — evidence the visible-feedback defect class
+  taught a transferable QA habit.
