@@ -31,6 +31,70 @@ Decision: draft | ready_for_review | approved | blocked
 
 ---
 
+### 2026-07-20 — session close (stabilization declared; QA triaged)
+
+- **Proprietor's direction today:** feature freeze confirmed by his own
+  call — "use the equipment that's already built; no further development;
+  test what we have and document the QA." Portfolio put on an HR footing.
+  QA work prioritized through the Eisenhower method, all four quadrants,
+  displayed on the board and filed here (below).
+- **Work completed (engineer):** Prompt Library repair shipped (Save
+  handler wired, Delete→archive per the law, toolbar auto-docks;
+  12 tests; suite 410→422; smoke 5/5) · portfolio audit + hours ledger
+  (27 repos, 571 commits, 174.3 h documented; COCOMO ceiling ~96
+  person-months labeled as model estimate; honest A/B/C tiering —
+  "industrial grade" not claimed) · 7 merged child branches deleted on
+  GitHub, 7 unmerged reported · field QA session sheet added to
+  Testing-and-QA.md · this triage.
+- **Evidence:** suite 422 green · main `0565102` + docs · both clones
+  mirrored same-day · archives: Prompt Archive folder created on first
+  use · E: drive DISCONNECTED — 4th-copy verification pending.
+- **Defects found / fixed:** Prompt Library (3-in-1, proprietor's field
+  report) — fixed and shipped; owner re-test pending (sheet §A).
+- **Decisions made:** stabilization phase governs; Q4 exclusions are
+  deliberate and in writing (no new features, no new doc products, no
+  runtime QA for Tier B/C without a stakeholder ask).
+- **Decisions PENDING (owner's call):** 7 unmerged branches · Recycle
+  Bin emptying (verdict: safe) · stale capital-D clone · June backup
+  folder → E: · dirty trees (QNF-GitHub 8, Imprint 1, Claude AI 9).
+- **Next session opens with:** proprietor's field-sheet results; every
+  ❌ becomes a defect report; engineer triages and fixes under the freeze.
+
+**Filed pseudocode (canonical copy — matches the board shown 2026-07-20):**
+
+```text
+ALGORITHM QAPipelineTriage                // Eisenhower, all four quadrants planned
+INPUT:  27 products, 1 field QA sheet, 1 proprietor on his day off
+OUTPUT: every product honestly labeled tested / partially tested / untested
+INVARIANT: feature freeze holds - nothing new gets built; nothing ships
+           claiming "QA tested" until its sheet is clean
+
+1    Q1 DO NOW (urgent + important) - today, inside a 25-min block:
+1.1      field sheet A - Prompt Library repair (step 7, awaiting owner's eyes)
+1.2      field sheet B - Ambience REAL audio, Reward-Draw, AAR dock
+                                          // never verified on this laptop
+2    Q2 SCHEDULE (important, not urgent) - one per session this week, on the Planner:
+2.1      field sheet C full timer sweep ; field sheet D Imprint end-to-end
+2.2      Tier-A repo passes: strata-console, Quantum-Nexus-Forge, earp-prompts
+2.3      nudge timers: observe over the week ; plug in E: drive, verify 4th copy
+3    Q3 DELEGATE (to the engineer - Claude):
+3.1      re-run automated suites before any ship ; read breadcrumb logs after sessions
+3.2      triage every X into a defect report -> fix -> mirror ; keep all copies exact
+4    Q4 DON'T DO (deliberately, in writing):
+4.1      no new features ; no new documentation products      // freeze is the law
+4.2      no runtime QA for Tier B/C repos - docs + templates have no runtime;
+         revisit only on a stakeholder ask
+5    FOR EACH completed line -> log pass/fail + note on the wiki sheet; fail -> CALL engineer
+6    ASSERT before any product is offered for payment: its QA sheet is clean
+     and its tier label is honest
+7    STOP -> proprietor returns from break, starts the timer, works Q1
+```
+
+Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
+Brian Kelley (proprietor)** · Decision: **ready_for_review**
+
+---
+
 ### 2026-07-16 (late) — field report from the road test → fixed same night
 
 - **Proprietor's field report (QA on the real screen):** "floating
