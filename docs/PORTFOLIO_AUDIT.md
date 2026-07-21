@@ -114,5 +114,68 @@ Co-creation is on the record, not asserted: commits carry
 and this ledger is committed to the flagship repository, mirrored to both
 OneDrive clones, and copied to the owner's `Claude AI` folder.
 
+## 7. Value analysis — the stakeholder question
+
+*"If a stakeholder walked in and commissioned these products from a
+traditional team, what would they pay — and what did they save?"*
+Three numbers, each labeled with its method. Quote all three together;
+none alone tells the truth.
+
+**7a. Documented labor (evidence — the bulletproof number).**
+174.3 hours × $50–$85/hr freelance rate = **$8,700–$14,800** (§4).
+This is what the commit record proves. It survives any audit.
+
+**7b. Traditional-team model (textbook estimate — the ceiling).**
+The flagship measures **~33,500 non-blank Python source lines** (27.3k
+application shell, 5.2k tested kernels, 2.9k tests). Basic COCOMO,
+organic mode (Boehm, *Software Engineering Economics*, 1981 — the model
+taught in software-engineering courses):
+
+    effort = 2.4 × (33.5 KLOC)^1.05  ≈  96 person-months
+    schedule = 2.5 × 96^0.38         ≈  14 months
+    average staffing                 ≈  7 people
+
+At a $50/hr fully-loaded rate (~$8,650/person-month), the model prices a
+traditional from-scratch build of the flagship at **≈ $830,000 with a
+team of ~7 for ~14 months**. Honest limits, stated plainly: COCOMO
+predates AI-assisted development, assumes enterprise process overhead,
+and SLOC-based models over-price generated code — treat this as what
+the *textbook* would estimate, not as an appraisal. A real consultancy
+bid would land well below the model and well above the floor.
+
+**7c. The delta (the savings story).**
+Model estimate (~$830k) minus documented delivery cost (~$4,100–$6,900
+for the flagship's 81.2 h) is the productivity gap of one directed
+AI-assisted developer versus the model's traditional team. The
+defensible interview sentence: *"By the textbook COCOMO model, my
+flagship's 33,500 lines estimate to ~96 person-months of traditional
+team effort; the public commit record shows I delivered it in ~81
+directed hours. That gap — roughly two orders of magnitude — is what a
+disciplined AI-assisted workflow is worth, and every number in that
+sentence is reproducible from my repositories."*
+
+## 8. Honest grading — what these repositories are and are not
+
+The credibility of this portfolio rests on precise claims. Graded
+honestly, per this project's own no-inflation rule:
+
+| Tier | Repositories | Honest label |
+|---|---|---|
+| **A — working, tested software** | sentinel-forge-personal-development (422 tests, in daily production use by its intended user), Imprint, strata-console, Quantum-Nexus-Forge, earp-prompts (FastAPI + tests) | "Production-quality for its intended scope" — real, runnable, tested |
+| **B — reference implementations & prototypes** | rag-reference-implementation, llm-eval-harness, hub-and-spoke-ai-chatbot, cognitive-neural-overlay, seed-crystal-input-processing-layer, library-first-decision-agent, and peers | Working demonstrations of a pattern; not hardened products |
+| **C — engineering documentation & templates** | software-development-lifecycle-framework, seven-layer-architecture-template-pack, ios-compliance-framework, engineering/inventory template packs, glyphic-codex DSL, codices | Process artifacts — evidence of systems thinking, not code |
+
+**"Industrial grade" is not claimed** — that term implies CI/CD
+pipelines, independent code review, security audit, and multi-user
+hardening these projects have not had, and this portfolio's standing
+rule bans inflated labels. The claim that IS made, because the evidence
+supports it: **the owner directs AI-assisted development to working,
+tested, documented software with real engineering discipline** — SDLC
+staging, functional-core architecture, additive migrations,
+archive-never-delete data policy, and a 422-test suite that gates every
+release. For a hiring manager, that is the demonstrated skill: not
+"can type code," but "can specify, direct, verify, and ship it."
+
 *Generated 2026-07-20 by Claude (Anthropic) at the owner's direction; data
-source: GitHub commit history, reproducible per §3.*
+source: GitHub commit history, reproducible per §3. Value analysis added
+same day at the owner's direction after his stakeholder-framing review.*
