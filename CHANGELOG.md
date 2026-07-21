@@ -11,6 +11,16 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **🔡 A−/A+ didn't grow the Prompt Library letters** (owner QA field
+  report, 2026-07-21, mid-session — "the letters aren't increasing";
+  breadcrumbs read FIRST per the standing method: every click fired and
+  stepped 12→28pt, but only the Study surfaces were enrolled — the
+  invisible-success class again). Fix: Prompt/Response boxes join the
+  legibility loop (font + line spacing), the Title entry scales font-only,
+  the navigation list stays fixed per the index-stays-legible rule, the
+  window now OPENS at the owner's persisted size, and the breadcrumb line
+  gains a `prompt_lib=yes/no` field. Smoke 5/5 under a real `mainloop()`
+  (grew 27→31pt and back at the owner's real saved size); suite 422 green.
 - **🎤 Mic couldn't dictate into the Prompt Library or Time Check boxes**
   (owner QA field report, 2026-07-20 — session titles couldn't be
   recorded by voice). The toolbar mic enrolls widgets via a `<FocusIn>`

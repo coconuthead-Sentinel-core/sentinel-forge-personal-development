@@ -3212,7 +3212,12 @@ class BookReader:
         # clicked A+ while viewing Study Notes/Journal and saw nothing move:
         # invisible success reads as broken. Navigation LISTS stay fixed.)
         for attr in ("_glossary_definition_widget", "commentary_area",
-                     "_study_notes_widget", "_journal_body"):
+                     "_study_notes_widget", "_journal_body",
+                     # Owner QA find (2026-07-21): the Prompt Library's
+                     # Prompt/Response boxes were never enrolled — A−/A+
+                     # fired (breadcrumbs prove it) but nothing moved
+                     # there. Same invisible-success class as before.
+                     "_prompt_lib_prompt_txt", "_prompt_lib_response_txt"):
             w = getattr(self, attr, None)
             if w is not None:
                 try:
@@ -3220,6 +3225,15 @@ class BookReader:
                                 spacing3=spec["spacing3"], wrap=tk.WORD)
                 except Exception:
                     pass
+        # The Prompt Library Title is an Entry (no spacing options) —
+        # scale its font only. Its navigation LIST stays fixed, per the
+        # index-stays-legible / content-scales rule above.
+        te = getattr(self, "_prompt_lib_title_entry", None)
+        if te is not None:
+            try:
+                te.configure(font=font)
+            except Exception:
+                pass
         # The Topics read/write pane scales too — but keep its wrap=NONE, since
         # its bottom horizontal slider is how the user brings long lines into
         # view. (Its omission here was why A−/A+ appeared to "do nothing" there.)
@@ -3246,9 +3260,11 @@ class BookReader:
             _os.makedirs(_os.path.dirname(logp), exist_ok=True)
             tc = getattr(self, "_topic_compose", None)
             with open(logp, "a", encoding="utf-8") as _f:
+                plt = getattr(self, "_prompt_lib_prompt_txt", None)
                 _f.write(f"A{'+' if direction > 0 else '-'} click: {old} -> "
                          f"{self.study_font_size}pt; topic_compose="
                          f"{'yes' if tc is not None else 'no'}; "
+                         f"prompt_lib={'yes' if plt is not None else 'no'}; "
                          f"font={tc.cget('font') if tc is not None else 'n/a'}\n")
         except Exception:
             pass
@@ -16774,6 +16790,7 @@ class BookReader:
         title_ent.bind("<FocusIn>",
                        lambda _e: self._set_mic_target(title_ent), add="+")
         self._attach_clipboard_menu(title_ent)
+        self._prompt_lib_title_entry = title_ent
 
         _yellow = self.HIGHLIGHT_COLORS.get("Yellow", "#fde047")
         prow = tk.Frame(right, bg=BG_DARK)
@@ -16859,6 +16876,9 @@ class BookReader:
             self._floating_toolbar_dock_to("prompt_library")
         except tk.TclError:
             pass
+        # And open at the owner's chosen text size, not the built-in one
+        # (owner QA find 2026-07-21: A−/A+ enrollment).
+        self._apply_study_legibility()
 
     def _prompt_lib_refresh(self, select_id: int | None = None) -> None:
         lb = self._prompt_lib_listbox
