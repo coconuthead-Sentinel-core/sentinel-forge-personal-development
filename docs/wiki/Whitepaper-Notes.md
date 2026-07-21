@@ -380,3 +380,11 @@
   design laws, not by the automated suite, and the fix ordering (file
   written before the database row is tombstoned) encodes a
   never-lose-the-only-copy invariant.
+
+- **2026-07-20 — Portfolio audit & hours ledger.** The evidence trail itself
+  became a deliverable: commit-session estimation (git-hours heuristic,
+  reproducible from public history) documents 174+ engineering hours across
+  27 repositories, published in `docs/PORTFOLIO_AUDIT.md` with its method
+  and limits stated — a floor, not a ceiling, and priced only as documented
+  labor. Engineering-first framing: honest attribution of the AI-assisted
+  workflow is presented as a credibility feature, not a disclaimer.

@@ -1,0 +1,226 @@
+{
+ "generated": "2026-07-20",
+ "method_gap_min": 60,
+ "method_pad_min": 30,
+ "total_hours": 174.3,
+ "total_commits": 571,
+ "total_sessions": 186,
+ "repos": [
+  {
+   "repo": "ancient-numerics-codex",
+   "commits": 1,
+   "sessions": 1,
+   "hours": 0.5,
+   "first": "2026-05-03",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "cinematography-pipeline",
+   "commits": 1,
+   "sessions": 1,
+   "hours": 0.5,
+   "first": "2026-05-03",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "cognitive-neural-overlay",
+   "commits": 18,
+   "sessions": 4,
+   "hours": 3.7,
+   "first": "2026-05-03",
+   "last": "2026-05-08"
+  },
+  {
+   "repo": "cstm-lattice-reference",
+   "commits": 1,
+   "sessions": 1,
+   "hours": 0.5,
+   "first": "2026-05-03",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "earp-prompts",
+   "commits": 2,
+   "sessions": 1,
+   "hours": 0.5,
+   "first": "2026-05-01",
+   "last": "2026-05-01"
+  },
+  {
+   "repo": "engineering-project-build-and-inventory-template-pack",
+   "commits": 2,
+   "sessions": 2,
+   "hours": 1.0,
+   "first": "2026-05-02",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "enterprise-ai-reliability-platform-v1",
+   "commits": 21,
+   "sessions": 10,
+   "hours": 7.2,
+   "first": "2026-04-18",
+   "last": "2026-04-28"
+  },
+  {
+   "repo": "glyphic-codex-7system-work-flow-dsl",
+   "commits": 3,
+   "sessions": 3,
+   "hours": 1.5,
+   "first": "2026-05-02",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "hub-and-spoke-ai-chatbot",
+   "commits": 2,
+   "sessions": 2,
+   "hours": 1.0,
+   "first": "2026-05-02",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "Imprint",
+   "commits": 15,
+   "sessions": 6,
+   "hours": 4.7,
+   "first": "2026-07-01",
+   "last": "2026-07-13"
+  },
+  {
+   "repo": "ios-compliance-framework",
+   "commits": 2,
+   "sessions": 2,
+   "hours": 1.0,
+   "first": "2026-05-02",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "library-first-decision-agent",
+   "commits": 1,
+   "sessions": 1,
+   "hours": 0.5,
+   "first": "2026-05-03",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "llm-eval-harness",
+   "commits": 1,
+   "sessions": 1,
+   "hours": 0.5,
+   "first": "2026-05-03",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "Neural-Lattice-Architecture-and-Workflow-Optimization",
+   "commits": 26,
+   "sessions": 12,
+   "hours": 7.7,
+   "first": "2025-12-22",
+   "last": "2026-05-10"
+  },
+  {
+   "repo": "portfolio-dashboard",
+   "commits": 3,
+   "sessions": 2,
+   "hours": 1.9,
+   "first": "2026-05-03",
+   "last": "2026-05-10"
+  },
+  {
+   "repo": "Quantum-Nexus-Forge",
+   "commits": 16,
+   "sessions": 8,
+   "hours": 5.9,
+   "first": "2026-04-09",
+   "last": "2026-04-28"
+  },
+  {
+   "repo": "rag-reference-implementation",
+   "commits": 1,
+   "sessions": 1,
+   "hours": 0.5,
+   "first": "2026-05-03",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "seed-crystal-input-processing-layer",
+   "commits": 2,
+   "sessions": 2,
+   "hours": 1.0,
+   "first": "2026-05-03",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "sentinel-forge-cognitive-orchestrator",
+   "commits": 39,
+   "sessions": 22,
+   "hours": 15.2,
+   "first": "2025-04-28",
+   "last": "2026-04-28"
+  },
+  {
+   "repo": "sentinel-forge-personal-development",
+   "commits": 320,
+   "sessions": 46,
+   "hours": 81.2,
+   "first": "2026-05-22",
+   "last": "2026-07-20"
+  },
+  {
+   "repo": "Sentinel-of-sentinel-s-Forge",
+   "commits": 40,
+   "sessions": 23,
+   "hours": 16.1,
+   "first": "2025-04-28",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "sentinel-prime-network",
+   "commits": 4,
+   "sessions": 4,
+   "hours": 2.0,
+   "first": "2026-04-26",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "SentinelForge-AI",
+   "commits": 8,
+   "sessions": 5,
+   "hours": 2.9,
+   "first": "2026-04-28",
+   "last": "2026-05-10"
+  },
+  {
+   "repo": "seven-layer-architecture-template-pack",
+   "commits": 2,
+   "sessions": 2,
+   "hours": 1.0,
+   "first": "2026-05-02",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "software-development-lifecycle-framework",
+   "commits": 2,
+   "sessions": 2,
+   "hours": 1.0,
+   "first": "2026-05-02",
+   "last": "2026-05-03"
+  },
+  {
+   "repo": "Sovereign-Forge",
+   "commits": 35,
+   "sessions": 20,
+   "hours": 13.7,
+   "first": "2025-04-28",
+   "last": "2026-05-10"
+  },
+  {
+   "repo": "strata-console",
+   "commits": 3,
+   "sessions": 2,
+   "hours": 1.1,
+   "first": "2026-07-06",
+   "last": "2026-07-11"
+  }
+ ]
+}
