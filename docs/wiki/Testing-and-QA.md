@@ -159,6 +159,7 @@ block — the timer under test is also the timer timing the test.
 - [ ] 🎁 Reward-Draw: finish the 25-min Do Now block → a draw fires (dot, quote card, or gold) and `reward_log` gains a row
 - [ ] 🪞 AAR window: toolbar docks there; Save commits today's reflection; Delete refuses past days
 - [ ] ⏱ Time Check popup (fixed 2026-07-20, re-test): dock the bar via the dock menu → type or dictate a note → yellow Save or Enter files it → status reads "⏱ Logged: … · ✏ note saved"
+- [ ] 🎤 Mic enrollment (fixed 2026-07-20, re-test): focus the Prompt Library Title box → toolbar mic → speak a session title → words land in the box (then Prompt, Response, and the Time Check note the same way)
 
 ### C. Timer sweep (first full pass on the record)
 - [ ] 🔥 Do Now 25-min Pomodoro: counts down, ends visibly (used as the session frame above)

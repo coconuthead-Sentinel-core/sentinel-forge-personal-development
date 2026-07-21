@@ -4033,6 +4033,7 @@ class BookReader:
         # Toolbar-driven input law: Enter commits, same as yellow Save.
         ent.bind("<Return>", lambda _e: _commit_default())
         self._attach_clipboard_menu(ent)
+        ent.bind("<FocusIn>", lambda _e: self._set_mic_target(ent), add="+")
 
         grid = tk.Frame(win, bg=BG_DARK, padx=8, pady=6)
         grid.pack(fill=tk.BOTH, expand=True)
@@ -16764,10 +16765,15 @@ class BookReader:
                  font=("Segoe UI", 9, "bold")
                  ).pack(anchor=tk.W, padx=10, pady=(6, 2))
         self._prompt_lib_title_var = tk.StringVar()
-        tk.Entry(right, textvariable=self._prompt_lib_title_var,
-                 bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
-                 font=("Segoe UI", 11), relief=tk.FLAT, bd=0
-                 ).pack(fill=tk.X, padx=10, ipady=5)
+        title_ent = tk.Entry(right, textvariable=self._prompt_lib_title_var,
+                             bg=BG_INPUT, fg=FG_TEXT, insertbackground=FG_TEXT,
+                             font=("Segoe UI", 11), relief=tk.FLAT, bd=0)
+        title_ent.pack(fill=tk.X, padx=10, ipady=5)
+        # Owner QA find (2026-07-20): the toolbar mic never enrolled these
+        # boxes, so session titles couldn't be dictated.
+        title_ent.bind("<FocusIn>",
+                       lambda _e: self._set_mic_target(title_ent), add="+")
+        self._attach_clipboard_menu(title_ent)
 
         _yellow = self.HIGHLIGHT_COLORS.get("Yellow", "#fde047")
         prow = tk.Frame(right, bg=BG_DARK)
@@ -16788,6 +16794,7 @@ class BookReader:
         pt.tag_raise("reading", "sel")
         self._prompt_lib_prompt_txt = pt
         self._attach_clipboard_menu(pt)
+        pt.bind("<FocusIn>", lambda _e: self._set_mic_target(pt), add="+")
 
         rrow = tk.Frame(right, bg=BG_DARK)
         rrow.pack(fill=tk.X, padx=10, pady=(10, 2))
@@ -16807,6 +16814,7 @@ class BookReader:
         rt.tag_raise("reading", "sel")
         self._prompt_lib_response_txt = rt
         self._attach_clipboard_menu(rt)
+        rt.bind("<FocusIn>", lambda _e: self._set_mic_target(rt), add="+")
 
         br = tk.Frame(right, bg=BG_DARK)
         br.pack(fill=tk.X, padx=10, pady=(4, 10))

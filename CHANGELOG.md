@@ -11,6 +11,14 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **🎤 Mic couldn't dictate into the Prompt Library or Time Check boxes**
+  (owner QA field report, 2026-07-20 — session titles couldn't be
+  recorded by voice). The toolbar mic enrolls widgets via a `<FocusIn>`
+  → `_set_mic_target` binding used in 20+ places, but the Prompt
+  Library's Title / Prompt / Response boxes and the Time Check note box
+  were never enrolled. Four one-line enrollments in the house pattern
+  (+ clipboard menu on the Title). Smoke 5/5 under a real `mainloop()`:
+  focus lands in each box → the mic targets it. Suite 422 green.
 - **⏱ Time Check popup couldn't be saved from the safe spot** (owner QA
   field report, 2026-07-20 — blocker filed before his own break: "if we
   can't save the A-1 work, we can't go to break"). The check-in popup sat
