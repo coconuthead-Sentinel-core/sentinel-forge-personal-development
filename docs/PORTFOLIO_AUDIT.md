@@ -143,6 +143,22 @@ and SLOC-based models over-price generated code — treat this as what
 the *textbook* would estimate, not as an appraisal. A real consultancy
 bid would land well below the model and well above the floor.
 
+**7b-prior. May 2026 canon estimates (reconciled 2026-07-20).**
+The shop's earlier ledger (`Claude AI\Completed projects\AI_Memory_Core\
+docs\SHOP_NOTES.md`, maintained May 2026) recorded **scope-based
+per-project replacement estimates**: SDLC Framework $9K–$30K ·
+Seven-Layer Architecture Pack $7K–$24K · iOS Compliance Framework
+$6K–$20K · earp-prompts $6K–$25K · Engineering/Inventory Template Pack
+$4.5K–$15K · Hub-and-Spoke $4.5K–$15K — six projects summing
+**~$37K–$129K**, before counting the flagship or the full-stack tier.
+That ledger also records test evidence beyond this audit's tiering
+(EARP v0.3.0 378/378 tests; SFCO 156/156; SoSF 116 routes). The two
+analyses answer different questions and both stand: the canon estimates
+**what each product's scope would cost to commission**; §7a prices
+**the labor the commit record proves**. Quote the canon figure for
+per-product worth, the §7a figure for documented effort, and the §7b
+model for the traditional-team ceiling — always with the method named.
+
 **7c. The delta (the savings story).**
 Model estimate (~$830k) minus documented delivery cost (~$4,100–$6,900
 for the flagship's 81.2 h) is the productivity gap of one directed
