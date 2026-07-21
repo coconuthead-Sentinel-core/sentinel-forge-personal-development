@@ -129,3 +129,51 @@ saw → engineer reads the tail of the relevant log → the report resolves
 to "never fired" (wiring defect), "fired with wrong values" (logic
 defect), or "fired correctly but invisibly" (feedback defect) — three
 different fixes, one log read apart.
+
+---
+
+## Field QA session sheet — 2026-07-20 (owner-led UAT, stabilization phase)
+
+**Standing order (proprietor, 2026-07-20): feature freeze holds. No new
+development; test what exists, log what's found.** This sheet is the
+session script. Mark each line ✅ pass / ❌ fail + one note; a ❌ becomes
+a defect report (screenshot + what you expected vs. what happened —
+the Prompt Library find is the model). Breadcrumbs are your witness:
+`qa_debug.log`, `voice_debug.log`, `fontsize_debug.log` in
+`%LOCALAPPDATA%\SentinelForge\`.
+
+**Setup (dogfood on purpose):** open Session Start, pre-commit to
+"Field QA session," and run the session inside a 🔥 Do Now 25-minute
+block — the timer under test is also the timer timing the test.
+
+### A. Today's ship — Prompt Library repair (step 7 still open)
+- [ ] Open 🗒 Prompt Library → traffic-light toolbar is docked at the top on arrival
+- [ ] Edit a selected entry → yellow **Save** → status shows "entry saved"
+- [ ] Red **Delete** on a junk entry → dialog says ARCHIVE (not "can't be undone") → entry leaves the list
+- [ ] The archived entry exists as a `.md` file in `Desktop\Prompt Archive\` and opens readable
+- [ ] Right-click an entry → "🗃 Archive this entry" present and works
+- [ ] Close the window → toolbar returns home to the dashboard
+
+### B. Recently shipped, never verified on this laptop
+- [ ] 🌧 Ambience: pick Rain, Quiet → **audible** under the reading voice, on the real speakers (this is the one the bench could not verify)
+- [ ] 🎁 Reward-Draw: finish the 25-min Do Now block → a draw fires (dot, quote card, or gold) and `reward_log` gains a row
+- [ ] 🪞 AAR window: toolbar docks there; Save commits today's reflection; Delete refuses past days
+
+### C. Timer sweep (first full pass on the record)
+- [ ] 🔥 Do Now 25-min Pomodoro: counts down, ends visibly (used as the session frame above)
+- [ ] 🎯 Focus Mode 60/90: starts, countdown visible, cancel works cleanly
+- [ ] 🚀 5-4-3-2-1: beats once per second, lands in Focus Mode on the #1 task
+- [ ] ⏱ Winner's Time Log at 5-min interval: chime fires, one-tap files it, pie chart updates
+- [ ] 🌤 Vision Board 60-second slideshow: plays, countdown shown, pause/next work, WAV music if set
+- [ ] ⏳ Wishlist: cooling item shows correct days remaining; "bought" stays disabled
+- [ ] Morning/evening nudges (Daily 10, vision board, AAR): can't be forced on demand — observe over the coming week and log dates seen
+
+### D. Imprint (documentation suite)
+- [ ] Launches clean from its shortcut
+- [ ] One document automation runs end-to-end and the output file opens in Word/Excel
+- [ ] Assistant buttons (🌐 web, ☁ OneDrive, 📄 draft) each produce a visible result or an honest error
+
+**Close-out:** write results below this sheet (date + ✅/❌ lines),
+then the assistant reconciles: defects get triaged, the suite stays
+green, results get committed and mirrored. Maintenance mode until the
+sheet is clean.
