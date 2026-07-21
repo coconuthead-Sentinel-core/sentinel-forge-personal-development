@@ -65,7 +65,20 @@ Decision: draft | ready_for_review | approved | blocked
   real mainloop on temp sidecars (Copy → clipboard == box text). Owner
   re-test line added to the field sheet. Persona order same shift:
   complete-ownership creed + Falcon call signs filed in the foreman's
-  journal.
+  journal. **Owner re-test ✅ ~04:00** — he copied and pasted his own
+  handoff to the assistant with the real mouse; line checked on the
+  field sheet.
+- **Bug 6 (proprietor's field report + screenshot, same night):**
+  right-click "Select all" dead on the "One primary task" field — and,
+  it turned out, on EVERY single-line field in the app (the helper
+  spoke only the Text API; Entries crashed silently in the callback —
+  invisible-failure instance six, inside the remediation tooling
+  itself). Fix: pure kernel `lyceum/select_all.py` (capability
+  dispatch), `_select_all_in` reduced to the error-guard shell.
+  Evidence: 7 new tests; suite 423 green + 14 pre-existing skips, 0
+  fail; smoke 9/9 under real mainloop — the app's own handler selects
+  the real prefilled Entry and Copy captures the full line. Re-test
+  line on the field sheet (one click, no dragging).
 
 Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
 Brian Kelley (proprietor)** · Decision: **ready_for_review**

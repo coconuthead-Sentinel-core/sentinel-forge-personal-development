@@ -420,3 +420,15 @@
   followed the house method: pure kernel (enable→replace→disable, locks
   even on error), fake-widget contract tests plus real-Tk clipboard
   proofs, then enrollment in the existing right-click menu pattern.
+
+- **2026-07-21 — Sixth instance: the menu itself.** The invisible-failure
+  class reached the remediation tooling: the right-click menu's "Select
+  all" — added everywhere as part of earlier repairs — silently crashed
+  on every single-line field, because its helper spoke only the
+  multi-line Text API. The owner localized it from the screen alone
+  ("the highlight needs to occur at the beginning… select all should be
+  there") without knowing the widget taxonomy — evidence that precise
+  UAT narration plus a screenshot can pin a defect to one callback. For
+  the paper: fixes that enroll surfaces into a shared control must test
+  the control against every widget species it's attached to, or the
+  repair propagates the class it repairs.

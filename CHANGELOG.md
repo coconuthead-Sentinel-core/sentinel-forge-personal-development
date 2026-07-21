@@ -11,6 +11,22 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **🖱 Right-click "Select all" was dead on every single-line field**
+  (owner QA field report, 2026-07-21, with screenshot — on the Session
+  Start "One primary task" field, Select all did nothing; the only way
+  to copy was drag-highlighting to the end of the line). Root cause:
+  the helper behind the menu spoke only the multi-line Text API
+  (`tag_add`); on a `tk.Entry` it raised inside the callback and the
+  menu just closed — an invisible failure, SIXTH instance of the class,
+  live on the 20+ Entries that carry the house right-click menu.
+  Fix: new pure kernel `lyceum/select_all.py` dispatches by widget
+  capability (Text family → tag the full range; Entry family →
+  `select_range(0, end)`); `_select_all_in` is now a thin shell holding
+  only the Tk error guard. 7 new tests (fake-dispatch + real-Tk proofs,
+  incl. select-then-copy equals full Entry content and select-all on a
+  disabled Text); suite 423 green + 14 pre-existing skips, 0 failures;
+  smoke 9/9 under a real `mainloop()` — the app's own menu handler
+  selects the real prefilled primary-task Entry end-to-end.
 - **📋 Session Start "Last session" box couldn't be copied** (owner QA
   field report, 2026-07-21 — "I should have been able to copy and paste
   this whole thing just using right click"; he had to screenshot his own

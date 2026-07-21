@@ -37,6 +37,7 @@ from lyceum.dictation_commands import apply_dictation_commands
 from lyceum.dictation_guard import dedup_punctuation
 from lyceum.platform_dpi import enable_high_dpi_awareness
 from lyceum.handoff_view import fill_readonly
+from lyceum.select_all import select_all
 from lyceum import finance as _finance
 from lyceum import util as _util
 from lyceum import goals as _goals
@@ -3361,13 +3362,18 @@ class BookReader:
             m.grab_release()
 
     def _select_all_in(self, widget) -> str:
-        """Select-all helper that works on any Text widget. Bound to
-        Ctrl+A on the Notes and Matrix editors."""
+        """Select-all helper for ANY enrolled box — multi-line Text or
+        single-line Entry. Bound to Ctrl+A and the right-click menu.
+
+        History (owner QA find 2026-07-21, screenshot evidence): the old
+        body spoke only the Text API, so on every Entry the menu's
+        "Select all" died silently (AttributeError inside the callback —
+        invisible failure) and Copy had nothing selected. Dispatch now
+        lives in the pure kernel lyceum/select_all.py; this shell only
+        holds the Tk error guard."""
         try:
-            widget.tag_add(tk.SEL, "1.0", tk.END)
-            widget.mark_set(tk.INSERT, "1.0")
-            widget.see(tk.INSERT)
-        except tk.TclError:
+            select_all(widget)
+        except (tk.TclError, AttributeError):
             pass
         return "break"
 
