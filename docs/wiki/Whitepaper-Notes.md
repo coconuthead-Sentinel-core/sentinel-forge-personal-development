@@ -408,3 +408,15 @@
   stakeholder converting vague "re-test it" into binary, sensory
   acceptance checks — evidence the visible-feedback defect class
   taught a transferable QA habit.
+
+- **2026-07-21 — Fifth instance, prediction confirmed.** The enrollment
+  defect class claimed its predicted fifth member: the Session Start
+  handoff box was a Label — the one surface whose entire job is to be
+  handed back to the assistant was the one surface that could not be
+  copied. The owner caught it by trying to *use* the workflow end-to-end
+  (session close → relaunch → brief the assistant), not by inspecting
+  features in isolation — evidence for the paper that workflow-level UAT
+  finds a class of defect feature-level QA structurally cannot. Repair
+  followed the house method: pure kernel (enable→replace→disable, locks
+  even on error), fake-widget contract tests plus real-Tk clipboard
+  proofs, then enrollment in the existing right-click menu pattern.

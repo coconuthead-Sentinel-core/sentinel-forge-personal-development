@@ -54,6 +54,18 @@ Decision: draft | ready_for_review | approved | blocked
   (3) red lamp archives an entry → `.md` appears in `Prompt Archive\`.
   Three ✅ = section clear → next field-sheet line. Gate filed on the
   field sheet (Testing-and-QA.md).
+- **Bug 5 (proprietor's field report, blocks session start — fixed
+  same hour):** the Session Start "Last session" handoff box couldn't
+  be copied ("I should have been able to copy and paste this whole
+  thing… I'm having to do snapshots and screenshots"). Label → read-only
+  Text + scrollbar, new pure kernel `lyceum/handoff_view.py`, enrolled
+  in the house right-click menu. Fifth enrollment-class instance, as
+  the whitepaper predicted. Evidence: 8 new tests; suite 430 collected,
+  416 green + 14 pre-existing py-fsrs skips, 0 fail; smoke 6/6 under
+  real mainloop on temp sidecars (Copy → clipboard == box text). Owner
+  re-test line added to the field sheet. Persona order same shift:
+  complete-ownership creed + Falcon call signs filed in the foreman's
+  journal.
 
 Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
 Brian Kelley (proprietor)** · Decision: **ready_for_review**

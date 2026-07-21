@@ -172,6 +172,7 @@ here as one gate by the proprietor's order.)
 - [ ] ⏱ Time Check popup (fixed 2026-07-20, re-test): dock the bar via the dock menu → type or dictate a note → yellow Save or Enter files it → status reads "⏱ Logged: … · ✏ note saved"
 - [ ] 🔡 A−/A+ in Prompt Library (fixed 2026-07-21, re-test): open Prompt Library → A+ twice → Title/Prompt/Response letters visibly grow; breadcrumb line shows prompt_lib=yes
 - [ ] 🎤 Mic enrollment (fixed 2026-07-20, re-test): focus the Prompt Library Title box → toolbar mic → speak a session title → words land in the box (then Prompt, Response, and the Time Check note the same way)
+- [ ] 📋 Last-session handoff copy (fixed 2026-07-21, re-test): open Session Start → right-click the "Last session" box → Select all → Copy → paste into any other app → the full handoff text arrives (this was the session-start blocker: screenshots were the only way to hand the notes back)
 
 ### C. Timer sweep (first full pass on the record)
 - [ ] 🔥 Do Now 25-min Pomodoro: counts down, ends visibly (used as the session frame above)

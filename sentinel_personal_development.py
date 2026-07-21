@@ -36,6 +36,7 @@ from lyceum.text_norm import normalize_for_speech
 from lyceum.dictation_commands import apply_dictation_commands
 from lyceum.dictation_guard import dedup_punctuation
 from lyceum.platform_dpi import enable_high_dpi_awareness
+from lyceum.handoff_view import fill_readonly
 from lyceum import finance as _finance
 from lyceum import util as _util
 from lyceum import goals as _goals
@@ -13133,18 +13134,32 @@ class BookReader:
         #  was taken out of the project.)
 
         # ---- Last session summary — shows the notes you recorded, and
-        # refreshes live as you record more (see auto-save below). ----------
+        # refreshes live as you record more (see auto-save below).
+        # A read-only tk.Text, NOT a Label: the handoff must be
+        # selectable and copyable so it can be pasted to the coding
+        # assistant at session start (owner QA find 2026-07-21 — the
+        # Label version could not be copied at all; fifth enrollment
+        # defect). Disabled Text = copy yes, edit no; scrolls when the
+        # handoff runs long. -----------------------------------------------
         tk.Label(body, text="Last session", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 9, "bold")).pack(anchor=tk.W, pady=(0, 4))
-        summary_lbl = tk.Label(
-            body, text=self._format_handoff_message(state or {}),
+        summary_frame = tk.Frame(body, bg=BG_INPUT)
+        summary_frame.pack(fill=tk.X, pady=(0, 14))
+        summary_box = tk.Text(
+            summary_frame, height=10,
             bg=BG_INPUT, fg=FG_TEXT, font=("Segoe UI", 10),
-            padx=10, pady=8, wraplength=500, justify=tk.LEFT, anchor=tk.W)
-        summary_lbl.pack(fill=tk.X, pady=(0, 14))
+            relief=tk.FLAT, bd=0, wrap=tk.WORD, padx=10, pady=8,
+            insertbackground=FG_TEXT)
+        summary_scroll = tk.Scrollbar(summary_frame, command=summary_box.yview)
+        summary_box.configure(yscrollcommand=summary_scroll.set)
+        summary_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        summary_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        fill_readonly(summary_box, self._format_handoff_message(state or {}))
+        self._attach_clipboard_menu(summary_box, track_for_mic=False)
 
         def _refresh_summary():
             try:
-                summary_lbl.configure(text=self._format_handoff_message(
+                fill_readonly(summary_box, self._format_handoff_message(
                     self._load_handoff_state() or {}))
             except tk.TclError:
                 pass

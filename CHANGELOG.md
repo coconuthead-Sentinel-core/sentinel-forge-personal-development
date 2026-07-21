@@ -11,6 +11,22 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **📋 Session Start "Last session" box couldn't be copied** (owner QA
+  field report, 2026-07-21 — "I should have been able to copy and paste
+  this whole thing just using right click"; he had to screenshot his own
+  handoff to brief the coding assistant, blocking the session-start
+  workflow). Diagnosis: the box was a `tk.Label` — no selection, no
+  clipboard, not enrollable in the house right-click menu; FIFTH
+  instance of the enrollment defect class, as the whitepaper note
+  predicted. Fix: the box is now a read-only `tk.Text` (disabled =
+  copy yes, edit no) with a scrollbar for long handoffs, filled through
+  a new pure kernel `lyceum/handoff_view.py` (`fill_readonly` — the
+  enable→replace→disable contract, re-locks even on error) and enrolled
+  in `_attach_clipboard_menu` (right-click → Select all / Copy).
+  8 new headless tests (fake-widget contract + real-Tk selection/copy
+  proofs); suite 430 total — 416 green, 14 pre-existing `py-fsrs`
+  optional-dependency skips, 0 failures; smoke 6/6 under a real
+  `mainloop()` on temp sidecars (Copy → clipboard equals box text).
 - **🔡 A−/A+ didn't grow the Prompt Library letters** (owner QA field
   report, 2026-07-21, mid-session — "the letters aren't increasing";
   breadcrumbs read FIRST per the standing method: every click fired and
