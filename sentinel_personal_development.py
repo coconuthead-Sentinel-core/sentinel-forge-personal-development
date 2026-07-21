@@ -13162,6 +13162,13 @@ class BookReader:
         summary_box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         fill_readonly(summary_box, self._format_handoff_message(state or {}))
         self._attach_clipboard_menu(summary_box, track_for_mic=False)
+        # Enroll in the 🔊 Read aim registry (owner QA bug 7, 2026-07-21:
+        # Read spoke the notes box but not this one — the bug-5 rebuild
+        # joined the clipboard registry but skipped this sibling one).
+        # House pattern for read-only panes; works on a DISABLED Text.
+        summary_box.bind(
+            "<1>", lambda _e: self._study_set_read_target(summary_box),
+            add="+")
 
         def _refresh_summary():
             try:

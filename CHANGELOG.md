@@ -11,6 +11,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **🔊 Read didn't speak the Session Start "Last session" box** (owner
+  QA field report, 2026-07-21 — TTS read the notes box but not the
+  handoff box). Root cause: the bug-5 rebuild enrolled the new box in
+  the clipboard registry but not the reader's aim registry (Read speaks
+  the last-clicked pane) — SEVENTH enrollment-class instance, this one
+  introduced by the previous night's own repair. Fix: one-line
+  enrollment in the house read-pane pattern (`_study_set_read_target`
+  on click; works on a disabled Text; cursor parks at word 1). Smoke
+  11/11 under a real `mainloop()` (click aims the reader; cursor at
+  top). Also hardened `tests/gui_base.py`: one shared Tk interpreter
+  per test process — repeated create/destroy cycles had begun
+  intermittently skipping 4 GUI tests via Tcl's `tcl_findLibrary`
+  re-init fault, making the suite count wobble. Suite now stable at
+  423 green + 14 py-fsrs skips, twice consecutively.
 - **🖱 Right-click "Select all" was dead on every single-line field**
   (owner QA field report, 2026-07-21, with screenshot — on the Session
   Start "One primary task" field, Select all did nothing; the only way

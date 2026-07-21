@@ -174,6 +174,7 @@ here as one gate by the proprietor's order.)
 - [ ] 🎤 Mic enrollment (fixed 2026-07-20, re-test): focus the Prompt Library Title box → toolbar mic → speak a session title → words land in the box (then Prompt, Response, and the Time Check note the same way)
 - [x] 📋 Last-session handoff copy (fixed 2026-07-21) — ✅ **owner re-test PASSED 2026-07-21 ~04:00**: proprietor right-clicked, copied, and pasted the full handoff (summary + next task + blocker + notes) to the assistant — the previously-impossible action, done with the real mouse on the real screen. Coaching note filed: right-click → Select all → Copy grabs a whole box in one shot.
 - [ ] 🖱 Select all on single-line fields (fixed 2026-07-21, re-test): click ONCE anywhere in the "One primary task" field → right-click → Select all → the whole line highlights (no dragging) → Copy → paste anywhere → the full line arrives. Same now works on every single-line box in the app.
+- [ ] 🔊 Read on the Last-session box (fixed 2026-07-21, re-test): click anywhere in the "Last session" box → toolbar 🔊 Read → the handoff is spoken from the first word (the notes box already worked; now both sections read aloud).
 
 ### C. Timer sweep (first full pass on the record)
 - [ ] 🔥 Do Now 25-min Pomodoro: counts down, ends visibly (used as the session frame above)

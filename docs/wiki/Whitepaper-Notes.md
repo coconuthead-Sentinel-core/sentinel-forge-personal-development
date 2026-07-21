@@ -432,3 +432,16 @@
   the paper: fixes that enroll surfaces into a shared control must test
   the control against every widget species it's attached to, or the
   repair propagates the class it repairs.
+
+- **2026-07-21 — Seventh instance: the repair repeats the class.** The
+  box rebuilt hours earlier to fix the copy defect was itself missing
+  from a sibling registry (the reader's aim), so text-to-speech spoke
+  every pane but the new one. The predicted failure mode is now
+  empirical: a surface must enroll in EVERY per-surface registry
+  (clipboard, mic, reader, scaling), and a fix that enrolls in some but
+  not all ships the next defect with the current one. The checklist
+  item is no longer advice; it is the sixth and seventh data points.
+  Same session, test-infrastructure corollary: growing the GUI suite
+  exposed a Tcl re-init fault that silently converted green tests to
+  skips — a wobbling suite count is itself a defect in the evidence
+  chain, fixed by sharing one Tk interpreter per test process.

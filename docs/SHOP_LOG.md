@@ -79,6 +79,17 @@ Decision: draft | ready_for_review | approved | blocked
   fail; smoke 9/9 under real mainloop — the app's own handler selects
   the real prefilled Entry and Copy captures the full line. Re-test
   line on the field sheet (one click, no dragging).
+- **Bug 7 (proprietor's field report via the new copy-paste channel):**
+  🔊 Read spoke the notes box but not the Last-session box — the bug-5
+  rebuild joined the clipboard registry but missed the reader's aim
+  registry. Seventh enrollment-class instance, introduced by our own
+  repair; owned as such. One-line house-pattern fix (read-pane click
+  binding, works on the disabled box). Smoke 11/11. Also fixed a
+  wobbling suite count: Tcl re-init fault was intermittently skipping
+  4 GUI tests; gui_base now shares one Tk interpreter per process.
+  Suite stable 423 green + 14 py-fsrs skips ×2 consecutive runs.
+  Owner's Eisenhower framing logged: Do Now = this fix (delegated),
+  Schedule = Prompt Library close-out (still not clear).
 
 Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
 Brian Kelley (proprietor)** · Decision: **ready_for_review**

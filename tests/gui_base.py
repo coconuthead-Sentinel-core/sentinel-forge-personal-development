@@ -23,6 +23,24 @@ except Exception as e:                # pragma: no cover - platform dependent
     _TK_IMPORT_ERROR = e
 
 
+# ONE Tk interpreter for the whole test process, shared by every
+# GuiTestCase subclass. History (2026-07-21): each class used to build
+# and destroy its own root; once the suite grew to three GUI classes,
+# the third re-initialization intermittently failed with Tcl's
+# `invalid command name "tcl_findLibrary"` (a known Tcl re-init fault),
+# silently turning 4 green tests into skips — a wobbling suite count.
+# The process exit reclaims the interpreter; no explicit destroy.
+_SHARED_ROOT = None
+
+
+def _shared_root():
+    global _SHARED_ROOT
+    if _SHARED_ROOT is None:
+        _SHARED_ROOT = tk.Tk()
+        _SHARED_ROOT.withdraw()   # hide from screen/taskbar; keep interpreter
+    return _SHARED_ROOT
+
+
 class GuiTestCase(unittest.TestCase):
     """Base class providing ``self.root`` — a withdrawn Tk root, or a skip."""
 
@@ -33,15 +51,6 @@ class GuiTestCase(unittest.TestCase):
         if tk is None:
             raise unittest.SkipTest(f"tkinter unavailable: {_TK_IMPORT_ERROR}")
         try:
-            cls.root = tk.Tk()
-            cls.root.withdraw()       # hide from screen/taskbar; keep interpreter
+            cls.root = _shared_root()
         except tk.TclError as e:      # pragma: no cover - headless runner
             raise unittest.SkipTest(f"no display for Tk: {e}")
-
-    @classmethod
-    def tearDownClass(cls):
-        try:
-            if cls.root is not None:
-                cls.root.destroy()    # full teardown: only at the very end
-        except Exception:
-            pass
