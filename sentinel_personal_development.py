@@ -1505,7 +1505,8 @@ class BookReader:
              "yellow Save · red Delete). Saves whatever you're editing — the "
              "selected Prompt Library entry, your Journal entry, Study Notes, "
              "or the open Add/Edit box in Topics, Glossary, and Commentary — "
-             "and tells you it saved."),
+             "and tells you it saved. In the ⏱ Time Check popup it files "
+             "the check-in (note included) under your last-used category."),
             (rem_btn, "🗑 Delete",
              "The red lamp. Nothing is destroyed: in the Prompt Library it "
              "ARCHIVES the selected entry (kept in the database, plus a "
@@ -1558,7 +1559,11 @@ class BookReader:
             # owner QA find #2 (2026-07-16): the AAR window was missing
             # from the dock map, so the bar (and its mic) could never
             # live there even though its dispatch handlers were wired.
-            "review": getattr(self, "_review_win", None)
+            "review": getattr(self, "_review_win", None),
+            # owner QA find (2026-07-20): the ⏱ Time Check popup was
+            # outside the dispatch chain entirely — no dock, no Save,
+            # no mic for the note box.
+            "time_check": getattr(self, "_time_audit_win", None)
         }
         
         target_win = window_map.get(target_host, self.root)
@@ -1685,7 +1690,8 @@ class BookReader:
                 "Library": "_library_win",
                 "Planning Hub": "_planning_win",
                 "Prompt Library": "_prompt_lib_win",
-                "After-Action Review": "_review_win"
+                "After-Action Review": "_review_win",
+                "Time Check": "_time_audit_win"
             }
 
             for label, attr in panels.items():
@@ -1983,6 +1989,8 @@ class BookReader:
         inline = getattr(self, "_ftb_inline_input", None)
         if inline is not None:
             inline()
+            return
+        if self._time_check_save_from_toolbar():
             return
         if self._prompt_lib_save_from_toolbar():
             return
@@ -4000,6 +4008,7 @@ class BookReader:
 
         def _close():
             self._time_audit_win = None
+            self._time_audit_commit_default = None
             try:
                 win.destroy()
             except tk.TclError:
@@ -4021,13 +4030,26 @@ class BookReader:
                        insertbackground=FG_TEXT, relief=tk.FLAT,
                        font=("Segoe UI", 10))
         ent.pack(fill=tk.X, ipady=3)
+        # Toolbar-driven input law: Enter commits, same as yellow Save.
+        ent.bind("<Return>", lambda _e: _commit_default())
+        self._attach_clipboard_menu(ent)
 
         grid = tk.Frame(win, bg=BG_DARK, padx=8, pady=6)
         grid.pack(fill=tk.BOTH, expand=True)
 
         def _choose(label):
+            # Remember the tap so the toolbar's yellow Save can file the
+            # next check-in under the same category (first use: A-1 Task).
+            self._time_audit_last_category = label
             self._log_time(label, interval, note_var.get().strip())
             _close()
+
+        def _commit_default():
+            """Enter in the note box / yellow Save on the toolbar: file
+            this check-in under the last-used category."""
+            _choose(getattr(self, "_time_audit_last_category",
+                            TIME_AUDIT_CATEGORIES[0][0]))
+        self._time_audit_commit_default = _commit_default
         for i, (label, color) in enumerate(TIME_AUDIT_CATEGORIES):
             tk.Button(grid, text=label, command=lambda l=label: _choose(l),
                       font=("Segoe UI", 10, "bold"), bg=color, fg="white",
@@ -4084,11 +4106,29 @@ class BookReader:
                 "created_at) VALUES (?,?,?,?,?,?)",
                 (now.strftime("%Y-%m-%d"), now.strftime("%H:%M"), category,
                  note or "", int(minutes), now.isoformat()))
-            self.set_status(f"⏱ Logged: {category} ({minutes} min). "
+            # Owner QA find (2026-07-20): say ON ITS FACE that the note
+            # made it in — the silent path read as "we can't save".
+            note_bit = " · ✏ note saved" if (note or "").strip() else ""
+            self.set_status(f"⏱ Logged: {category} ({minutes} min){note_bit}. "
                             "Knowing where the time goes is a freeing thing.")
         except Exception:
             pass
         self._refresh_time_log_report()
+
+    def _time_check_save_from_toolbar(self) -> bool:
+        """Toolbar 💾 in the ⏱ Time Check popup (owner QA find
+        2026-07-20: the popup sat outside the dispatch chain — no dock
+        slot, no Save, no mic for the note box). Files the check-in,
+        note included, under the last-used category (first use defaults
+        to 🅰 A-1 Task) with visible confirmation."""
+        win = getattr(self, "_time_audit_win", None)
+        if not self._ftb_should_act_on(win, "time_check"):
+            return False
+        commit = getattr(self, "_time_audit_commit_default", None)
+        if commit is None:
+            return False
+        commit()
+        return True
 
 
     def _time_log_week_totals(self) -> list[tuple[str, int]]:

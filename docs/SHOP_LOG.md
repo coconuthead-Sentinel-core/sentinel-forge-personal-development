@@ -50,7 +50,11 @@ Decision: draft | ready_for_review | approved | blocked
   mirrored same-day · archives: Prompt Archive folder created on first
   use · E: drive DISCONNECTED — 4th-copy verification pending.
 - **Defects found / fixed:** Prompt Library (3-in-1, proprietor's field
-  report) — fixed and shipped; owner re-test pending (sheet §A).
+  report) — fixed and shipped; owner re-test pending (sheet §A). ·
+  ⏱ Time Check popup outside the dispatch chain (proprietor's blocker,
+  filed before break — "can't save the A-1 work") — dock slot + yellow
+  Save/Enter commit + clipboard menu + "✏ note saved" on the status
+  line; smoke 9/9 on temp DB; suite 422 green; re-test on sheet §B.
 - **Decisions made:** stabilization phase governs; Q4 exclusions are
   deliberate and in writing (no new features, no new doc products, no
   runtime QA for Tier B/C without a stakeholder ask).

@@ -11,6 +11,20 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **⏱ Time Check popup couldn't be saved from the safe spot** (owner QA
+  field report, 2026-07-20 — blocker filed before his own break: "if we
+  can't save the A-1 work, we can't go to break"). The check-in popup sat
+  entirely outside the floating-toolbar world: no dock slot, no Save
+  handler, no mic for the note box, no Enter-to-commit — and its "Logged"
+  confirmation printed on the dashboard status bar the popup itself
+  covered, so successful saves LOOKED like failures. House-pattern fix:
+  `"time_check"` added to the dock map + dock menu; yellow **Save** (and
+  Enter in the note box) files the check-in under the last-used category
+  (first use defaults to 🅰 A-1 Task); the note box gets the standard
+  right-click clipboard menu; and the status line now says on its face
+  when the note went in ("⏱ Logged: 🅰 A-1 Task (30 min) · ✏ note
+  saved"). Wiring-only; runtime proof: smoke 9/9 under a real
+  `mainloop()` on a temp DB; suite 422 green.
 - **Prompt Library: Save didn't work, Delete destroyed, and the toolbar
   never came** (owner QA field report, 2026-07-20 — found on the real
   screen while filing a live job-search exchange). Three defects, one
