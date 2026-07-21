@@ -395,6 +395,15 @@ dashboards.
   dock-on-open, tour cards updated. 12 tests on temp DB; suite 422
   green; smoke 5/5 under a real mainloop. Pseudocode boarded + filed in
   the commit message. *(this session)*
+- ✅ 2026-07-21 (QA sweep, cont.) — three more owner finds, same
+  invisible-success class, all breadcrumb-diagnosed and shipped same-day:
+  ⏱ Time Check outside the dispatch chain (dock slot + Save/Enter commit
+  + "✏ note saved" on its face); 🎤 mic never enrolled in Prompt Library
+  Title/Prompt/Response + Time Check note (4 FocusIn enrollments); 🔡
+  A−/A+ never enrolled Prompt Library boxes (legibility loop + open at
+  persisted size + prompt_lib breadcrumb field). Smokes 9/9, 5/5, 5/5;
+  suite 422 green throughout; shared time_log now carries both parties'
+  punches. *(this session)*
 - (empty — Shannon or the assistant may append instructions here; the
   next README check executes them)
 

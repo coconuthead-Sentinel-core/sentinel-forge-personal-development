@@ -31,6 +31,29 @@ Decision: draft | ready_for_review | approved | blocked
 
 ---
 
+### 2026-07-21 (early) — QA sweep continues (same working session)
+
+- **Proprietor's direction:** one item at a time, Eisenhower order;
+  exercise break logged ☕ 30 min; extreme-ownership books check ordered.
+- **Work completed (engineer):** bugs 2–4 fixed/shipped/mirrored same
+  hour — ⏱ Time Check dispatch + visible save · 🎤 mic enrollment
+  (4 boxes) · 🔡 A−/A+ legibility enrollment + open-at-persisted-size.
+  All breadcrumb-diagnosed first, per standing method.
+- **Evidence:** smokes 9/9 · 5/5 · 5/5 under real mainloop (temp DB);
+  suite 422 green ×3; main `9ef5610`; three clones verified identical;
+  foreman's journal + boards current; owner re-tests ✅ on Prompt
+  Library toolbar/save/title-mic (his screenshots).
+- **Decisions PENDING (owner):** unchanged (branches, Recycle Bin, E:
+  drive, stale clone, dirty trees) — E: still disconnected.
+- **Weekly receipt readiness:** time_log (both parties' punches) +
+  CHANGELOG + field sheet + this log = compile-ready; formatting job is
+  Imprint's first work order (field sheet §D).
+
+Signoff — Prepared by: **Claude (engineer)** · Reviewed by: **Shannon
+Brian Kelley (proprietor)** · Decision: **ready_for_review**
+
+---
+
 ### 2026-07-20 — session close (stabilization declared; QA triaged)
 
 - **Proprietor's direction today:** feature freeze confirmed by his own

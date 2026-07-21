@@ -388,3 +388,14 @@
   and limits stated — a floor, not a ceiling, and priced only as documented
   labor. Engineering-first framing: honest attribution of the AI-assisted
   workflow is presented as a credibility feature, not a disclaimer.
+
+- **2026-07-21 — The invisible-success defect class (QA weekend).** Four
+  owner-found defects in 36 hours shared one signature: the code worked
+  but gave no visible proof (Save unwired or confirmation hidden; mic and
+  font-scaling never enrolled for new surfaces). The breadcrumb-first
+  method resolved each field report to one of three verdicts — never
+  fired / wrong values / fired invisibly — in a single log read, and every
+  fix shipped same-day with a mainloop smoke as runtime proof. For the
+  paper: enrollment-by-registration UIs (dock maps, mic targets, scaling
+  loops) need a checklist item per new surface, or the fourth instance of
+  this class will not be the last.
