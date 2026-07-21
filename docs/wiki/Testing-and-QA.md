@@ -138,9 +138,11 @@ different fixes, one log read apart.
 development; test what exists, log what's found.** This sheet is the
 session script. Mark each line ✅ pass / ❌ fail + one note; a ❌ becomes
 a defect report (screenshot + what you expected vs. what happened —
-the Prompt Library find is the model). Breadcrumbs are your witness:
-`qa_debug.log`, `voice_debug.log`, `fontsize_debug.log` in
-`%LOCALAPPDATA%\SentinelForge\`.
+the Prompt Library find is the model). Breadcrumbs are your witness —
+two addresses (corrected 2026-07-21; the old line sent readers to the
+wrong door for two of the three): `voice_debug.log` and `qa_debug.log`
+live NEXT TO THE APP in `Desktop\Sentinel-Forge\`;
+`fontsize_debug.log` lives in `%LOCALAPPDATA%\SentinelForge\`.
 
 **Setup (dogfood on purpose):** open Session Start, pre-commit to
 "Field QA session," and run the session inside a 🔥 Do Now 25-minute
