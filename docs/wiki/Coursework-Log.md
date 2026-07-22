@@ -172,3 +172,18 @@ version. Both forms retained: private = fuel, public = direction.
 Student to dictate his own final public sentence; it then leads the
 flagship README and anchors the question bank. Further PD texts
 incoming at student's request — admission gate applies per text.
+
+- *7 Strategies for Wealth & Happiness* (Rohn 1985; owner's Bookshare
+  copy) — admitted to the PD shelf with the reality filter applied:
+  DURABLE = written/dated/reviewed goals, self-education as a system,
+  personal development as the asset, time discipline, association;
+  DATED/WISHFUL = 1985 financial arithmetic and wealth-promise framing
+  (noted, not followed; finance belongs to licensed advisors).
+  Applications filed: written 5-year development plan as an interview
+  artifact; the dashboard framed as Strategy Three compiled into
+  software; the admission gate recognized as Rohn's "stand guard at
+  the door of your mind" operationalized. Interview-discretion
+  coaching: private WHY = fuel, public WHY = direction; student's HR
+  sentence upgraded (strong verbs, evidence named, employer's need
+  answered). Student's own discretion instinct predicted the text's
+  counsel — transfer noted.
