@@ -83,3 +83,18 @@ functional requirement; explicit vs implicit; operational/structural/
 cross-cutting (families only); trade-off; least-worst. A true
 concordance feature is DEFERRED under the freeze — logged here as a
 decision, not drift.
+
+**Canary run — Harvest terms vs Ch. 4 assignment (2026-07-21):**
+student probed the tool before trusting it (correct canary practice).
+Finding: harvester is WHOLE-DOCUMENT scoped — returned 7 real
+term-definition pairs from across the book (plus one noise item,
+"ThoughtWorks," from the endorsement pages) and none of the assigned
+Ch. 4 terms. Ruling: verification PASS, validation MISS — not a
+defect; the tool met its built requirement. Enhancement DEFERRED under
+the freeze and logged as a decision: chapter-scoped harvest +
+instructor-seeded term list. Classroom procedure stands: assigned
+terms are found by reading and dictated into the Glossary; approved
+harvest terms from later chapters enter the review deck as preview
+vocabulary (spacing effect). The approve-to-add checklist is noted as
+correct human-in-the-loop design — the reason noise cannot reach the
+Glossary unapproved.
