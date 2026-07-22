@@ -79,6 +79,15 @@ Decision: draft | ready_for_review | approved | blocked
   fail; smoke 9/9 under real mainloop — the app's own handler selects
   the real prefilled Entry and Copy captures the full line. Re-test
   line on the field sheet (one click, no dragging).
+- **Bug 9 (proprietor's field report, mid-coursework 2026-07-22):**
+  Harvest-approval checkboxes read as dead — reproduction proved them
+  working but MUTE (near-black indicator + black checkmark on the dark
+  theme; checked and unchecked identical). Invisible-state class,
+  ninth member, second face: unreadable state = dead control. Fix:
+  white indicator, term labels clickable, live count on the Add button
+  (state proven three ways per toggle). Smoke 8/8 real mainloop (box
+  and label toggles move the counter; only checked terms reach the
+  temp-DB Glossary); suite 423 green. Re-test line on the field sheet.
 - **Bug 8 (proprietor's field report + screenshot, after real sleep —
   "we're killing bugs" 🕷 session theme declared):** Prompt Library
   content clipped at large fonts — Response box starved to 1px,

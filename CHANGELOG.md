@@ -11,6 +11,19 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **🧠 Harvest-terms checkboxes looked dead** (owner QA field report,
+  2026-07-22, mid-coursework — "can't even check the boxes"). Ninth
+  invisible-state instance: the approval dialog painted its indicator
+  `selectcolor=BG_INPUT` (#0b1220) with a default-black checkmark on
+  the dark theme — the boxes WORKED and defaulted to checked, but
+  checked and unchecked were visually identical, so the control read
+  as broken. Fix: white indicator (black ✓ on white, unmissable),
+  term labels are click targets too (bigger than the 13px box), and
+  the green button is now a live counter — "➕ Add N checked terms" —
+  so every toggle shows visible proof. Smoke 8/8 under a real
+  `mainloop()` (box click and label click both move the counter; only
+  checked terms reach the Glossary on temp DB). Suite 423 green + 14
+  pre-existing skips.
 - **🗒 Prompt Library clipped its own bottom at large fonts** (owner QA
   field report + screenshot, 2026-07-21 — "top to bottom you can't see
   the whole screen"; at 26pt+ the Response box and the button row fell

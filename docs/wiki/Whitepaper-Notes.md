@@ -469,3 +469,15 @@
   folklore (learning styles, hour-count mastery rules) explicitly
   barred — and the coursework artifacts double as QA of the equipment
   they're written in.
+
+- **2026-07-22 — Ninth instance: the mute control.** Mid-coursework,
+  the owner reported the harvest-approval checkboxes as unclickable;
+  instrumented reproduction showed they worked perfectly and were
+  simply invisible — a near-black indicator with a black checkmark on
+  the dark theme rendered checked and unchecked identical. The class
+  now has a second face: beyond controls that fire without visible
+  effect, controls whose STATE cannot be read are equally defective —
+  a working checkbox the user cannot see is a dead checkbox. Repair
+  added redundant visibility: high-contrast indicator, enlarged click
+  targets, and a live count on the commit button, so state is proven
+  three ways per toggle.

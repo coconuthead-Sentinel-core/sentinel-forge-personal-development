@@ -178,6 +178,7 @@ here as one gate by the proprietor's order.)
 - [ ] 🖱 Select all on single-line fields (fixed 2026-07-21, re-test): click ONCE anywhere in the "One primary task" field → right-click → Select all → the whole line highlights (no dragging) → Copy → paste anywhere → the full line arrives. Same now works on every single-line box in the app.
 - [ ] 🔊 Read on the Last-session box (fixed 2026-07-21, re-test): click anywhere in the "Last session" box → toolbar 🔊 Read → the handoff is spoken from the first word (the notes box already worked; now both sections read aloud).
 - [ ] 🗒 Prompt Library fits its window (fixed 2026-07-21, re-test): open Prompt Library → A+ up to a big size → Title, Prompt, AND Response boxes all visible with the ➕ Add / + New / 📋 Paste buttons at the bottom; Prompt and Response split the space evenly; the left list scrolls to every entry (no 12-entry limit — it was the clipping).
+- [ ] 🧠 Harvest checkboxes visible (fixed 2026-07-22, re-test): run Harvest terms → every box shows a black ✓ on a WHITE square; click a box OR its term name → the check visibly flips AND the green button's count changes ("Add N checked terms"); uncheck one → Add → Glossary gains only the checked terms.
 
 ### C. Timer sweep (first full pass on the record)
 - [ ] 🔥 Do Now 25-min Pomodoro: counts down, ends visibly (used as the session frame above)

@@ -14725,12 +14725,22 @@ class BookReader:
             var = tk.BooleanVar(value=True)
             row = tk.Frame(inner, bg=BG_DARK)
             row.pack(fill=tk.X, pady=2)
+            # selectcolor WHITE, not BG_INPUT (owner QA bug 9,
+            # 2026-07-22): a dark indicator + black checkmark on the
+            # dark theme made checked and unchecked look IDENTICAL —
+            # the box worked but was mute. Invisible-state class.
             tk.Checkbutton(row, variable=var, bg=BG_DARK,
                            activebackground=BG_DARK,
-                           selectcolor=BG_INPUT).pack(side=tk.LEFT)
-            tk.Label(row, text=term, bg=BG_DARK, fg=FG_TEXT,
-                     font=("Segoe UI", 10, "bold"), anchor=tk.W
-                     ).pack(side=tk.LEFT, padx=(2, 8))
+                           selectcolor="white",
+                           cursor="hand2").pack(side=tk.LEFT)
+            name_lbl = tk.Label(row, text=term, bg=BG_DARK, fg=FG_TEXT,
+                                font=("Segoe UI", 10, "bold"),
+                                anchor=tk.W, cursor="hand2")
+            name_lbl.pack(side=tk.LEFT, padx=(2, 8))
+            # the term name is a click target too — bigger than the
+            # 13px box, per the accessibility law
+            name_lbl.bind("<Button-1>",
+                          lambda _e, v=var: v.set(not v.get()))
             tk.Label(row, text=defn[:110] + ("…" if len(defn) > 110
                                              else ""),
                      bg=BG_DARK, fg=FG_MUTED, font=("Segoe UI", 9),
@@ -14771,12 +14781,27 @@ class BookReader:
             except tk.TclError:
                 pass
 
-        tk.Button(brow, text="➕ Add checked terms to Glossary",
+        add_btn = tk.Button(brow, text="➕ Add checked terms to Glossary",
                   command=_add_approved, font=("Segoe UI", 11, "bold"),
                   bg=ACCENT_GREEN, fg="white",
                   activebackground=ACCENT_GREEN, relief=tk.FLAT,
                   padx=16, pady=6, cursor="hand2",
-                  borderwidth=0).pack(side=tk.RIGHT)
+                  borderwidth=0)
+        add_btn.pack(side=tk.RIGHT)
+
+        # Live count on the button — every toggle produces VISIBLE
+        # proof (bug 9's companion fix: state changes must be seen).
+        def _update_count(*_a):
+            try:
+                n = sum(1 for v, _t, _d in checks if v.get())
+                add_btn.configure(
+                    text=f"➕ Add {n} checked term{'s' if n != 1 else ''}"
+                         " to Glossary")
+            except tk.TclError:
+                pass
+        for v, _t, _d in checks:
+            v.trace_add("write", _update_count)
+        _update_count()
         tk.Button(brow, text="Cancel", command=win.destroy,
                   font=("Segoe UI", 10), bg=ACCENT_SLATE, fg="white",
                   activebackground=ACCENT_SLATE, relief=tk.FLAT,
