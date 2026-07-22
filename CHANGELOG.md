@@ -11,6 +11,22 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **🗒 Prompt Library clipped its own bottom at large fonts** (owner QA
+  field report + screenshot, 2026-07-21 — "top to bottom you can't see
+  the whole screen"; at 26pt+ the Response box and the button row fell
+  off the window edge, unreachable). Reproduced under a real mainloop
+  first: window geometry was INNOCENT (stays clamped on-screen); the
+  root cause was layout — Text `height` is requested in lines-of-
+  current-font, so A+ ballooned the requests and Tk's packer starved
+  the last-packed widgets (Response measured 1px at 32pt). Fix, both
+  halves textbook: button row now packs FIRST at side=BOTTOM (the
+  `_prompt_for_text` never-clip law, finally applied here), and
+  Prompt/Response share one gridded frame with EQUAL uniform row
+  weights — a guaranteed 50/50 split at any font, scrollbars reaching
+  the rest. Height requests capped at 4 lines. Smoke 7/7 on the real
+  display (Response 65px alive at 32pt + docked toolbar; buttons
+  visible; window inside screen; 14 entries all reachable — the list
+  has no cap, it scrolls). Suite 423 green + 14 pre-existing skips.
 - **🔊 Read didn't speak the Session Start "Last session" box** (owner
   QA field report, 2026-07-21 — TTS read the notes box but not the
   handoff box). Root cause: the bug-5 rebuild enrolled the new box in

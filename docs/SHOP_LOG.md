@@ -79,6 +79,20 @@ Decision: draft | ready_for_review | approved | blocked
   fail; smoke 9/9 under real mainloop — the app's own handler selects
   the real prefilled Entry and Copy captures the full line. Re-test
   line on the field sheet (one click, no dragging).
+- **Bug 8 (proprietor's field report + screenshot, after real sleep —
+  "we're killing bugs" 🕷 session theme declared):** Prompt Library
+  content clipped at large fonts — Response box starved to 1px,
+  buttons off the edge; reported as "window bigger than the screen,"
+  DISPROVEN by controlled reproduction (geometry innocent, layout
+  guilty: font-relative height requests + packer starvation). Fix:
+  bottom-first button row (the never-clip law) + gridded equal-weight
+  Prompt/Response split, height requests capped. Smoke 7/7 on the real
+  display; suite 423 green. Also answered from the same experiment:
+  the entry list has NO cap — "stopped at 12" was the clipping.
+  Re-test line on the field sheet. Mic breadcrumb audit run same
+  session (voice/tts/fontsize logs healthy; log-address doc bug fixed;
+  qa_debug shows an unexplained 04:33 Add/Save fall-through — pinned
+  as a candidate, owner to confirm intent).
 - **Bug 7 (proprietor's field report via the new copy-paste channel):**
   🔊 Read spoke the notes box but not the Last-session box — the bug-5
   rebuild joined the clipboard registry but missed the reader's aim

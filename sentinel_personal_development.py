@@ -16805,6 +16805,25 @@ class BookReader:
 
         # Right: detail (title + prompt + response + buttons)
         right = tk.Frame(panes, bg=BG_DARK)
+        # Button row packs FIRST, side=BOTTOM — the packer allocates
+        # space in packing order, so the actions can never be clipped
+        # off the bottom no matter how tall A+ grows the text (owner QA
+        # bug 8, 2026-07-21: at 26pt+ the Response box and buttons fell
+        # below the window edge). Same law as _prompt_for_text's
+        # OK/Cancel row.
+        br = tk.Frame(right, bg=BG_DARK)
+        br.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=(4, 10))
+
+        def _mk(text, cmd, color):
+            tk.Button(br, text=text, command=cmd, bg=color, fg="white",
+                      font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
+                      padx=12, pady=6, cursor="hand2", borderwidth=0
+                      ).pack(side=tk.LEFT, padx=(0, 6))
+
+        _mk("➕ Add",            self._prompt_lib_record_entry,  ACCENT_GREEN)
+        _mk("+ New",             self._prompt_lib_new,           ACCENT_CYAN)
+        _mk("📋 Paste → Response", self._prompt_lib_paste_response, ACCENT_AMBER)
+
         tk.Label(right, text="Title", bg=BG_DARK, fg=FG_MUTED,
                  font=("Segoe UI", 9, "bold")
                  ).pack(anchor=tk.W, padx=10, pady=(6, 2))
@@ -16821,14 +16840,27 @@ class BookReader:
         self._prompt_lib_title_entry = title_ent
 
         _yellow = self.HIGHLIGHT_COLORS.get("Yellow", "#fde047")
-        prow = tk.Frame(right, bg=BG_DARK)
-        prow.pack(fill=tk.X, padx=10, pady=(10, 2))
+        # Prompt + Response live in ONE gridded frame with EQUAL row
+        # weights (uniform group): the packer alone starves whichever
+        # box packs last when A+ inflates line height (bug 8 — Response
+        # was 1px at 32pt). Grid weights guarantee the 50/50 split at
+        # any font; scrollbars reach whatever doesn't fit on screen.
+        boxes = tk.Frame(right, bg=BG_DARK)
+        boxes.pack(fill=tk.BOTH, expand=True)
+        boxes.grid_columnconfigure(0, weight=1)
+        boxes.grid_rowconfigure(1, weight=1, uniform="plbox")
+        boxes.grid_rowconfigure(3, weight=1, uniform="plbox")
+        prow = tk.Frame(boxes, bg=BG_DARK)
+        prow.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 2))
         tk.Label(prow, text="Prompt  (your message)", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
         # (🔊 Listen removed — read-aloud feature was taken out.)
-        pt_frame = tk.Frame(right, bg=BG_DARK)
-        pt_frame.pack(fill=tk.BOTH, expand=True, padx=10)
-        pt = tk.Text(pt_frame, height=8, bg=BG_INPUT, fg=FG_TEXT,
+        pt_frame = tk.Frame(boxes, bg=BG_DARK)
+        pt_frame.grid(row=1, column=0, sticky="nsew", padx=10)
+        # height is REQUESTED lines-of-current-font: keep it small so A+
+        # can't balloon the request past the window (bug 8) — real space
+        # still comes from fill/expand, and the scrollbar reaches the rest.
+        pt = tk.Text(pt_frame, height=4, bg=BG_INPUT, fg=FG_TEXT,
                      insertbackground=FG_TEXT, font=("Segoe UI", 10),
                      relief=tk.FLAT, bd=0, wrap=tk.WORD)
         pt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -16841,14 +16873,14 @@ class BookReader:
         self._attach_clipboard_menu(pt)
         pt.bind("<FocusIn>", lambda _e: self._set_mic_target(pt), add="+")
 
-        rrow = tk.Frame(right, bg=BG_DARK)
-        rrow.pack(fill=tk.X, padx=10, pady=(10, 2))
+        rrow = tk.Frame(boxes, bg=BG_DARK)
+        rrow.grid(row=2, column=0, sticky="ew", padx=10, pady=(10, 2))
         tk.Label(rrow, text="Response  (the reply)", bg=BG_DARK, fg=FG_TEXT,
                  font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
         # (🔊 Listen removed — read-aloud feature was taken out.)
-        rt_frame = tk.Frame(right, bg=BG_DARK)
-        rt_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 6))
-        rt = tk.Text(rt_frame, height=10, bg=BG_INPUT, fg=FG_TEXT,
+        rt_frame = tk.Frame(boxes, bg=BG_DARK)
+        rt_frame.grid(row=3, column=0, sticky="nsew", padx=10, pady=(0, 6))
+        rt = tk.Text(rt_frame, height=4, bg=BG_INPUT, fg=FG_TEXT,
                      insertbackground=FG_TEXT, font=("Segoe UI", 10),
                      relief=tk.FLAT, bd=0, wrap=tk.WORD)
         rt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -16861,20 +16893,6 @@ class BookReader:
         self._attach_clipboard_menu(rt)
         rt.bind("<FocusIn>", lambda _e: self._set_mic_target(rt), add="+")
 
-        br = tk.Frame(right, bg=BG_DARK)
-        br.pack(fill=tk.X, padx=10, pady=(4, 10))
-
-        def _mk(text, cmd, color):
-            tk.Button(br, text=text, command=cmd, bg=color, fg="white",
-                      font=("Segoe UI", 10, "bold"), relief=tk.FLAT,
-                      padx=12, pady=6, cursor="hand2", borderwidth=0
-                      ).pack(side=tk.LEFT, padx=(0, 6))
-
-        # (Prompts library 💾 Save removed — Save widgets were taken out.)
-        _mk("➕ Add",            self._prompt_lib_record_entry,  ACCENT_GREEN)
-        _mk("+ New",             self._prompt_lib_new,           ACCENT_CYAN)
-        _mk("📋 Paste → Response", self._prompt_lib_paste_response, ACCENT_AMBER)
-        # (🗑 Delete (Prompts) removed — Delete/Remove widgets were taken out.)
         panes.add(right, minsize=380, stretch="always")
 
         def _close():

@@ -445,3 +445,15 @@
   exposed a Tcl re-init fault that silently converted green tests to
   skips — a wobbling suite count is itself a defect in the evidence
   chain, fixed by sharing one Tk interpreter per test process.
+
+- **2026-07-21 — Reproduce before you believe the symptom's name.** The
+  owner reported the Prompt Library window "bigger than the screen"; a
+  controlled reproduction (real display, big font, docked toolbar, 14
+  seeded entries) proved the window geometry innocent and convicted the
+  layout: font-relative height requests let A+ balloon the content
+  until the packer starved the last-packed widgets to 1px. Two symptoms
+  ("window too big", "list stops at 12") shared the one root cause. For
+  the paper: the user's vocabulary names the experience, not the
+  defect — the experiment translates between the two, and a fix shipped
+  against the reported name rather than the proven cause would have
+  changed the window and repaired nothing.
