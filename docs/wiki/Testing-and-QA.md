@@ -181,7 +181,7 @@ here as one gate by the proprietor's order.)
 - [x] 🧠 Harvest checkboxes visible (fixed 2026-07-22) — ✅ **owner re-test PASSED 2026-07-22**: proprietor ran Harvest, checked/unchecked visibly, approved, and confirmed the terms SAVED to the Glossary ("tool function performed adequately — harvested the key terms, seven and all, saved, confirmation").
 
 ### C. Timer sweep (first full pass on the record)
-- [ ] 🔥 Do Now 25-min Pomodoro: counts down, ends visibly (used as the session frame above)
+- [ ] 🔥 Do Now 25-min Pomodoro: counts down, ends visibly (used as the session frame above) — *breadcrumb evidence 2026-07-21/22: cycle machinery VERIFIED from the pomo log (work→break→work→long-break, chime, counts all correct); drift bug found (20-min block ran 61 real minutes across a sleep) and FIXED 2026-07-22 (wall-clock deadline is now the source of truth). Owner re-test: start a block, note the clock time, let it finish — the chime must land at start+duration by the wall clock, even if the laptop napped.*
 - [ ] 🎯 Focus Mode 60/90: starts, countdown visible, cancel works cleanly
 - [ ] 🚀 5-4-3-2-1: beats once per second, lands in Focus Mode on the #1 task
 - [ ] ⏱ Winner's Time Log at 5-min interval: chime fires, one-tap files it, pie chart updates

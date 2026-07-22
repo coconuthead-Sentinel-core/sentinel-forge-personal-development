@@ -481,3 +481,15 @@
   added redundant visibility: high-contrast indicator, enlarged click
   targets, and a live count on the commit button, so state is proven
   three ways per toggle.
+
+- **2026-07-22 — The breadcrumbs ran the test before the tester could.**
+  The owner scheduled twenty minutes to "test the timer"; the pomo
+  breadcrumb log had already run the test — a full evening of real
+  cycles showing the transition machinery flawless AND a 20-minute
+  block stretched to 61 wall-clock minutes across a laptop sleep. The
+  tick-counting countdown was replaced with a wall-clock deadline
+  kernel (drift-immune by construction, provable headless). For the
+  paper: instrumentation converts field time into archival evidence —
+  the cheapest QA session is the one the logs already ran, and the
+  timer defect class (trusting ticks over clocks) is old enough to
+  have a textbook name and still shipped in v1.

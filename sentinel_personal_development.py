@@ -38,6 +38,7 @@ from lyceum.dictation_guard import dedup_punctuation
 from lyceum.platform_dpi import enable_high_dpi_awareness
 from lyceum.handoff_view import fill_readonly
 from lyceum.select_all import select_all
+from lyceum.pomo_clock import deadline_for, remaining_seconds
 from lyceum import finance as _finance
 from lyceum import util as _util
 from lyceum import goals as _goals
@@ -1096,6 +1097,7 @@ class BookReader:
         # Reading timer (Pomodoro-style countdown)
         self._timer_after_id: str | None = None
         self._timer_remaining_seconds: int = 0
+        self._timer_deadline: float = 0.0     # wall-clock end of the block
         self._timer_running: bool = False
         # Pomodoro cycle state. _pomo_phase tracks where we are in the
         # work/break rotation; _pomo_work_cycles_done counts completed
@@ -17440,6 +17442,11 @@ class BookReader:
             except Exception:
                 pass
             self._timer_after_id = None
+        # Wall-clock DEADLINE is the timer's single source of truth
+        # (owner QA 2026-07-22: tick-counting stretched a 20-min block
+        # to 61 real minutes across a laptop sleep — pomo breadcrumbs).
+        # Ticks below only refresh the display; they never keep time.
+        self._timer_deadline = deadline_for(int(duration_min), time.time())
         self._timer_remaining_seconds = int(duration_min) * 60
         self._timer_running = True
         if self.timer_button is not None:
@@ -17510,10 +17517,13 @@ class BookReader:
     def _tick_timer(self) -> None:
         if not self._timer_running:
             return
+        # Truth from the clock, not the tick count — late or missed
+        # ticks (sleep, event-loop load) can no longer stretch a block.
+        self._timer_remaining_seconds = remaining_seconds(
+            self._timer_deadline, time.time())
         if self._timer_remaining_seconds <= 0:
             self._timer_done()
             return
-        self._timer_remaining_seconds -= 1
         self._update_timer_display()
         self._timer_after_id = self.root.after(1000, self._tick_timer)
 

@@ -11,6 +11,21 @@ and the project aims to follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **⏱ Pomodoro blocks could run long against the wall clock** (owner
+  QA session 2026-07-22; diagnosed from the pomo breadcrumbs — a
+  "20-minute" work block on 07-21 ran 61 real minutes, another 27).
+  Root cause: the countdown SUBTRACTED one second per Tk `after(1000)`
+  tick, so laptop sleep and event-loop load stretched every counted
+  second — the timer trusted its ticks instead of the clock. Fix: new
+  pure kernel `lyceum/pomo_clock.py` — a wall-clock DEADLINE is the
+  single source of truth; ticks only refresh the display
+  (`remaining_seconds(deadline, now)`, clamped, drift-immune by
+  construction). Cycle machinery (work→break auto-transitions, 4-cycle
+  long break, chime) verified correct from the same breadcrumbs and
+  untouched. 7 new headless tests (drift, sleep-jump, spam-call
+  immunity); smoke 5/5 under a real `mainloop()` (simulated sleep past
+  the deadline ends the block and auto-starts the break with a fresh
+  deadline). Suite 430 green + 14 pre-existing skips.
 - **🧠 Harvest-terms checkboxes looked dead** (owner QA field report,
   2026-07-22, mid-coursework — "can't even check the boxes"). Ninth
   invisible-state instance: the approval dialog painted its indicator

@@ -79,6 +79,17 @@ Decision: draft | ready_for_review | approved | blocked
   fail; smoke 9/9 under real mainloop — the app's own handler selects
   the real prefilled Entry and Copy captures the full line. Re-test
   line on the field sheet (one click, no dragging).
+- **Bug 10 (⏱ timer drift; owner scheduled the test, the breadcrumbs
+  had already run it — 2026-07-22):** pomo log showed the cycle
+  machinery flawless across a real evening of use AND a "20-min" work
+  block that ran 61 wall-clock minutes (laptop sleep froze the
+  tick-counted countdown). Fix: `lyceum/pomo_clock.py` — wall-clock
+  deadline is the timer's single source of truth; ticks only refresh
+  the display. 7 kernel tests (drift/sleep/spam immunity); smoke 5/5
+  real mainloop (simulated sleep ends the block on time and auto-
+  starts the break). Suite 430 green + 14 pre-existing skips. Owner
+  re-test on the field sheet §C: chime must land at start+duration by
+  the wall clock.
 - **Bug 9 (proprietor's field report, mid-coursework 2026-07-22):**
   Harvest-approval checkboxes read as dead — reproduction proved them
   working but MUTE (near-black indicator + black checkmark on the dark
