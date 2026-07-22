@@ -318,3 +318,17 @@ years INSIDE an HRO's compliance culture. Honest gaps: solo React
 (directed only), PyTorch/TensorFlow none, salary unlisted. Ranking
 now: Aline #1 · Ursa #2 · Cav #3 · FocusKPI #4 · WellBe reserve ·
 Continued aspirational.
+
+**LinkedIn review (2026-07-22):** profile exists and is stronger than
+expected — About, skills list, GitHub link, open-to targets all
+present and largely audit-clean. Five fixes issued, ranked: (1) ADD
+the AI-attribution sentence — LinkedIn must match GitHub's "built in
+collaboration with Claude AI" or the gap reads as concealment; the
+method is a selling point for AI-first employers; (2) headline
+"AI Systems Engineer" softened to a defensible independent-developer
+form; (3) add the three campaign exhibits missing from Projects (RAG
+Reference Implementation, LLM Evaluation Harness, flagship
+accessibility dashboard); (4) number consistency — 25 vs 30 years
+unified, 27 projects / 174.3 audited hours cited; (5) trims: "cloud-
+based" softened, NLCA dedupe, Experience section to be verified.
+Owner to apply edits in his own pass; prerequisite nearly closed.
