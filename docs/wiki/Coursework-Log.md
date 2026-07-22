@@ -276,3 +276,17 @@ attribution sentence). Matrix updated; ranking after three: Ursa →
 FocusKPI → WellBe on requirements. New build-list item: scoped
 classical-ML learning lap (scikit-learn on the owner's own time_log
 data).
+
+**Fourth live ticket (2026-07-22):** Continued (EdTech) AI Engineer —
+honest verdict: NOT qualified today (mid-level: 3-5 yrs + enterprise
+production deployment; declining protects campaign credibility).
+Three yields banked: (1) first posting with an EXPLICIT
+portfolio-instead-of-degree clause ("or equivalent demonstrated
+experience through portfolio work") — the no-degree lane is a
+documented market reality, filed as standing intelligence; (2) the
+posting archived as the Year 3-5 TARGET PROFILE inside the five-year
+plan — annual reviews measure against it; (3) their cover-letter
+prompt ("a book you learned something from") = the coursework
+question verbatim — study log is market-graded currency. Matrix
+updated. Ranking unchanged: Ursa → FocusKPI → WellBe (apply-tier);
+Continued filed as aspirational-tier, not applied.
