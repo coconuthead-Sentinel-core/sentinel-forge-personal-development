@@ -263,3 +263,16 @@ v1.0 + LLM Evaluation Harness v1.0 → WellBe board CORRECTED
 Skills Matrix board filed: Portfolio\boards\
 2026-07-22_Sentinels_Forge_Job_Skills_Matrix.md — extend one column
 per posting.
+
+**Third live ticket (2026-07-22):** FocusKPI Junior AI/ML Engineer
+(remote contract/internship) — middle fit: degree hard-gate + first
+posting to test CLASSICAL ML hands-on (real gap; EARP's
+IsolationForest = exposure only), but strongest FastAPI/SQL alignment
+and the lowest-stakes entry ramp (paid internship). Their required
+3-6 paragraph project write-up recognized as the shop's ticket format
+— assigned as a drill regardless of application (Sentinel or Imprint
+as subject; the "your specific contribution" section carries the
+attribution sentence). Matrix updated; ranking after three: Ursa →
+FocusKPI → WellBe on requirements. New build-list item: scoped
+classical-ML learning lap (scikit-learn on the owner's own time_log
+data).
