@@ -234,3 +234,14 @@ said 23, audit records 27; owner to pick his number). Survives the
 pending owner's final dictation pass; then it leads the flagship
 README. Remaining rubric line: R4 (application sent in its scheduled
 block).
+
+**Live ticket reviewed (2026-07-22):** WelbeHealth AI Engineer I
+(remote, $90-119k) worked as a requirements document — full evidence
+map, gates named honestly (bachelor's REQUIRED = hard gate, truthful
+"No" always; solo-Python = closable Year-1 gap), truthful-checkbox
+inventory, and campaign next-actions (scoped local RAG learning
+project, Azure AI-900, LinkedIn prerequisite, application-block
+drafting). Board filed: Portfolio\boards\
+2026-07-22_WelbeHealth_AI_Engineer_I_Ticket_Review.md. Mission-fit
+finding: the posting's population IS the owner's 30-year patient
+population — the WHY sentence lands verbatim.
