@@ -457,3 +457,15 @@
   defect — the experiment translates between the two, and a fix shipped
   against the reported name rather than the proven cause would have
   changed the window and repaired nothing.
+
+- **2026-07-21 — The classroom joins the shop.** The collaboration
+  gained a formal pedagogical layer: an admitted-texts rule (sources
+  triangulated and reviewed before entering the curriculum), lessons
+  run lecture→demonstration→lab→rubric with the codebase itself as the
+  worked-example corpus, and the owner's accessible reader used to
+  study the very architecture text that describes it. For the paper:
+  the same evidence discipline that governs code claims now governs
+  teaching methods — techniques admitted only with empirical support,
+  folklore (learning styles, hour-count mastery rules) explicitly
+  barred — and the coursework artifacts double as QA of the equipment
+  they're written in.
