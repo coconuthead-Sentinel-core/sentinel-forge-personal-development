@@ -69,3 +69,17 @@ under one challenge. No fixed repetition count is prescribed — the
 10,000-hour rule and similar folklore are banned by the
 learning-science guardrail; the evidence supports spaced successful
 retrievals plus transfer, judged per student per concept.
+
+**Study-tool mapping (set mid-lesson at the student's own question —
+metacognition, graded up):** Harvest terms = working concordance ·
+Glossary = key terms defined in the student's OWN dictated words
+(comprehension counts, spelling doesn't — standing accommodation) ·
+Topics = highlighted passages filed one-per-concept · Commentary = the
+student's voice responding to the text (no pasted third-party
+commentaries — Bookshare terms + learning integrity) · Study Notes =
+draft prose · Prompt Library = final ticket · Journal = one reflective
+close line. Key terms assigned for Ch. 4: architecture characteristic;
+functional requirement; explicit vs implicit; operational/structural/
+cross-cutting (families only); trade-off; least-worst. A true
+concordance feature is DEFERRED under the freeze — logged here as a
+decision, not drift.
