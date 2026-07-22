@@ -332,3 +332,12 @@ accessibility dashboard); (4) number consistency — 25 vs 30 years
 unified, 27 projects / 174.3 audited hours cited; (5) trims: "cloud-
 based" softened, NLCA dedupe, Experience section to be verified.
 Owner to apply edits in his own pass; prerequisite nearly closed.
+
+**LinkedIn — CLOSED as ready (owner's call, 2026-07-22, and he was
+right):** profile ships as-is; the five-fix list is WITHDRAWN as
+over-engineering — the review itself graded the profile audit-clean.
+Standing lesson recorded for the instructor: repeated full-redo
+demands on application materials are call reluctance induced by the
+assistant; good-enough ships. One optional 30-second attribution
+sentence noted, zero obligation. Campaign artifacts remaining: the
+project write-up (dictated) and the scheduled send.
