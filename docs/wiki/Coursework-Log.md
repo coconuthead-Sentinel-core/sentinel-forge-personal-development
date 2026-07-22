@@ -223,3 +223,14 @@ incoming at student's request — admission gate applies per text.
   call-reluctance chapter + scheduled application block). Career arc
   affirmed for the 5-year plan (junior → certificate → senior);
   "senior" lives in the plan, never on the current resume.
+
+**R3 update (2026-07-22):** student dictated the full transition
+statement in his own words unprompted — toward-form arrived naturally
+("continue to work in the field of health care" via software). Forged
+to one sentence with three edits shown (hedges cut; serving-healthcare
+promoted to spine; project count flagged for defensibility — owner
+said 23, audit records 27; owner to pick his number). Survives the
+"did you write the code?" follow-up by construction. R3 marked MET
+pending owner's final dictation pass; then it leads the flagship
+README. Remaining rubric line: R4 (application sent in its scheduled
+block).
