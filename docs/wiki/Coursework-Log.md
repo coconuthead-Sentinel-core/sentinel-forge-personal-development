@@ -145,3 +145,21 @@ book's own argument for renaming "nonfunctional requirements" to
 re-test. Next classroom activity queued at student's request: review
 a REAL job posting as a requirements document (Lectio → evidence
 mapping → application drafting against the question bank).
+
+## Texts admitted 2026-07-22 — professional-development shelf
+(Practitioner wisdom, NOT peer-reviewed science — never cited as
+evidence; used for campaign strategy and communication craft.)
+- *Start With Why* (Sinek; owner's Bookshare copy) — Golden Circle
+  applied to the portfolio: READMEs and interview answers lead with
+  the verified WHY (accessible workstation built from lived
+  disability + 30 years of care work). Trust = the honesty ledger.
+- *Earn What You're Really Worth* (Tracy 2012; owner's Bookshare
+  copy) — job campaign frame: readiness = decision + competence
+  evidence (already banked); value priced from documented output
+  (W30 receipt method); search run as a disciplined full-time job;
+  multiple-careers norm reframes the age question (a 50s transition
+  is scheduled, not late); Ch.5 informational-interview script queued
+  as a drill. LIMITS on the record: 2012 market stats stale; no
+  disability-disclosure or healthcare→tech specifics in either text.
+Queued next: student brings a REAL job posting → reviewed as a
+requirements document against the question bank and the WHY line.
