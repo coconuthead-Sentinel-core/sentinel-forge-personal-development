@@ -290,3 +290,18 @@ prompt ("a book you learned something from") = the coursework
 question verbatim — study log is market-graded currency. Matrix
 updated. Ranking unchanged: Ursa → FocusKPI → WellBe (apply-tier);
 Continued filed as aspirational-tier, not applied.
+
+**Fifth live ticket — THE BULLSEYE (2026-07-22):** Aline, Junior
+Agentic (AI) Engineer, remote $65-80k. The predicted convergence
+posting: senior-care mission (owner's 30-year population by name) +
+explicit portfolio lanes on BOTH the degree and experience gates.
+Role inventory matches the archive by name: retrieval layer
+(chunk/hybrid/rerank/citations) = RAG Reference Implementation; eval
+stack (golden sets, LLM-as-judge) = LLM Evaluation Harness; Claude
+Agent SDK + MCP + human-in-the-loop = daily practice; LLM failure
+modes incl. injection = lived (the Ursa honeypot catch); HIPAA
+practiced. Required gap: NumPy/Pandas/Scikit-learn comfort —
+classical-ML learning lap PROMOTED TO PRIORITY (scoped project,
+scope-first applies; owner's own time_log as dataset). Campaign
+ranking: Aline #1 · Ursa #2 · FocusKPI #3 · WellBe mission-reserve ·
+Continued aspirational. Matrix updated.
