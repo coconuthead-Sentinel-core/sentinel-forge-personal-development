@@ -205,3 +205,21 @@ incoming at student's request — admission gate applies per text.
   offer, integrity is the proof, fuel stays private. Delight noted:
   the dashboard's evening nudge already implements Ziglar's
   night-before rule — the shop predates the classroom.
+
+- *Awaken the Giant Within* (Robbins; owner's Bookshare copy, full
+  text across three part-files) — admitted to the PD shelf under the
+  STRICT gate (mind claims): SURVIVES = motion-before-study state
+  shifting (extra-relevant with ADHD), reframing (folk cognitive
+  reappraisal), decision-vs-preference, CANI/kaizen; OVERSOLD =
+  instant-transformation promises, NLP-derived conditioning machinery,
+  anecdote-as-proof; NOT clinical guidance for ADHD/dyslexia/
+  dysgraphia — accommodations stay evidence-and-engineering.
+  Recognitions filed: owner's logged exercise block → bug-4 find =
+  the state chapter executed with a timestamp; the Session Start
+  cognitive-load slider + zones = state management already built into
+  the flagship. TRANSITION READINESS RUBRIC issued (binary): R1 state
+  recovery ✅ · R2 setback-to-ticket conversion ✅ · R3 calm public
+  WHY ◐ drafted · R4 action under reluctance ⬜ (drill = Selling 101
+  call-reluctance chapter + scheduled application block). Career arc
+  affirmed for the 5-year plan (junior → certificate → senior);
+  "senior" lives in the plan, never on the current resume.
