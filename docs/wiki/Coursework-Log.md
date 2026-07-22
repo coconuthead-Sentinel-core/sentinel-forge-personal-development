@@ -187,3 +187,21 @@ incoming at student's request — admission gate applies per text.
   sentence upgraded (strong verbs, evidence named, employer's need
   answered). Student's own discretion instinct predicted the text's
   counsel — transfer noted.
+
+- Ziglar shelf admitted 2026-07-22 (PD shelf, reality-filtered):
+  *See You At The Top* — EXCERPT ONLY (ch. 3-4 self-image; two
+  duplicate files on disk, one deletable at owner's leisure; full text
+  welcome if wanted): self-image lag named as the interview-posture
+  issue; updated by drill, not waiting. *Selling 101* — strongest
+  campaign fit: job search mapped to the sales process (prospecting =
+  target companies; needs analysis = read the posting for employer
+  pain; presentation = resume as THEIR solution; close = ask plainly;
+  follow-up = the unsent thank-you note). ASSIGNED READING before the
+  first application ships: the call-reluctance chapter → scheduled
+  application blocks with pre-drafted materials. *Better Than Good* —
+  purpose/passion long-form; honestly labeled openly faith-based
+  (private fuel category, owner's use; stays out of repo and
+  interview either way). Cross-shelf synthesis filed: service is the
+  offer, integrity is the proof, fuel stays private. Delight noted:
+  the dashboard's evening nudge already implements Ziglar's
+  night-before rule — the shop predates the classroom.
