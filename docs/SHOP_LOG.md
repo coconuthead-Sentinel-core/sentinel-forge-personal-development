@@ -79,6 +79,16 @@ Decision: draft | ready_for_review | approved | blocked
   fail; smoke 9/9 under real mainloop — the app's own handler selects
   the real prefilled Entry and Copy captures the full line. Re-test
   line on the field sheet (one click, no dragging).
+- **🌧 Ambience — NO BUG, line closed (proprietor's order, in his
+  words, 2026-07-22):** "Claude AI, built by Anthropic, coding
+  assistant, was able to use shop logs to bring up a question of a
+  bug and was able to identify that bug did not need to be fixed —
+  ambient noise works effectively in the Library. User is able to
+  listen to ambient rain while listening to Claude AI's responses in
+  the Library or while studying books in the Library. There is no
+  bug." Field sheet §B line checked ✅. Method note: raised from the
+  qa breadcrumb (`ambience: started kind=rain`), closed by the
+  owner's ears — logs ask, humans verify.
 - **Bug 10 (⏱ timer drift; owner scheduled the test, the breadcrumbs
   had already run it — 2026-07-22):** pomo log showed the cycle
   machinery flawless across a real evening of use AND a "20-min" work

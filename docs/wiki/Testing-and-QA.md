@@ -168,7 +168,7 @@ here as one gate by the proprietor's order.)
 - [ ] Close the window → toolbar returns home to the dashboard
 
 ### B. Recently shipped, never verified on this laptop
-- [ ] 🌧 Ambience: pick Rain, Quiet → **audible** under the reading voice, on the real speakers (this is the one the bench could not verify)
+- [x] 🌧 Ambience: pick Rain, Quiet → **audible** under the reading voice, on the real speakers — ✅ **owner-confirmed 2026-07-22**: "ambient noise works effectively, no bugs" — rain audible in the Library under both TTS reading and study; line closed. (Found and closed via breadcrumb review: the engineer raised it from the qa log's `ambience: started` entry; owner's ears supplied the verdict.)
 - [ ] 🎁 Reward-Draw: finish the 25-min Do Now block → a draw fires (dot, quote card, or gold) and `reward_log` gains a row
 - [ ] 🪞 AAR window: toolbar docks there; Save commits today's reflection; Delete refuses past days
 - [ ] ⏱ Time Check popup (fixed 2026-07-20, re-test): dock the bar via the dock menu → type or dictate a note → yellow Save or Enter files it → status reads "⏱ Logged: … · ✏ note saved"
