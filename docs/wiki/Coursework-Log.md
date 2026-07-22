@@ -245,3 +245,21 @@ drafting). Board filed: Portfolio\boards\
 2026-07-22_WelbeHealth_AI_Engineer_I_Ticket_Review.md. Mission-fit
 finding: the posting's population IS the owner's 30-year patient
 population — the WHY sentence lands verbatim.
+
+**Second live ticket + skills matrix (2026-07-22):** Ursa Space Jr AI
+Engineer reviewed — currently the campaign's strongest requirements
+fit (no degree gate; Human-on-the-Loop stewardship model matches the
+owner's existing daily practice; MCP/agentic tooling and co-pilot
+experience are named requirements he meets; "very desirable" list —
+agent harnesses, evals, agentic memory, cost measurement — maps to
+LLM Evaluation Harness v1.0, AI_Memory_Core, and the portfolio
+audit). AI-honeypot detected in the posting's cover-letter
+instructions (bait line for LLM-written letters) — flagged to owner;
+all cover letters will be dictated in his own voice. Completed-
+projects sweep (owner-ordered) surfaced RAG Reference Implementation
+v1.0 + LLM Evaluation Harness v1.0 → WellBe board CORRECTED
+(RAG/embeddings/vector checkboxes are truthful; engineer's earlier
+"None" assessment logged as an error per the honesty clause). Job
+Skills Matrix board filed: Portfolio\boards\
+2026-07-22_Sentinels_Forge_Job_Skills_Matrix.md — extend one column
+per posting.
