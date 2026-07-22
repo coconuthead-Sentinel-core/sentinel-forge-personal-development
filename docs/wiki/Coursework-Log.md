@@ -305,3 +305,16 @@ classical-ML learning lap PROMOTED TO PRIORITY (scoped project,
 scope-first applies; owner's own time_log as dataset). Campaign
 ranking: Aline #1 · Ursa #2 · FocusKPI #3 · WellBe mission-reserve ·
 Continued aspirational. Matrix updated.
+
+**Sixth live ticket (2026-07-22):** Cav, Junior Fullstack + AI
+Developer (remote, compliance automation / GRC). Friendliest gates of
+all six (0-2 yrs with projects counted; degree in desired-tier only;
+mentorship-driven). Star witness identified: EARP = a miniature
+Compliance OS (NIST AI RMF scoring, policy gates, hash-chained audit
+history, retention/legal holds, React+TS dashboard, FastAPI, 378
+assertions) — the project write-up subject for this target. Bonus
+story: healthcare = the canonical High Reliability Organization; 30
+years INSIDE an HRO's compliance culture. Honest gaps: solo React
+(directed only), PyTorch/TensorFlow none, salary unlisted. Ranking
+now: Aline #1 · Ursa #2 · Cav #3 · FocusKPI #4 · WellBe reserve ·
+Continued aspirational.
