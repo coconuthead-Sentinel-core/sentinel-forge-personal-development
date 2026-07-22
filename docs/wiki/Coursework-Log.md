@@ -133,3 +133,15 @@ answers aren't standing. Grading uninflated per the honesty clause.
 before any new material** (successive relearning). Student's
 "workplace operability 2026" question added to the Schedule column for
 its own session with the interview question bank.
+
+**Accommodation logged (2026-07-22, student-engineered):** Ch. 4
+converted to sectioned audio via Speechify — counts as class time
+(access accommodation + additional spaced pass + student's own
+re-sectioning = elaborative organization; value framed per the
+learning-science law as ACCESS, not "learning styles"). Student
+independently connected his unambiguous-language instinct to the
+book's own argument for renaming "nonfunctional requirements" to
+"architecture characteristics" — transfer, unprompted, noted for the
+re-test. Next classroom activity queued at student's request: review
+a REAL job posting as a requirements document (Lectio → evidence
+mapping → application drafting against the question bank).
