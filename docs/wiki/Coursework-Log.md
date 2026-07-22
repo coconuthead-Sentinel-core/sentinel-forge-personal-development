@@ -163,3 +163,12 @@ evidence; used for campaign strategy and communication craft.)
   disability-disclosure or healthcare→tech specifics in either text.
 Queued next: student brings a REAL job posting → reviewed as a
 requirements document against the question bank and the WHY line.
+
+**WHY drill — first draft delivered (2026-07-22):** student dictated
+an honest away-from WHY unprompted; coached through one Disputatio
+pass into its toward-form (care work continued by different
+instrument — accessibility software) without discarding the private
+version. Both forms retained: private = fuel, public = direction.
+Student to dictate his own final public sentence; it then leads the
+flagship README and anchors the question bank. Further PD texts
+incoming at student's request — admission gate applies per text.
