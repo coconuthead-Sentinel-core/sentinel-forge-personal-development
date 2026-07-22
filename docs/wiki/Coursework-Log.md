@@ -114,3 +114,22 @@ freeze lifts IF coursework shows repeated need for in-context term
 lookups; then option (b) only. Textbook note recorded for the student:
 unrequested polish is gold plating and grades DOWN; the decision
 record itself is what grades UP.
+
+**Exam — Ch. 4 oral retrieval, attempt 1 (2026-07-22, after two
+listen-throughs with follow-along highlight):** R1 HALF-MET (concordance
+correctly classed feature/gold-plating; floating toolbar mislabeled a
+characteristic — corrected: widgets are features, the quality served —
+accessibility — is the characteristic). R2 NOT YET (characteristics
+unnamed; instructor's answer given: accessibility, testability,
+maintainability — accessibility wins collisions, evidenced by the
+weekend's triage order; student independently surfaced the
+vision-vs-feasibility tension unprompted — transfer noted). R3 NOT YET
+(honest blank, declared without bluffing — the honored behavior;
+compact retelling given for re-encoding: door=characteristics,
+drawers=modularity, dog=coupling, cabinet=ADRs, wall=fitness
+functions). R4 deferred — Disputatio converts to instruction when
+answers aren't standing. Grading uninflated per the honesty clause.
+**Re-test scheduled: NEXT session opener, same three questions, cold,
+before any new material** (successive relearning). Student's
+"workplace operability 2026" question added to the Schedule column for
+its own session with the interview question bank.
