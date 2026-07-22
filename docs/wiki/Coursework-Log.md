@@ -98,3 +98,19 @@ harvest terms from later chapters enter the review deck as preview
 vocabulary (spacing effect). The approve-to-add checklist is noted as
 correct human-in-the-loop design — the reason noise cannot reach the
 Glossary unapproved.
+
+**ADR-2026-07-22 — Concordance integration: DEFERRED (upgraded from
+the earlier one-line deferral; analysis run as a live Ch. 4 worked
+example, proprietor's question).** Options costed: (a) external
+freeware concordancer beside the app — ~1 hr, zero regression;
+(b) in-house pure-python KWIC kernel in lyceum/ — one sprint, keeps
+the standard-library-only law, additive, low regression; (c) third-
+party code integration — REJECTED permanently (violates the no-new-
+dependencies constraint regardless of freeze). Benefit judged honestly
+at ~+0.2 Richter, not +1: Search + Harvest + Glossary already cover
+most of the study value; driving characteristic (accessibility) is
+not advanced by corpus tooling. Decision: defer; revisit when the
+freeze lifts IF coursework shows repeated need for in-context term
+lookups; then option (b) only. Textbook note recorded for the student:
+unrequested polish is gold plating and grades DOWN; the decision
+record itself is what grades UP.
